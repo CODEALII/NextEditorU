@@ -100,6 +100,16 @@ Navigating those structures in the actual W1 BFRES confirmed version `0x03000001
 
 These offsets belong only to this exact extracted BFRES, and should be discovered through dictionaries rather than hardcoded in export logic. Macro route names proposed for the three-node prototype are thus confirmed to exist in the source skeleton. Relocating only level-point bones may leave route animation positions inconsistent; coupled route transforms need testing.
 
+## Narrow custom geometry implementation
+
+`worldstudio/mesh.py` implements an independently tested capacity-bounded subcase, rather than a general BFRES importer. The local `CS_W1_World` model contains the rigid shape `beltmodel14__mtGrass` with 2,348 vertices, 10,098 triangle indices, 18 submesh partitions and 35 bounding nodes. Its identity root bone permits model-local coordinates without inverse-skinning conversion. Its attributes are `_p0` float32x3 (`0x811`), `_n0` signed normalized 10:10:10:2 (`0x20B`), `_u0` float32x2 (`0x80D`), and `_u1` unsigned normalized 16:16 (`0x7`).
+
+The implementation accepts an original vertex/polygon mesh within those capacities, generates smooth normals and planar XZ UVs, replaces positions and indices, degenerates unused triangles, and updates all existing bounding boxes and the shape radius. It retains original material references, vertex/index counts, all allocation sizes, submesh partitions and pointers. It refuses unsupported skinning, shared vertex buffers, format/version changes, capacity overruns and noncontiguous submesh partitions. Convex polygons use fan triangulation; authored concave faces must be triangulated before import. Other shapes are unchanged, so this does not remove the entire stock landmass or its decorative meshes.
+
+Primary layout evidence: BfresLibrary `Shared/Models/VertexBuffer.cs`, `VertexAttrib.cs`, `Shared/Common/Buffer.cs`, `Shared/Models/Shape/Shape.cs`, `Mesh.cs`, `SubMesh.cs`, `Bounding.cs`, and `Shared/GX2/Enums.cs` at commit `65c005275deed1e085069e72fea523247f955b87`. The Wii U buffer stores its data relative pointer at +0x14; shape mesh pointer is +0x24; submesh offsets are byte offsets into the index buffer.
+
+Validation completed: three synthetic fixture tests in `tests/test_mesh.py` pass, including index/position/normal/bounds readback and unchanged-byte checks outside permitted regions. An in-memory replacement against the actual W1 BFRES with the original 13-vertex/18-triangle island completed, retained the 11,546,624-byte length, and reloaded identical skeletons. No source game file was written. This verifies structural export and buffer readback, **not** actual rendering, materials, lighting or camera culling in Cemu.
+
 ## Confirmed versus still unverified
 
 Confirmed from source: runtime graph successor-name arrays, relevant lookup/model interfaces, script loader format/path, version-specific script behavior, current versus deprecated SDK status, license identities above.

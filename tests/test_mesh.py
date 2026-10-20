@@ -1,0 +1,150 @@
+import struct
+import unittest
+import hashlib
+from pathlib import Path
+
+from worldstudio.mesh import replace_rigid_mesh
+from worldstudio.archive import Archive
+from worldstudio.bfres import Skeletons
+
+
+def fixture():
+    """Entirely synthetic BFRES subset, containing no game data."""
+    b = bytearray(4096)
+    def u(p, n): struct.pack_into('>I',b,p,n)
+    def h(p, n): struct.pack_into('>H',b,p,n)
+    def ptr(p, target): u(p,(target-p)&0xffffffff if target else 0)
+    cursor = 0x900
+    def string(text):
+        nonlocal cursor
+        at = cursor
+        data = text.encode()+b'\0'
+        b[at:at+len(data)] = data
+        cursor += len(data)
+        return at
+    def dictionary(at, items):
+        u(at,8+16*(len(items)+1));u(at+4,len(items))
+        for i,(name,target) in enumerate(items):
+            q=at+24+16*i
+            ptr(q+8,string(name));ptr(q+12,target)
+    b[:4]=b'FRES';u(4,0x03000001);b[8:10]=b'\xfe\xff';ptr(32,0x80)
+    dictionary(0x80,[('CS_W1_World',0x100)])
+    b[0x100:0x104]=b'FMDL';ptr(0x10c,0x140);ptr(0x114,0x240)
+    b[0x140:0x144]=b'FSKL';h(0x148,1);ptr(0x150,0x180)
+    dictionary(0x180,[('root',0x1c0)])
+    ptr(0x1c0,string('root'));h(0x1c6,65535)
+    struct.pack_into('>3f',b,0x1d4,1,1,1)
+    struct.pack_into('>4f',b,0x1e0,0,0,0,1)
+    dictionary(0x240,[('beltmodel14__mtGrass',0x280)])
+    b[0x280:0x284]=b'FSHP';b[0x297]=1;h(0x29a,1)
+    ptr(0x2a0,0x300);ptr(0x2a4,0x480);ptr(0x2b4,0x500)
+    b[0x300:0x304]=b'FVTX';b[0x304]=4;b[0x305]=1;u(0x308,4)
+    ptr(0x314,0x340);ptr(0x318,0x440)
+    specs=[('_p0',0,0x811),('_n0',12,0x20b),('_u0',16,0x80d),('_u1',24,7)]
+    dictionary(0x340,[(n,0x400+12*i) for i,(n,_,_) in enumerate(specs)])
+    for i,(_,offset,fmt) in enumerate(specs):h(0x406+12*i,offset);u(0x408+12*i,fmt)
+    u(0x444,112);h(0x44c,28);h(0x44e,1);ptr(0x454,0x600)
+    u(0x480,4);u(0x484,4);u(0x488,6);h(0x48c,1);ptr(0x490,0x4e0);ptr(0x494,0x4b0)
+    u(0x4b4,12);h(0x4be,1);ptr(0x4c4,0x800);u(0x4e4,6)
+    return bytes(b)
+
+
+class MeshTests(unittest.TestCase):
+    vertices=[(0.,0.,0.),(0.,0.,2.),(2.,0.,0.)]
+    faces=[(0,1,2)]
+
+    def test_original_island_assets_have_upward_top_faces(self):
+        root=Path(__file__).resolve().parents[1]
+        for path,top_count in ((root/'assets/island.obj',6),(root/'examples/island-game.obj',18)):
+            vertices=[];faces=[]
+            for line in path.read_text().splitlines():
+                f=line.split()
+                if f and f[0]=='v':vertices.append(tuple(map(float,f[1:4])))
+                elif f and f[0]=='f':faces.append(tuple(int(i)-1 for i in f[1:]))
+            tops=faces[-6:] if path.name=='island.obj' else faces[:top_count]
+            for face in tops:
+                a,b,c=[vertices[i] for i in face[:3]]
+                normal_y=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2])
+                self.assertGreater(normal_y,0)
+            if path.name=='island-game.obj':
+                from collections import Counter
+                edges=Counter(tuple(sorted((face[i],face[(i+1)%len(face)])))
+                              for face in faces for i in range(len(face)))
+                self.assertTrue(all(count==2 for count in edges.values()))
+
+    def test_replacement_preserves_layout_and_unused_bytes(self):
+        before=fixture()
+        after, report=replace_rigid_mesh(before,self.vertices,self.faces)
+        self.assertEqual(len(after),len(before))
+        self.assertEqual(report['triangles'],1)
+        self.assertEqual(struct.unpack_from('>6H',after,0x800),(0,1,2,0,0,0))
+        self.assertEqual(struct.unpack_from('>3f',after,0x600+28),(0,0,2))
+        self.assertEqual(struct.unpack_from('>6f',after,0x500),(1,0,1,1,.009999999776482582,1))
+        self.assertEqual(struct.unpack_from('>I',after,0x600+12)[0],511<<10)
+        allowed=set(range(0x600,0x670))|set(range(0x800,0x80c))|set(range(0x500,0x518))|set(range(0x29c,0x2a0))
+        self.assertTrue(all(a==b or i in allowed for i,(a,b) in enumerate(zip(before,after))))
+
+    def test_rejects_capacity_and_bad_input(self):
+        with self.assertRaisesRegex(ValueError,'vertex capacity'):
+            replace_rigid_mesh(fixture(),self.vertices*2,self.faces)
+        with self.assertRaisesRegex(ValueError,'Invalid mesh face'):
+            replace_rigid_mesh(fixture(),self.vertices,[(0,1,99)])
+        with self.assertRaisesRegex(ValueError,'Degenerate'):
+            replace_rigid_mesh(fixture(),self.vertices,[(0,0,0)])
+
+    def test_rejects_unknown_formats_and_skinning(self):
+        data=bytearray(fixture());struct.pack_into('>I',data,0x408,123)
+        with self.assertRaisesRegex(ValueError,'Unsupported vertex attribute'):
+            replace_rigid_mesh(bytes(data),self.vertices,self.faces)
+        data=bytearray(fixture());data[0x296]=1
+        with self.assertRaisesRegex(ValueError,'rigid'):
+            replace_rigid_mesh(bytes(data),self.vertices,self.faces)
+
+
+class LocalDumpMeshTests(unittest.TestCase):
+    def test_local_dump_in_memory_export_and_byte_boundaries(self):
+        root=Path(__file__).resolve().parents[1]
+        source=root/'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W1 dump unavailable')
+        original=source.read_bytes()
+        source_hash=hashlib.sha256(original).digest()
+        archive=Archive(original)
+        before=archive.read('CS_W1.bfres')
+        vertices=[];faces=[]
+        for line in (root/'examples/island-game.obj').read_text().splitlines():
+            f=line.split()
+            if f and f[0]=='v':vertices.append(tuple(map(float,f[1:4])))
+            elif f and f[0]=='f':faces.append(tuple(int(i)-1 for i in f[1:]))
+        after,report=replace_rigid_mesh(before,vertices,faces)
+        self.assertEqual(len(before),len(after))
+        self.assertEqual(report['vertices'],len(vertices))
+        self.assertEqual(report['triangles'],len(faces))
+        r=Skeletons(before)
+        self.assertEqual(r.models,Skeletons(after).models)
+        model=dict(r.dictionary(r.ptr(32)))['CS_W1_World']
+        shape=dict(r.dictionary(r.ptr(model+20)))['beltmodel14__mtGrass']
+        vb=r.ptr(shape+32);buf=r.ptr(vb+24);start=r.ptr(buf+20)
+        stride=r.u16(buf+12);capacity=r.u32(vb+8)
+        attrs={n:r.u16(a+6) for n,a in r.dictionary(r.ptr(vb+20))}
+        permitted=bytearray(len(before))
+        def allow(at,size):permitted[at:at+size]=b'\1'*size
+        for i in range(capacity):
+            for name,width in (('_p0',12),('_n0',4),('_u0',8),('_u1',4)):
+                allow(start+i*stride+attrs[name],width)
+        mesh=r.ptr(shape+36);ib=r.ptr(mesh+20);istart=r.ptr(ib+20)
+        allow(istart,r.u32(mesh+8)*2)
+        allow(r.ptr(shape+52),r.u16(shape+26)*24)
+        allow(shape+28,4)
+        self.assertGreater(sum(a!=b for a,b in zip(before,after)),0)
+        self.assertTrue(all(a==b or permitted[i] for i,(a,b) in enumerate(zip(before,after))))
+        for i,xyz in enumerate(vertices):
+            self.assertEqual(struct.unpack_from('>3f',after,start+i*stride+attrs['_p0']),xyz)
+        triangle_indices=struct.unpack_from('>'+str(r.u32(mesh+8))+'H',after,istart)
+        expected=tuple(i for face in faces for i in face)
+        self.assertEqual(triangle_indices[:len(expected)],expected)
+        self.assertTrue(all(i==0 for i in triangle_indices[len(expected):]))
+        self.assertEqual(hashlib.sha256(source.read_bytes()).digest(),source_hash)
+
+
+if __name__=='__main__':unittest.main()

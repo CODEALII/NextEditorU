@@ -1,0 +1,28 @@
+# Original NSMBU World Studio island. CC0. Units are editor units.
+# Preview asset; the separate bounded rigid-mesh exporter can embed this geometry experimentally.
+o StudioIsland
+v -240 -35 -170
+v 200 -35 -190
+v 280 -35 0
+v 170 -35 190
+v -190 -35 180
+v -290 -35 0
+v -170 0 -110
+v 130 0 -130
+v 190 0 0
+v 110 0 120
+v -140 0 110
+v -200 0 0
+v 0 30 0
+f 7 8 2 1
+f 8 9 3 2
+f 9 10 4 3
+f 10 11 5 4
+f 11 12 6 5
+f 12 7 1 6
+f 13 8 7
+f 13 9 8
+f 13 10 9
+f 13 11 10
+f 13 12 11
+f 13 7 12

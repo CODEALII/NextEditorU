@@ -36,6 +36,10 @@ class Table:
         self.rows = [next(csv.reader([line.rstrip('\r\n')])) for line in self.lines]
         self.initial = [r[:] for r in self.rows]
         self.newline = '\r\r\n' if b'\r\r\n' in data else '\r\n' if b'\r\n' in data else '\n'
+        self.quoted = []
+        for line in self.lines:
+            fields = re.findall(r'(?:"(?:[^"]|"")*"|[^,\r\n]*)(?:,|$)', line.rstrip('\r\n'))
+            self.quoted.append([f.startswith('"') for f in fields[:len(self.rows[len(self.quoted)])]])
 
     def encode(self):
         if self.rows == self.initial:
@@ -45,9 +49,16 @@ class Table:
             if i < len(self.initial) and row == self.initial[i]:
                 result.append(self.lines[i])
             else:
-                s = io.StringIO(newline='')
-                csv.writer(s, lineterminator=self.newline).writerow(row)
-                result.append(s.getvalue())
+                # The game has its own CSV/list parser. Keep explicit quotes on
+                # array cells even when their edited value has only one item.
+                fields = []
+                for j, value in enumerate(row):
+                    quoted = i < len(self.quoted) and j < len(self.quoted[i]) and self.quoted[i][j]
+                    if quoted or any(c in value for c in ',"\r\n'):
+                        fields.append('"' + value.replace('"', '""') + '"')
+                    else:
+                        fields.append(value)
+                result.append(','.join(fields) + self.newline)
         return ''.join(result).encode('cp932')
 
 
@@ -60,6 +71,7 @@ class WorldProject:
     def open(cls, path):
         self = cls()
         self.source = Path(path).resolve()
+        self.game_root = next((p.parent for p in self.source.parents if p.name.lower() == 'content'), self.source.parent)
         self.archive = Archive(self.source.read_bytes())
         self.source_sha256 = sha(self.archive.original)
         points = [n for n in self.archive.entries if re.fullmatch(r'pointW\w+\.csv', n)]
@@ -80,6 +92,7 @@ class WorldProject:
                           if len(b) == 1 and re.fullmatch(r'W[A-Za-z0-9]{3}', name)}
         self.layout = {}
         self.terrain = None
+        self.geometry = None
         return self
 
     def validate(self):
@@ -152,12 +165,13 @@ class WorldProject:
 
     def save(self, path):
         path = Path(path).resolve()
-        if path == self.source or self.source.parent in path.parents:
+        if path == self.game_root or self.game_root in path.parents:
             raise ValueError('Store projects outside the source game resource directory')
         content = json.dumps({'format': 'nsmbu-world-studio', 'version': 1,
             'source': str(self.source), 'source_sha256': self.source_sha256,
             'points': self.points.rows, 'routes': self.routes.rows,
-            'layout': self.layout, 'positions': self.positions, 'terrain': self.terrain}, indent=2)
+            'layout': self.layout, 'positions': self.positions, 'terrain': self.terrain,
+            'geometry': self.geometry}, indent=2)
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.worldstudio-')
         try:
@@ -181,6 +195,7 @@ class WorldProject:
         self.layout = data.get('layout', {})
         self.positions = data.get('positions', self.positions)
         self.terrain = data.get('terrain')
+        self.geometry = data.get('geometry')
         return self
 
     def export(self, output):
@@ -190,9 +205,14 @@ class WorldProject:
         if sha(self.source.read_bytes()) != self.source_sha256:
             raise ValueError('Source archive has changed; reload it before exporting')
         output = Path(output).resolve()
-        if output == self.source or self.source.parent in output.parents:
+        if output == self.game_root or self.game_root in output.parents:
             raise ValueError('Export outside original game resources')
         patched_model = self.skeletons.patch_positions(self.positions)
+        geometry_report = None
+        if self.geometry is not None:
+            from .mesh import replace_rigid_mesh
+            patched_model, geometry_report = replace_rigid_mesh(patched_model,
+                self.geometry['vertices'], self.geometry['faces'])
         modified = {self.point_name: self.points.encode(), self.route_name: self.routes.encode(),
                     self.model_name: patched_model}
         blob = self.archive.replace(modified)
@@ -208,7 +228,8 @@ class WorldProject:
         manifest = {'source_sha256': self.source_sha256, 'output_sha256': sha(blob),
             'output': str(output), 'changed_entries': [n for n,v in modified.items() if v != self.archive.read(n)],
             'bfres_unchanged': patched_model == self.model, 'game_tested': False,
-            'terrain_exported': False, 'note': 'Local artifact contains user-owned resources. Do not redistribute.'}
+            'terrain_exported': geometry_report is not None, 'geometry': geometry_report,
+            'note': 'Local artifact contains user-owned resources. Do not redistribute.'}
         manifest_path = output.with_suffix(output.suffix + '.manifest.json')
         if output.exists() or manifest_path.exists():
             raise FileExistsError('Output or manifest already exists; choose a new export path')

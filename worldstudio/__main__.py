@@ -35,6 +35,7 @@ def main():
     demo = sub.add_parser('demo', help='Build experimental three-level progression patch')
     demo.add_argument('--source', default=str(DEFAULT_SOURCE))
     demo.add_argument('--out', required=True, type=Path)
+    demo.add_argument('--island', type=Path, help='Experimental original OBJ replacement of one existing rigid grass mesh')
     exp = sub.add_parser('export', help='Validate and export a saved project')
     exp.add_argument('project')
     exp.add_argument('--out', type=Path, required=True)
@@ -51,6 +52,11 @@ def main():
                 'positions': p.positions, 'validation_errors': p.validate()}, indent=2))
         elif args.command == 'demo':
             p = chain_demo(WorldProject.open(args.source))
+            if args.island:
+                from .editor import read_obj
+                vertices, faces = read_obj(args.island)
+                p.geometry = {'vertices': vertices, 'faces': faces}
+                p.terrain = str(args.island.resolve())
             if args.out.exists():
                 raise FileExistsError('Choose a new output folder')
             p.save(args.out / 'three-level-chain.nws.json')
@@ -58,8 +64,9 @@ def main():
             (args.out / 'EXPERIMENT.txt').write_text(
                 'Experimental resource patch. Not yet verified in-game.\n'
                 'Normal progression: W101 -> W102 -> W103; all other points remain.\n'
-                'W102 uses existing RW102W1T0,RW1T0W103 macro paths.\n'
-                'Original model, level files, cameras, scripts and saves unchanged.\n'
+                'W102 uses existing RW102W1T0,RW1T0W103 macro paths.\n' +
+                ('One rigid grass shape replaced by original OBJ; other shapes retained.\n' if args.island else 'Original model unchanged.\n') +
+                'Level files, cameras, scripts and saves unchanged.\n'
                 'Test on a separate game copy/profile. Contains user-owned resources; do not redistribute.\n', encoding='utf-8')
             print(json.dumps(manifest, indent=2))
         elif args.command == 'export':

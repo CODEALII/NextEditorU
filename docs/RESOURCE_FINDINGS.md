@@ -136,3 +136,50 @@ this specific ELF**, not discovered function addresses or universal patch sites:
 
 These give reproducible starting points for Ghidra cross-references. This
 inspection did not trace callers or establish the semantics of their fields.
+
+## Isolated emulator setup helper
+
+`tools/prepare_cemu.py --cemu <Cemu directory or executable> --patch
+build/three-level-chain --out <new distinct directory>` copies the emulator,
+runtime resources, installed system-title resources if available, CrashFix,
+and the generated patch into a new output directory. It writes fresh settings
+with only CrashFix and WorldStudioChain enabled, its own `mlc01`, no online
+account, no Discord presence and no automatic updates. It refuses an existing
+output directory and does not launch anything.
+
+The generated `launch.ps1` accepts an explicit game RPX path, sets the isolated
+working directory, and invokes `-g <RPX> -m <isolated mlc01>`. Keyboard profile:
+Z = A, X = B, C = X, V = Y, Enter = Plus, arrows = D-pad, WASD = left stick.
+Schema evidence comes from the inspected local XML profiles and official Cemu
+source:
+
+- [InputManager.cpp](https://github.com/cemu-project/Cemu/blob/main/src/input/InputManager.cpp): XML loading and mapping entries.
+- [KeyboardController.cpp](https://github.com/cemu-project/Cemu/blob/main/src/input/api/Keyboard/KeyboardController.cpp): Keyboard controller identity.
+- [VPADController.h](https://github.com/cemu-project/Cemu/blob/main/src/input/emulated/VPADController.h): button mapping ID enumeration.
+- [wxWindowSystem.cpp](https://github.com/cemu-project/Cemu/blob/main/src/gui/wxgui/wxWindowSystem.cpp): Windows virtual-key interpretation.
+- [LaunchSettings.cpp](https://github.com/cemu-project/Cemu/blob/main/src/config/LaunchSettings.cpp): `-g` and `-m` arguments.
+
+Current upstream source was inspected; compatibility with the local legacy
+binary remains a runtime check. A temporary-fixture test passed for setup,
+fresh XML settings, expected mapping IDs, preservation of input bytes, and
+refusal to overwrite an existing destination. No emulator executable was
+launched by that fixture test.
+
+Legacy setup detail verified against official [v2.0 CemuApp.cpp](https://github.com/cemu-project/Cemu/blob/v2.0/src/gui/CemuApp.cpp)
+and [v2.0 CemuConfig.cpp](https://github.com/cemu-project/Cemu/blob/v2.0/src/config/CemuConfig.cpp):
+`gp_download` maps to `did_show_graphic_pack_download`, and false triggers the
+first-run wizard. The helper therefore sets it **true** to mark setup complete;
+this is not an automatic-download switch. It also sets `permanent_storage` false
+to prevent legacy Cemu using shared `%LOCALAPPDATA%/Cemu/perm_setting.xml`
+([PermanentStorage.cpp](https://github.com/cemu-project/Cemu/blob/v2.0/src/config/PermanentStorage.cpp)).
+Both emitted values passed a temporary XML fixture assertion.
+
+Legacy input detail: the helper now emits both `controllerProfiles/controller0.txt`
+and `.xml`. Cemu 1.26's INI syntax is `[General]` with `emulate = Wii U GamePad`
+and `api = Keyboard`; `[Controller]` mappings use `key_90` for Z, `key_13` for
+Enter, etc. These are decimal Windows virtual-key values. The `button_` prefix
+is for controller bitmasks, not keyboard keys. Official
+[v2.0 InputManager.cpp](https://github.com/cemu-project/Cemu/blob/v2.0/src/input/InputManager.cpp)
+lines 385-407 migrate legacy `key_` values to XML with decimal parsing, and lines
+226-257 show that keyboard does not require a controller GUID. A temporary
+fixture confirmed exact equality between the generated INI and XML mappings.

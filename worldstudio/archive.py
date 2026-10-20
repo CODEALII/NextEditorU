@@ -2,7 +2,7 @@
 
 SARC replacements retain the original FAT order, offsets and allocation. This
 avoids changing BFRES alignment. A larger table must fit its existing slot.
-Yaz0 output uses legal literal groups; compression ratio is deliberately modest.
+Yaz0 output uses bounded-window LZ77 to keep resource sizes close to originals.
 """
 from dataclasses import dataclass
 import struct
@@ -53,8 +53,8 @@ def decompress(data: bytes) -> bytes:
 def compress(data: bytes) -> bytes:
     if len(data) > MAX_SIZE:
         raise ValueError('Resource exceeds size limit')
-    return b'Yaz0' + struct.pack('>I', len(data)) + bytes(8) + b''.join(
-        b'\xff' + data[i:i + 8] for i in range(0, len(data), 8))
+    from .yaz0_encode import encode
+    return encode(data)
 
 
 @dataclass(frozen=True)

@@ -52,6 +52,9 @@ class ArchiveTests(unittest.TestCase):
         t.rows[0][2] = 'fix,stop'
         loaded = Table(t.encode())
         self.assertEqual(loaded.rows, t.rows)
+        self.assertIn(b'"W102","RW101W102"', t.encode())
+        t.rows[0][3] = 'W103'
+        self.assertIn(b'"W103"', t.encode())
         road = Table('RW101W102,ジャンプ,\r\n'.encode('cp932'))
         self.assertEqual(road.rows[0][1], 'ジャンプ')
 
@@ -105,6 +108,13 @@ class LocalIntegrationTests(unittest.TestCase):
         self.assertTrue(any('indices' in e for e in p.validate()))
         with self.assertRaises(ValueError):
             p.export(Path(tempfile.gettempdir()) / 'never-written.szs')
+
+    def test_game_tree_protected_for_projects_and_exports(self):
+        p = WorldProject.open(DEFAULT_SOURCE)
+        with self.assertRaises(ValueError):
+            p.save(p.game_root / 'code' / 'do-not-write.json')
+        with self.assertRaises(ValueError):
+            p.export(p.game_root / 'content' / 'do-not-write.szs')
 
 
 if __name__ == '__main__':
