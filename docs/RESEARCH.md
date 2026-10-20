@@ -1,0 +1,107 @@
+# NSMBU overworld research
+
+Research date: 2026-10-20. Sources were cloned from their public upstreams into `external/` and inspected locally. These are source-confirmed interfaces, not proof that a patch has run on the user's game. Any addresses below belong to upstream maps/headers and must be matched to the actual executable/version before use.
+
+## Reproducible source snapshots
+
+| Project | Commit inspected | License file | Relevant contribution |
+| --- | --- | --- | --- |
+| [Cobra](https://github.com/RoadrunnerWMC/Cobra) | `0b8d3927a4466e5061367dbb69c03fcd3eeaec3b` | `LICENSE`, GPL-3.0 | RPX/RAM event-script analysis, text export, WMSC encoding |
+| [Tsuru](https://github.com/Zenith-Team/Tsuru) | `69a01d3a1ef8ecfc85a26141977a5ace87fec23f` | `LICENSE`, MPL-2.0 | Legacy code injection, actors, script loader, symbol map |
+| [NSMBU-CSScript](https://github.com/Ryguy0777/NSMBU-CSScript) | `26797c51b20af47dfcf59256bac0dcc192ed26aa` | `LICENSE.txt`, MPL-2.0 | Current RedCore module for externally supplied WMSC scripts |
+| [Pyamoto](https://github.com/Zenith-Team/Pyamoto) | `0420d3b1487f41bc9095691b2d02555888e28a02` | `license.txt`, GPL-3.0 | Course editor, Yaz0/SARC workflows; not a complete overworld editor |
+| [RedCore](https://github.com/Zenith-Team/RedCore) | `a1b7ff2c38699e9086dcb11d5e0ce4a80abbee6c` | `LICENSE.txt`, MPL-2.0 | Current C++ API and target/address conversion maps |
+| [nsmbu/headers](https://github.com/nsmbu/headers) | `bb923aede585a06924669c0d496bb4b784ab6f2c` | No top-level license found | Public reverse-engineered interfaces; research only, do not vendor into distributed code without resolving licensing |
+
+Run `git -C external/<name> rev-parse HEAD` to reproduce each identity. Clones are independent upstream repositories and must not be added wholesale to the tooling repository. Respect file-level licenses when reusing implementation code.
+
+## Node and route topology
+
+The strongest current public evidence is in [CourseSelectPathPoint.h](https://github.com/nsmbu/headers/blob/bb923aede585a06924669c0d496bb4b784ab6f2c/course_select/CourseSelectPathPoint.h):
+
+- `CourseSelectPathPoint` has a name, four ordinary successor names, and four secret successor names. Public accessors are `getName`, `getNextPoint(idx)`, and `getNextPointSecret(idx)`.
+- The source declares `FixedSafeString<5>` for each of those names. These are runtime C++ objects, **not five-byte disk records**.
+- It declares attribute, enemy, trap and placement flag groups and asserts a runtime object size of `0x448`.
+- Attributes include stop/link flags, scale/fixed-coordinate/focus flags, and several course-point types. Flag meanings beyond their upstream names have not been verified in gameplay.
+- Many other members remain unknown. The header does not establish the disk serializer or level-launch mapping.
+
+[CourseSelectPath.h](https://github.com/nsmbu/headers/blob/bb923aede585a06924669c0d496bb4b784ab6f2c/course_select/CourseSelectPath.h) exposes `getPoint(u32)` at upstream address `0x021D23AC`, while the rest of that class is explicitly TODO. [CourseSelectMgr.h](https://github.com/nsmbu/headers/blob/bb923aede585a06924669c0d496bb4b784ab6f2c/course_select/CourseSelectMgr.h) exposes `getPath(u8 world_no, u8 sub_world_no)` at `0x021F9FC8`.
+
+These functions also appear in `external/RedCore/syms.map` under `CourseSelectPath` and `CourseSelectMgr`. They are a concrete starting point for local executable disassembly and a runtime diagnostic hook. Their existence does not by itself prove a compatible arbitrary graph replacement patch.
+
+## Rendering and geometry
+
+[CourseSelectMap.h](https://github.com/nsmbu/headers/blob/bb923aede585a06924669c0d496bb4b784ab6f2c/course_select/CourseSelectMap.h) exposes:
+
+| Upstream interface | Upstream address |
+| --- | --- |
+| `loadModel(world, worldSubLetter)` | `0x021F56CC` |
+| `getBoneWorldMatrix(world, worldSubLetter, name, out)` | `0x021F5800` |
+| `getBoneWorldPos(out, world, worldSubLetter, name)` | `0x021F59A8` |
+| `initialize()` | `0x021F6C14` |
+| `calc()` | `0x021F6FE8` |
+| `draw(layer)` | `0x021F7114` |
+
+The header represents nine model lists. `MapModel.h` exposes separate `mModel`, `mModelWorld`, and `mModelTrap` pointers to `AnimModel` objects, and records the world and subletter. This supports investigation of model/bone relationships. A dependency of route positions on particular BFRES bone names is a hypothesis until confirmed from local assets/disassembly.
+
+The local dump contains `content/Common/course_select/CS_W1.szs` and corresponding resources for other worlds, plus `CS_WorldMap.szs`, `MarioOffsetDataW1.bin` through W9 and `LookOffsetDataW1.bin` through W9. Filename observations alone do not establish binary field semantics. Do not treat offset binaries as node connectivity without further evidence.
+
+Pyamoto's `miyamoto/app.py` explicitly detects Yaz0 compression, decompresses it, and uses SarcLib for archive handling. That is useful existing packaging functionality; it does not establish arbitrary BFRES geometry authoring support. An SZS extension should be checked for its actual compression/archive magic.
+
+## Events and scripts
+
+[Cobra's NSMBU documentation](https://github.com/RoadrunnerWMC/Cobra/blob/0b8d3927a4466e5061367dbb69c03fcd3eeaec3b/docs/nsmbu.md) distinguishes version-specific script tables and terminators. It states that Wii U script command IDs are initialized at runtime rather than fully present in static RPX data. `export_nsmbu.py` analyzes PPC instruction patterns to recover these IDs, and recognizes RPX ELF files and Cemu RAM dumps.
+
+For the US releases, that document lists:
+
+| Version | Scripts table | Count | Terminator |
+| --- | --- | --- | --- |
+| 1.0.0 | `0x10044A60` | 119 | 341 |
+| 1.1.0 / 1.2.0 | `0x10044A98` | 119 | 342 |
+| 1.3.0 | `0x100458B8` | 121 | 344 |
+
+These addresses are **not portable file offsets**. They are upstream US virtual addresses. Cobra can auto-detect important addresses rather than blindly applying this table.
+
+Cobra WMSC is an external mod format, not a stock game resource. Its README specifies `WMS0`, game `U`, a three-character variant such as `130`, file size, sparse sorted script IDs, priority/offset records, and eight-byte command/argument pairs. Script data is encoded big endian for Wii U. The stock executable requires a loader patch for these files.
+
+[NSMBU-CSScript README](https://github.com/Ryguy0777/NSMBU-CSScript/blob/26797c51b20af47dfcf59256bac0dcc192ed26aa/README.md) requires a v1.3.0 WMSC at `content/Common/course_select/scripts.wmsc`, and describes Cemu GraphicPack and Telkin deployment. `include/csscript/Cobra.h` checks `WMS`, version `0`, game `U`, variant `130`, then resolves script offsets into pointers. `src/Main.cpp` hooks script command argument/type/priority access. Those hooks are for events; a WMSC file is **not a node/route graph file**.
+
+## Current toolchain and target caution
+
+Tsuru's checked-in `DEPRECATED.md` is dated 2026-09-14 and recommends Project RedHadron. RedCore is the current modern API; its project configuration and `conv/` directory distinguish US, EU, JP, bundle and standalone Luigi targets. Do not apply legacy Tsuru raw addresses without selecting the exact target and checking instructions.
+
+The current NSMBU-CSScript and RedCore READMEs describe Tachyon with Node.js 24+, `tachyon pm install`, `tachyon compile US`, and `tachyon launch US`. These are upstream instructions, not a claim that the local SDK is installed or the module was compiled.
+
+## Local resource evidence and BFRES bone layout
+
+The user-provided W1 SZS was decompressed and its SARC entries read without writing the source. It contains `routeW1.csv` (2,052 bytes), `pointW1.csv` (1,646 bytes), and `CS_W1.bfres` (11,546,624 bytes). Both CSVs decode as Shift-JIS. The point table includes normal destination names and corresponding lists of macro route names, while the route CSV lists smaller route segments with movement labels such as the Japanese word for road, slope or jump.
+
+Stock point records support multiple macro route references for a single destination: W1C0 has destination W201 and references RW1C0W2J0, RW2J0W2M0, RW2M0W201. W1S0 has destination W501 with four route references. Therefore connecting W102 to W103 with existing RW102W1T0 and RW1T0W103 follows an observed stock syntax, but bypassing the tower and its unlock/event logic remains an emulator integration question.
+
+For geometry inspection, [BfresLibrary](https://github.com/KillzXGaming/BfresLibrary/tree/65c005275deed1e085069e72fea523247f955b87) was cloned to `external/BfresLibrary`; its license is MIT. Its primary parser source establishes the following Wii U layout:
+
+- `Shared/Core/ResFileLoader.cs:ReadOffset`: nonzero 32-bit offsets are relative to the address of the offset field itself.
+- `WiiU/ResFileParser.cs:Load`: the FRES models dictionary pointer is at 0x20.
+- `Shared/Common/ResDict.cs`: an 8-byte dictionary header is followed by a 16-byte root entry and 16-byte data entries; key pointer is entry+8 and value pointer is entry+12.
+- `Shared/Models/Model.cs`: FMDL skeleton pointer is model+0x0C.
+- `Shared/Models/Skeleton/Skeleton.cs`: FSKL bone count is at +8; the bone dictionary pointer is at +0x10.
+- `Shared/Models/Skeleton/Bone.cs`: Wii U bone name pointer +0, index +4, parent index +6, flags +0x10, scale +0x14, rotation +0x20, translation +0x30, user-data dictionary pointer +0x3C. Versions below 0x03040000 include an additional inverse matrix after this header.
+- Translation-zero optimization flags are bit 27 (local) and bit 31 (cumulative). A nonzero translation edit must account for them. Moving skinned geometry also requires matrix/animation considerations; changing a bone field alone does not establish a correct mesh export.
+
+Navigating those structures in the actual W1 BFRES confirmed version `0x03000001` and seven model dictionaries. The main model `CS_W1` has 158 bones. The following positions are local bone translations, not a proof of final rendered world-space positions:
+
+| Bone | BFRES offset | Local translation | Parent index |
+| --- | --- | --- | --- |
+| W101 | 0x57A8 | (180.0068054, 60, -60.4845695) | 0 |
+| W102 | 0x5818 | (420.0068054, 60, -60.4845695) | 0 |
+| W103 | 0x5888 | (90.0068054, 300, -870.4845581) | 0 |
+| RW102W1T0 | 0x3128 | (0.0070038, 60, -0.4845963) | 0 |
+| RW1T0W103 | 0x51F8 | (0.0070038, 107.8915024, -1600.4846191) | 0 |
+
+These offsets belong only to this exact extracted BFRES, and should be discovered through dictionaries rather than hardcoded in export logic. Macro route names proposed for the three-node prototype are thus confirmed to exist in the source skeleton. Relocating only level-point bones may leave route animation positions inconsistent; coupled route transforms need testing.
+
+## Confirmed versus still unverified
+
+Confirmed from source: runtime graph successor-name arrays, relevant lookup/model interfaces, script loader format/path, version-specific script behavior, current versus deprecated SDK status, license identities above.
+
+Still unverified here: exact parser semantics of every CSV column, route interpolation, save/unlock semantics, level-launch dispatch, camera state transitions, arbitrary BFRES import compatibility, and runtime behavior of a custom three-node island. Those require further executable analysis and a Cemu/console run. A standalone editor simulation cannot serve as evidence for any of them.

@@ -1,0 +1,7 @@
+NSMBU Modding Project/
+external/
+build/
+local/
+__pycache__/
+*.pyc
+.venv/
