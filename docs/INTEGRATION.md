@@ -10,6 +10,10 @@
   outgoing destination removed (W102 and W103 become unreachable). It confirms
   no rejected archive is written and compares the source SZS byte-for-byte.
   Successful export manifests still retain `game_tested:false`.
+- The native editor's **Graph check** toolbar menu selects the same optional
+  JSON profile for SZS export and clears it when switching source archives.
+  This offline gate does not demonstrate route traversal or progression in
+  Cemu.
 
 ## Ambiguous albedo references in local world models — 2026-10-22
 

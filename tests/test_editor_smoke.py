@@ -259,6 +259,33 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertEqual(len(self.app.tree.get_children()), 7)
         self.assertEqual(self.app.tree_filter_status.cget("text"), "7 items")
 
+    def test_graph_profile_can_be_enabled_and_disabled_in_native_editor(self):
+        profile_path = Path(__file__).parents[1] / "profiles" / "w1-core-progression.json"
+        with patch("worldstudio.editor.filedialog.askopenfilename", return_value=str(profile_path)):
+            self.app.choose_graph_profile()
+
+        self.assertEqual(self.app.graph_profile_path, profile_path)
+        self.assertEqual(self.app.graph_profile_label.get(),
+                         "Graph check: w1-core-progression.json")
+        self.assertIn("W101", self.app.status.get())
+        self.assertIn("not inferred", self.app.status.get())
+
+        self.app.clear_graph_profile()
+        self.assertIsNone(self.app.graph_profile_path)
+        self.assertEqual(self.app.graph_profile_label.get(), "Graph check: off")
+
+    def test_profile_gate_blocks_native_export_before_output_picker(self):
+        self.app.graph_profile_path = Path("profiles/w1-core-progression.json")
+        with patch("worldstudio.__main__._validate_with_graph_profile",
+                   return_value=["W102 is unreachable"]), \
+             patch("worldstudio.editor.messagebox.showerror") as show_error, \
+             patch("worldstudio.editor.filedialog.asksaveasfilename") as choose_output:
+            self.app.export_szs()
+
+        show_error.assert_called_once()
+        self.assertIn("W102 is unreachable", show_error.call_args.args[1])
+        choose_output.assert_not_called()
+
     def test_add_route_dialog_builds_a_draft_from_an_existing_bfres_segment(self):
         before = [row[:] for row in self.native.routes.rows]
         self.native.points.rows[1][4] = "RW102F001"

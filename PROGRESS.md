@@ -9,6 +9,11 @@
   exit removed because W102/W103 become unreachable, confirms no rejected
   output was created, and verifies the source SZS is byte-identical. Profile
   checks remain opt-in and do not claim game unlock semantics.
+- The native editor also offers a **Graph check** toolbar menu to select or
+  disable the same profile before SZS export. It clears the selection when a
+  different source world opens and reports the required static paths without
+  implying event, unlock, or save behavior. Tk regressions confirm selection
+  and that failed checks block the output picker.
 
 ## 2026-10-22 — Resolve ambiguous local albedo references
 

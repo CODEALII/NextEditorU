@@ -1777,6 +1777,8 @@ class NativeStudio(WorldStudio):
     def __init__(self, master, native, project_path=None):
         self.native = native
         self.exporting = False
+        self.graph_profile_path = None
+        self.graph_profile_label = tk.StringVar(master, value="Graph check: off")
         self._auto_fit = True
         self._fit_after_id = None
         self.export_results = queue.Queue()
@@ -1865,6 +1867,14 @@ class NativeStudio(WorldStudio):
         bar.pack(fill="x", before=self.winfo_children()[1])
         ttk.Button(bar, text="Open native world SZS", command=self.open_szs).pack(side="left", padx=2)
         ttk.Button(bar, text="Export validated SZS", command=self.export_szs).pack(side="left", padx=2)
+        profile_menu = ttk.Menubutton(bar, textvariable=self.graph_profile_label)
+        profile_options = tk.Menu(profile_menu, tearoff=False)
+        profile_options.add_command(label="Select reachability profile…",
+                                    command=self.choose_graph_profile)
+        profile_options.add_command(label="Disable profile check",
+                                    command=self.clear_graph_profile)
+        profile_menu.configure(menu=profile_options)
+        profile_menu.pack(side="left", padx=2)
         ttk.Button(bar, text="Use OBJ/GLB mesh (experimental)", command=self.use_obj_mesh).pack(side="left", padx=2)
         ttk.Button(bar, text="Open external preview", command=self.open_external_preview).pack(side="left", padx=2)
         ttk.Checkbutton(bar, text="Show path geometry / auxiliary points", variable=self.show_auxiliary,
@@ -2415,6 +2425,8 @@ class NativeStudio(WorldStudio):
             self.camera_window.destroy()
         self.camera_window = None
         self.native, self.project_path = native, project_path
+        self.graph_profile_path = None
+        self.graph_profile_label.set("Graph check: off")
         self.native_selection = self.selected = None
         self.dirty = False
         self.project = self.view_project()
@@ -2592,7 +2604,8 @@ class NativeStudio(WorldStudio):
             while pending:
                 widget = pending.pop()
                 pending.extend(widget.winfo_children())
-                if isinstance(widget, (ttk.Button, ttk.Entry, ttk.Checkbutton, ttk.Scale, ttk.Treeview)) and not widget.instate(["disabled"]):
+                if isinstance(widget, (ttk.Button, ttk.Menubutton, ttk.Entry, ttk.Checkbutton,
+                                       ttk.Scale, ttk.Treeview)) and not widget.instate(["disabled"]):
                     widget.state(["disabled"])
                     self.disabled_for_export.append(widget)
         else:
@@ -2625,6 +2638,13 @@ class NativeStudio(WorldStudio):
         if self.exporting:
             return
         issues = self.native.validate()
+        if self.graph_profile_path is not None:
+            try:
+                from .__main__ import _validate_with_graph_profile
+                issues = sorted(set(issues) | set(
+                    _validate_with_graph_profile(self.native, self.graph_profile_path)))
+            except (OSError, ValueError) as error:
+                issues = sorted(set(issues) | {str(error)})
         if issues:
             messagebox.showerror("Export blocked", "\n".join(issues[:35]), parent=self)
             return
@@ -2642,6 +2662,36 @@ class NativeStudio(WorldStudio):
                     self.export_results.put((False, str(error)))
             threading.Thread(target=worker, name="worldstudio-export", daemon=True).start()
             self.after(60, self.poll_export)
+
+    def choose_graph_profile(self):
+        if self.exporting:
+            return
+        path = filedialog.askopenfilename(
+            title="Select a static graph reachability profile",
+            filetypes=[("World graph profiles", "*.json"), ("JSON", "*.json")],
+            parent=self)
+        if not path:
+            return
+        from .graph_validation import load_native_graph_profile
+        world = re.search(r"pointW([1-9])", getattr(self.native, "point_name", ""))
+        world_prefix = f"W{world[1]}" if world else None
+        try:
+            profile = load_native_graph_profile(path, world_prefix)
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Graph profile unavailable", str(error), parent=self)
+            return
+        self.graph_profile_path = Path(path)
+        self.graph_profile_label.set(f"Graph check: {self.graph_profile_path.name}")
+        self.status.set(
+            f"Export gate enabled: {', '.join(profile['entry_points'])} must reach "
+            f"{', '.join(profile['required_locations'])}; game unlock rules are not inferred.")
+
+    def clear_graph_profile(self):
+        if self.exporting:
+            return
+        self.graph_profile_path = None
+        self.graph_profile_label.set("Graph check: off")
+        self.status.set("Graph-profile export gate disabled")
 
 
 class PathChainDialog(tk.Toplevel):
