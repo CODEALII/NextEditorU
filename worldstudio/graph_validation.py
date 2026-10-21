@@ -12,6 +12,50 @@ _POINT_ID = re.compile(r"[WF][A-Za-z0-9]{3}\Z")
 _ROUTE_ID = re.compile(r"R[A-Za-z0-9]{8}\Z")
 
 
+def native_route_segment_choices(route_rows, known_references, known_bones,
+                                 world_prefix=None):
+    """Return unused BFRES route IDs whose local endpoint bones resolve."""
+    references = set(known_references)
+    bones = set(known_bones)
+    existing = {
+        row[0] for row in route_rows
+        if (isinstance(row, (list, tuple)) and len(row) == 3 and
+            isinstance(row[0], str) and _ROUTE_ID.fullmatch(row[0]))
+    }
+    candidates = []
+    for name in references:
+        if not isinstance(name, str) or not _ROUTE_ID.fullmatch(name) or name in existing:
+            continue
+        endpoints = (name[1:5], name[5:9])
+        if all(
+                endpoint in bones or
+                (world_prefix and endpoint.startswith("W") and
+                 not endpoint.startswith(world_prefix))
+                for endpoint in endpoints):
+            candidates.append(name)
+    return sorted(candidates)
+
+
+def build_native_route_row(route_id, road_type, available_route_ids,
+                           existing_route_rows=()):
+    """Build a route CSV row from an unused, existing BFRES route ID.
+
+    This only constructs the native table record. It does not add BFRES route
+    geometry or update point destination/path-chain fields.
+    """
+    if not isinstance(route_id, str) or not _ROUTE_ID.fullmatch(route_id):
+        raise ValueError("Choose an existing BFRES route segment ID")
+    if route_id not in set(available_route_ids):
+        raise ValueError("Choose an unused route segment found in the current BFRES")
+    if not isinstance(road_type, str) or not road_type.strip():
+        raise ValueError("Choose a road type found in the current route table")
+
+    for row in existing_route_rows:
+        if isinstance(row, (list, tuple)) and row and row[0] == route_id:
+            raise ValueError(f"Route segment {route_id} already exists")
+    return [route_id, road_type.strip(), ""]
+
+
 def _tokens(value):
     return [token.strip() for token in value.split(",") if token.strip()]
 

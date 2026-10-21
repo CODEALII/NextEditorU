@@ -78,7 +78,8 @@ Resolve the start prompt before drawing any conclusion about map movement.
 - Implemented: project, editor, and export validation require a directed segment chain for newly added same-world destinations. Changed local destinations are also checked against paired BFRES macro-path references when the listed bones form one unambiguous linear chain. Branched legacy lists, pre-existing gaps and cross-world links are preserved. Route edits recheck baseline-connected destinations and block an export if an edit disconnects one.
 - Implemented: a route segment may reference endpoints in another world without requiring those bones in the current BFRES. Local endpoints are still validated, and cross-world segments cannot satisfy local reachability checks.
 - Extend graph validation only as each native reference is identified: level destinations, event dependencies, and progression conditions.
-- Support route creation and node placement after safe bone naming, point indexes, and engine/script references are understood. Preserve unknown data and block unresolved exports.
+- Implemented: the native Add segment dialog offers unused BFRES route IDs whose local endpoint bones resolve, reuses a road type present in the source table, and rejects duplicate segments. It adds only the route CSV row; point destination/path-chain wiring and game use remain unverified.
+- Continue full route creation and node placement after route-geometry links, safe bone naming, point indexes, and engine/script references are understood. Preserve unknown data and block unresolved exports.
 - Improve camera offset editing with a clear table inspector, then map each bank and transition to in-game behavior.
 - Keep the Cobra event table bridge offline until a loader or game-side hook is verified. Round-trip success alone does not establish that the game consumes an edited table.
 

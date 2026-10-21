@@ -67,6 +67,14 @@ longer logical route than an individual route CSV row: W102 references
 segments ending at `W1T0`. A validator must not reject every point route reference
 that lacks an identical route CSV row without checking BFRES.
 
+For the supplied W1 archive, the BFRES ASCII reference inventory contains 17
+exact `R` plus eight-character identifiers; four also occur in the 134-row
+route table. Thirteen other identifiers have resolvable local endpoint bones
+(cross-world endpoints are treated as external). The native editor can add one
+of these unused BFRES-referenced IDs as a table row using an observed road type.
+An in-memory addition of `RF008W1C0` passes static project validation, but this
+does not wire a point destination/path chain or establish in-game traversal.
+
 ## BFRES observations
 
 All world BFRES entries begin `FRES 03 00 00 01 FE FF 00 10` (version bytes and

@@ -10,11 +10,16 @@ import hashlib
 import json
 import math
 import queue
+import re
 import threading
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from .gltf import read_glb
+from .graph_validation import (
+    build_native_route_row,
+    native_route_segment_choices,
+)
 from .mesh import MAX_FACE_CORNERS, transform_obj_geometry
 from .recent_projects import RecentProjects
 from .session_recovery import SessionRecovery, StaleRecoveryError
@@ -1856,12 +1861,106 @@ class NativeStudio(WorldStudio):
     def add_route(self):
         if self.exporting:
             return
-        name = simpledialog.askstring("Draft segment", "Existing BFRES route segment name (R + two four-character points):", parent=self)
-        if name:
-            self.native.routes.rows.append([name.strip(), "道", ""])
+        bones = {
+            bone.name
+            for model_bones in self.native.skeletons.models.values()
+            for bone in model_bones
+        }
+        world_match = re.search(r"pointW([1-9])", getattr(self.native, "point_name", ""))
+        world_prefix = f"W{world_match[1]}" if world_match else None
+        route_ids = native_route_segment_choices(
+            self.native.routes.rows, self.native.references, bones, world_prefix)
+        if not route_ids:
+            messagebox.showerror(
+                "Cannot add route segment",
+                "No unused BFRES route segments with resolvable local endpoints were found.",
+                parent=self,
+            )
+            return
+
+        route_types = list(dict.fromkeys(
+            row[1] for row in self.native.routes.rows
+            if (isinstance(row, (list, tuple)) and len(row) == 3 and
+                isinstance(row[1], str) and row[1].strip())
+        ))
+        if not route_types:
+            messagebox.showerror(
+                "Cannot add route segment",
+                "The current route table does not contain a road type to reuse.",
+                parent=self,
+            )
+            return
+
+        window = tk.Toplevel(self)
+        window.title("Add draft route segment")
+        window.transient(self.winfo_toplevel())
+        window.resizable(False, False)
+        body = ttk.Frame(window, padding=14)
+        body.grid(sticky="nsew")
+        ttk.Label(body, text="Add an existing BFRES segment to the route table.",
+                  font=("TkDefaultFont", 10, "bold")).grid(
+                      row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
+
+        segment_id = tk.StringVar(value="")
+        road_type = tk.StringVar(value="")
+        for row_index, (label, variable, choices) in enumerate((
+                ("BFRES segment", segment_id, route_ids),
+                ("Road type", road_type, route_types))):
+            ttk.Label(body, text=label).grid(row=row_index + 1, column=0,
+                                             sticky="w", padx=(0, 12), pady=4)
+            ttk.Combobox(body, textvariable=variable, values=choices,
+                         state="readonly", width=22).grid(
+                             row=row_index + 1, column=1, sticky="ew", pady=4)
+
+        ttk.Label(
+            body,
+            text=("Only unused route IDs already present in this BFRES are listed. "
+                  "This adds a CSV row; point destinations and path chains are unchanged."),
+            wraplength=390,
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(5, 10))
+
+        buttons = ttk.Frame(body)
+        buttons.grid(row=4, column=0, columnspan=2, sticky="e")
+        create = ttk.Button(buttons, text="Add segment", state="disabled")
+        create.pack(side="right", padx=(8, 0))
+        ttk.Button(buttons, text="Cancel", command=window.destroy).pack(side="right")
+
+        def update_route_preview(*_):
+            try:
+                row = build_native_route_row(
+                    segment_id.get(), road_type.get(), route_ids,
+                    self.native.routes.rows)
+            except ValueError as error:
+                self.status.set(str(error) if segment_id.get() else
+                                "Choose an unused BFRES route segment.")
+                create.state(["disabled"])
+                return
+            self.status.set(f"Ready to add existing BFRES route segment {row[0]}.")
+            create.state(["!disabled"])
+
+        def submit():
+            try:
+                row = build_native_route_row(
+                    segment_id.get(), road_type.get(), route_ids,
+                    self.native.routes.rows)
+            except ValueError as error:
+                messagebox.showerror("Invalid route segment", str(error), parent=window)
+                return
+            self.native.routes.rows.append(row)
             self.dirty = True
             self._record_edit()
             self.refresh()
+            self.status.set(
+                f"Draft route {row[0]} added to CSV; point destinations and path chains were not changed.")
+            window.destroy()
+
+        create.configure(command=submit)
+        for variable in (segment_id, road_type):
+            variable.trace_add("write", update_route_preview)
+        window.bind("<Return>", lambda _event: submit() if create.instate(("!disabled",)) else None)
+        window.bind("<Escape>", lambda _event: window.destroy())
+        window.grab_set()
+        window.wait_window()
 
     def delete(self):
         if self.exporting:

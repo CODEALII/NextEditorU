@@ -1137,3 +1137,22 @@ camera behavior and a fully playable custom world remain open.
   `local/evidence/preview-w1-wrap-sampler.png`). The clean Cemu check remained
   at its title prompt, so route movement, level launches, progression, and
   terrain appearance remain unverified.
+
+## 2026-10-21 — Safer native route-table drafts
+
+- Replaced free-text route-ID entry with BFRES-segment and road-type selectors.
+  The editor now lists unused route IDs found in the BFRES whose local endpoint
+  bones resolve, offers only road types already present in the route table,
+  and rejects duplicate segments. The local W1 archive contains 13 such IDs
+  absent from its 134-row route table.
+- The dialog says that it adds only a route CSV row. It does not create route
+  geometry or edit point destinations/path chains; successful static export
+  therefore does not establish that the game can traverse the segment.
+- Added synthetic graph checks and a Tk smoke test for selection, row creation,
+  and undo. The focused graph-validation and editor smoke suites pass (22 and
+  21 tests). The final full suite passed: **275 tests in 249.642 seconds**;
+  `compileall` and `git diff --check` also passed.
+- Cross-checked all 12 supplied `CS_W*.szs` world archives in memory: every
+  baseline passed static validation; ten had unused BFRES route IDs and
+  accepted one added table row, while W8a and W9a had no unused IDs. This does
+  not verify route movement or point-chain behavior in game.

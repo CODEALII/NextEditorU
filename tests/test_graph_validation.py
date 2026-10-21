@@ -1,10 +1,45 @@
 import unittest
 
-from worldstudio.graph_validation import validate_native_world
+from worldstudio.graph_validation import (
+    build_native_route_row,
+    native_route_segment_choices,
+    validate_native_world,
+)
 
 
 def point(index, name, normal="", paths="", secret="", secret_paths=""):
     return [str(index), name, "", normal, paths, "", secret, secret_paths, ""]
+
+
+class NativeRouteDraftTests(unittest.TestCase):
+    def test_route_choices_require_unused_bfres_ids_and_resolvable_endpoints(self):
+        references = {"RW101W102", "RW102W103", "RW103W104", "RW103W201",
+                      "RW103K009", "RK999W103", "not-a-route"}
+        self.assertEqual(
+            native_route_segment_choices(
+                [["RW101W102", "road", ""]], references,
+                {"W101", "W102", "W103", "W104"}, world_prefix="W1"),
+            ["RW102W103", "RW103W104", "RW103W201"],
+        )
+
+    def test_builds_row_from_an_available_existing_bfres_route_id(self):
+        row = build_native_route_row(
+            "RW102W103", " road ", {"RW102W103"}, [])
+        self.assertEqual(row, ["RW102W103", "road", ""])
+
+    def test_rejects_malformed_or_unavailable_bfres_route_ids(self):
+        with self.assertRaisesRegex(ValueError, "existing BFRES"):
+            build_native_route_row("bad", "road", {"RW102W103"}, [])
+        with self.assertRaisesRegex(ValueError, "unused route segment"):
+            build_native_route_row("RW101W103", "road", {"RW102W103"}, [])
+
+    def test_rejects_empty_road_type_and_duplicate_route(self):
+        with self.assertRaisesRegex(ValueError, "road type"):
+            build_native_route_row("RW102W103", " ", {"RW102W103"}, [])
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            build_native_route_row(
+                "RW102W103", "road", {"RW102W103"},
+                [["RW102W103", "road", ""]])
 
 
 class NativeGraphValidationTests(unittest.TestCase):

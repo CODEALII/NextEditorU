@@ -2,6 +2,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 import tkinter as tk
+from tkinter import ttk
 import threading
 import time
 import tempfile
@@ -30,6 +31,7 @@ class NativeFixture:
         self.skeletons = SimpleNamespace(models={"Primary": [
             SimpleNamespace(name=name, index=i, parent=0 if i else -1, model="Primary")
             for i, name in enumerate(names)]})
+        self.references = set(names) | {"RW102F001"}
         self.positions = dict(zip(names, ([100, 0, 0], [300, 0, 0], [10, 0, 0], [20, 0, 0], [4, 0, 0], [999999, 0, 0])))
         self.layout, self.terrain, self.geometry = {}, None, None
 
@@ -237,6 +239,39 @@ class EditorSmokeTests(unittest.TestCase):
         self.app.clear_tree_filter()
         self.assertEqual(len(self.app.tree.get_children()), 7)
         self.assertEqual(self.app.tree_filter_status.cget("text"), "7 items")
+
+    def test_add_route_dialog_builds_a_draft_from_an_existing_bfres_segment(self):
+        before = [row[:] for row in self.native.routes.rows]
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        def complete_dialog():
+            dialog = next(child for child in self.app.winfo_children()
+                          if isinstance(child, tk.Toplevel))
+            controls = list(descendants(dialog))
+            combos = [widget for widget in controls if isinstance(widget, ttk.Combobox)]
+            self.assertEqual(len(combos), 2)
+            combos[0].set("RW102F001")
+            combos[1].set("road")
+            add_button = next(widget for widget in controls
+                              if isinstance(widget, ttk.Button) and
+                              widget.cget("text") == "Add segment")
+            self.assertTrue(add_button.instate(("!disabled",)))
+            add_button.invoke()
+
+        self.root.after(0, complete_dialog)
+        self.app.add_route()
+
+        self.assertEqual(self.native.routes.rows,
+                         before + [["RW102F001", "road", ""]])
+        self.assertTrue(self.app.dirty)
+        self.assertIn("point destinations and path chains were not changed",
+                      self.app.status.get())
+        self.app.undo()
+        self.assertEqual(self.native.routes.rows, before)
 
     def test_native_tree_filter_clears_properties_when_selected_item_is_hidden(self):
         self.app.tree.selection_set("bone:K001")
