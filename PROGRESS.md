@@ -658,3 +658,21 @@ camera behavior and a fully playable custom world remain open.
   `compileall`, `git diff --check`, and W101 → W102/W103 reachability passing.
 - No in-game findings changed: route movement, terrain appearance, level
   launches, progression, and save behavior remain unverified.
+
+## 2026-10-21 — Keep native 3D preview generation off the Tk thread
+
+- Moved native BFRES extraction, texture/material diagnostics, bounds
+  calculation, typed-buffer packing, page writing, and browser launch to a
+  background worker. The native graph is captured on the UI thread because it
+  reads Tk state; editor changes and close are locked until the preview opens
+  or reports an error.
+- Kept the lightweight OBJ editor's direct preview path intact. Worker status
+  and error dialogs are handled by the UI event loop.
+- A Tk smoke test holds the worker, verifies the UI processes a scheduled
+  callback, checks the graph snapshot and worker thread, then verifies status
+  completion and unlock. The editor smoke suite passed (**7 tests**); the full
+  suite passed (**190 tests in 134.483 seconds**). `compileall` and
+  `git diff --check` passed.
+- No render-fidelity or game-behavior claims changed. BFRES animations and full
+  game shaders remain unsupported; Cemu route traversal and terrain appearance
+  remain unverified.

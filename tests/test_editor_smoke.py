@@ -2,9 +2,11 @@
 from pathlib import Path
 from types import SimpleNamespace
 import tkinter as tk
+import threading
+import time
 import unittest
 
-from worldstudio.editor import NativeStudio, ObjTransformDialog
+from worldstudio.editor import NativeStudio, ObjTransformDialog, WorldStudio
 
 
 class NativeFixture:
@@ -104,6 +106,46 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertEqual(self.native.routes.rows[0][1], "road")
         self.app.redo()
         self.assertEqual(self.native.routes.rows[0][1], "revised-road")
+
+    def test_3d_preview_build_runs_off_tk_thread_and_keeps_events_live(self):
+        started = threading.Event()
+        release = threading.Event()
+        worker_results = []
+
+        def build(graph):
+            worker_results.append((threading.current_thread(), graph))
+            started.set()
+            release.wait(2)
+            return "3D preview opened · 1 shape · 1 triangle"
+
+        self.app._build_3d_preview = build
+        self.app.open_3d_preview()
+        self.assertTrue(self.app.exporting)
+        self.assertTrue(started.wait(1))
+        callbacks = []
+        self.root.after(0, lambda: callbacks.append("responsive"))
+        self.root.update()
+        self.assertEqual(callbacks, ["responsive"])
+        self.assertIsNot(worker_results[0][0], threading.current_thread())
+        self.assertEqual([node["id"] for node in worker_results[0][1]["nodes"]], ["W101", "W102"])
+
+        release.set()
+        deadline = time.monotonic() + 2
+        while self.app.exporting and time.monotonic() < deadline:
+            self.root.update()
+            time.sleep(0.01)
+        self.assertFalse(self.app.exporting)
+        self.assertIn("3D preview opened", self.app.status.get())
+
+    def test_lightweight_editor_keeps_its_direct_obj_preview_path(self):
+        studio = object.__new__(WorldStudio)
+        status = SimpleNamespace(set=lambda value: setattr(status, "value", value))
+        studio.status = status
+        studio._build_3d_preview = lambda graph: "3D preview opened · imported OBJ"
+
+        studio.open_3d_preview()
+
+        self.assertEqual(status.value, "3D preview opened · imported OBJ")
 
     def test_dragging_a_native_root_point_is_one_undoable_edit(self):
         original = list(self.native.positions["W101"])

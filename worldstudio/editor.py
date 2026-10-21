@@ -500,9 +500,58 @@ class WorldStudio(ttk.Frame):
                 self.status.set(f"Terrain unavailable: {error}")
 
     def open_3d_preview(self):
-        """Open the current model in an offline, depth-tested WebGL viewer."""
+        """Build the offline preview in a worker so Tk remains responsive."""
+        if not hasattr(self, "native"):
+            # The lightweight OBJ editor has no shared native state or export
+            # worker lifecycle. Keep its existing direct preview path intact.
+            try:
+                self.status.set(self._build_3d_preview(None))
+            except (OSError, ValueError, KeyError, TypeError, OverflowError) as error:
+                self.status.set(f"3D preview unavailable: {error}")
+                messagebox.showerror("3D preview unavailable", str(error), parent=self)
+            return
+        if getattr(self, "exporting", False):
+            return
         try:
-            nodes, routes = [], []
+            # view_project reads Tk variables, so capture its detached graph on
+            # the UI thread before the worker starts.
+            graph = self.view_project()
+        except (OSError, ValueError, KeyError, TypeError, OverflowError) as error:
+            self.status.set(f"3D preview unavailable: {error}")
+            messagebox.showerror("3D preview unavailable", str(error), parent=self)
+            return
+        self.set_export_busy(True)
+        self.status.set("Building the 3D preview in the background… editor controls are locked.")
+
+        def worker():
+            try:
+                result = self._build_3d_preview(graph)
+                self.preview_results.put((True, result))
+            except Exception as error:
+                # The worker never calls Tk; completion and errors are handled
+                # by poll_preview on the GUI thread.
+                self.preview_results.put((False, str(error)))
+
+        threading.Thread(target=worker, name="worldstudio-preview", daemon=True).start()
+        self.after(60, self.poll_preview)
+
+    def poll_preview(self):
+        try:
+            succeeded, result = self.preview_results.get_nowait()
+        except queue.Empty:
+            self.after(60, self.poll_preview)
+            return
+        self.set_export_busy(False)
+        if succeeded:
+            self.status.set(result)
+        else:
+            self.status.set(f"3D preview failed: {result}")
+            messagebox.showerror("3D preview unavailable", str(result), parent=self)
+
+    def _build_3d_preview(self, graph):
+        """Build and open a preview using the locked editor's read-only state."""
+        nodes, routes = [], []
+        try:
             if hasattr(self, "native"):
                 from .mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model
                 from .preview_textures import (attach_base_color_textures,
@@ -614,7 +663,6 @@ class WorldStudio(ttk.Frame):
                             else:
                                 shape.pop("uvs", None)
                             break
-                graph = self.view_project()
                 visible_nodes = {n["id"]: n for n in graph["nodes"]
                                  if not n.get("fallback") and all(type(n.get(k)) in (int, float) for k in ("x", "y", "z"))}
                 nodes = [{"id": n["id"], "x": float(n["x"]), "y": float(n["y"]), "z": float(n["z"])}
@@ -668,9 +716,9 @@ class WorldStudio(ttk.Frame):
                 scene["maskTextureNotice"] = mask_texture_notice
                 scene["maskTextures"] = mask_textures
             open_preview(scene)
-            self.status.set(f"3D preview opened · {len(shapes)} shapes · {triangle_count:,} triangles")
-        except (OSError, ValueError, KeyError, TypeError, OverflowError) as error:
-            messagebox.showerror("3D preview unavailable", str(error), parent=self)
+            return f"3D preview opened · {len(shapes)} shapes · {triangle_count:,} triangles"
+        except (OSError, ValueError, KeyError, TypeError, OverflowError):
+            raise
 
     def project_point(self, point):
         camera = self.project.setdefault("camera", {})
@@ -1022,6 +1070,7 @@ class NativeStudio(WorldStudio):
         self.native = native
         self.exporting = False
         self.export_results = queue.Queue()
+        self.preview_results = queue.Queue()
         self.disabled_for_export = []
         self.camera_window = None
         self.show_auxiliary = tk.BooleanVar(master, value=False)
@@ -1550,7 +1599,7 @@ class NativeStudio(WorldStudio):
 
     def may_discard(self):
         if self.exporting:
-            self.status.set("Export is running. Wait for verification before changing or closing the project.")
+            self.status.set("A background operation is running. Wait before changing or closing the project.")
             return False
         return super().may_discard()
 
@@ -1745,7 +1794,7 @@ class CameraDataWindow(tk.Toplevel):
 
     def active(self):
         if self.studio.exporting:
-            self.status.set("Export is running; offset edits and closing are locked until verification completes.")
+            self.status.set("A background operation is running; offset edits and closing are locked.")
             return False
         if self.studio.native is not self.native:
             self.status.set("The source project changed. Reopen Camera data from the current project.")
