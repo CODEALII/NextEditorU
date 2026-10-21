@@ -156,7 +156,7 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
 
 
 def _nearest_uvs(points, source_points, source_uvs):
-    """Transfer baked-light UVs by nearest source XZ vertex using a grid."""
+    """Transfer baked-light UVs by exact nearest source XZ vertex."""
     cell_size = 128.
     grid = {}
     for i, point in enumerate(source_points):
@@ -164,33 +164,59 @@ def _nearest_uvs(points, source_points, source_uvs):
         grid.setdefault(key, []).append(i)
     if not grid:
         raise ValueError('Original shape has no lightmap source vertices')
-    min_x, max_x = min(k[0] for k in grid), max(k[0] for k in grid)
-    min_z, max_z = min(k[1] for k in grid), max(k[1] for k in grid)
+
+    def build_tree(cells, axis=0):
+        if not cells:
+            return None
+        cells.sort(key=lambda item: item[0][axis])
+        middle = len(cells) // 2
+        key, indices = cells[middle]
+        left = build_tree(cells[:middle], 1 - axis)
+        right = build_tree(cells[middle + 1:], 1 - axis)
+        child_bounds = [child[4] for child in (left, right) if child is not None]
+        bounds = (
+            min([key[0], *(box[0] for box in child_bounds)]),
+            max([key[0], *(box[1] for box in child_bounds)]),
+            min([key[1], *(box[2] for box in child_bounds)]),
+            max([key[1], *(box[3] for box in child_bounds)]),
+        )
+        return key, indices, left, right, bounds
+
+    tree = build_tree(list(grid.items()))
+
+    def bounds_distance_squared(point, bounds):
+        min_x, max_x, min_z, max_z = bounds
+        low_x, high_x = min_x * cell_size, (max_x + 1) * cell_size
+        low_z, high_z = min_z * cell_size, (max_z + 1) * cell_size
+        dx = max(low_x - point[0], 0., point[0] - high_x)
+        dz = max(low_z - point[2], 0., point[2] - high_z)
+        return dx * dx + dz * dz
+
     result = []
     for point in points:
-        cx, cz = math.floor(point[0] / cell_size), math.floor(point[2] / cell_size)
         best, best_distance = None, float('inf')
-        max_ring = max(abs(cx-min_x), abs(cx-max_x), abs(cz-min_z), abs(cz-max_z))
-        for ring in range(max_ring + 1):
-            for dx in range(-ring, ring + 1):
-                for dz in range(-ring, ring + 1):
-                    if max(abs(dx), abs(dz)) != ring:
-                        continue
-                    for i in grid.get((cx+dx, cz+dz), ()):
-                        src = source_points[i]
-                        distance = (point[0]-src[0])**2 + (point[2]-src[2])**2
-                        if distance < best_distance:
-                            best, best_distance = i, distance
-            if best is not None:
-                left = point[0] - (cx-ring)*cell_size
-                right = (cx+ring+1)*cell_size - point[0]
-                down = point[2] - (cz-ring)*cell_size
-                up = (cz+ring+1)*cell_size - point[2]
-                outside_distance = max(0., min(left, right, down, up))
-                if best_distance <= outside_distance**2:
-                    break
+
+        def visit(node):
+            nonlocal best, best_distance
+            if node is None or bounds_distance_squared(point, node[4]) > best_distance:
+                return
+            for index in node[1]:
+                distance = _xz_distance_squared(point, source_points[index])
+                if distance < best_distance:
+                    best, best_distance = index, distance
+            children = [child for child in (node[2], node[3]) if child is not None]
+            children.sort(key=lambda child: bounds_distance_squared(point, child[4]))
+            for child in children:
+                if bounds_distance_squared(point, child[4]) <= best_distance:
+                    visit(child)
+
+        visit(tree)
         result.append(source_uvs[best])
     return result
+
+
+def _xz_distance_squared(point, source):
+    return (point[0] - source[0]) ** 2 + (point[2] - source[2]) ** 2
 
 
 def _triangulate_face(vertices, face):

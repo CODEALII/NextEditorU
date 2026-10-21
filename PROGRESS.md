@@ -616,3 +616,17 @@ camera behavior and a fully playable custom world remain open.
   performance claim.
 - Full suite: **184 tests passed in 129.793 seconds**. `compileall`,
   `git diff --check`, and the W101 → W102/W103 reachability command passed.
+
+## 2026-10-21 — Bound terrain lightmap UV transfer
+
+- Replaced expanding empty-grid rings with a balanced spatial tree over
+  occupied source cells. Nearest XZ matching remains exact while distant OBJ
+  coordinates no longer scale the search by the gap to the stock terrain.
+- A synthetic 10×10 source grid compares four far-offset results against
+  brute-force nearest points and counts fewer than half the full-scan distance
+  evaluations. One hundred randomized grids with twelve distant queries each
+  also matched brute-force results.
+- The focused mesh suite passed (**14 tests**) and the full suite passed
+  (**185 tests in 130.928 seconds**); `compileall` and `git diff --check` also
+  passed. In-game baked-light UV interpretation remains an unverified
+  assumption until the corrected terrain is visually compared in Cemu.

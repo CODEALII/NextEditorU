@@ -3,7 +3,9 @@ import unittest
 import hashlib
 import math
 from pathlib import Path
+from unittest.mock import patch
 
+import worldstudio.mesh as mesh
 from worldstudio.mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model, replace_rigid_mesh
 from worldstudio.archive import Archive
 from worldstudio.bfres import Skeletons
@@ -142,6 +144,34 @@ class MeshTests(unittest.TestCase):
         struct.pack_into('>I', data, 0x420, 0x4)
         with self.assertRaisesRegex(ValueError, 'texture-coordinate attribute exceeds'):
             extract_rigid_model(bytes(data))
+
+    def test_far_uv_projection_is_exact_without_distance_scaled_grid_search(self):
+        source_points = [((x - 5) * 256., 0., (z - 5) * 256.)
+                         for x in range(10) for z in range(10)]
+        source_uvs = [(float(i), float(-i)) for i in range(len(source_points))]
+        points = [(99999., 0., 99999.), (-99999., 0., -99999.),
+                  (99999., 0., -99999.), (-99999., 0., 99999.)]
+        distance_checks = 0
+        original_distance = mesh._xz_distance_squared
+
+        def counted_distance(point, source):
+            nonlocal distance_checks
+            distance_checks += 1
+            return original_distance(point, source)
+
+        with patch.object(mesh, '_xz_distance_squared', counted_distance):
+            projected = mesh._nearest_uvs(points, source_points, source_uvs)
+
+        for point, uv in zip(points, projected):
+            expected_distance = min((point[0] - source[0]) ** 2 +
+                                    (point[2] - source[2]) ** 2
+                                    for source in source_points)
+            actual_index = source_uvs.index(uv)
+            actual_source = source_points[actual_index]
+            actual_distance = ((point[0] - actual_source[0]) ** 2 +
+                               (point[2] - actual_source[2]) ** 2)
+            self.assertEqual(actual_distance, expected_distance)
+        self.assertLess(distance_checks, len(points) * len(source_points) // 2)
 
     def test_rejects_capacity_and_bad_input(self):
         with self.assertRaisesRegex(ValueError,'vertex capacity'):
