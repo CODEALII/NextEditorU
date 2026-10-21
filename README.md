@@ -10,7 +10,7 @@ Progress details and dated findings: [PROGRESS.md](PROGRESS.md) · [Runtime test
 
 ## What works today
 
-- Read Yaz0/SARC archives and export patched archives while preserving untouched members.
+- Read Yaz0/SARC archives and export patched archives while preserving untouched members. Export manifests list every changed member with before/after SHA-256 hashes and byte sizes, alongside archive-level hashes.
 - Read and edit World 1 point and route tables; validate references before export.
 - Inspect supported BFRES skeletons and apply bounded bone-transform changes.
 - Export an experimental three-node progression patch using existing route data.

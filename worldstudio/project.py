@@ -469,8 +469,21 @@ class WorldProject:
         for name in self.archive.entries:
             if name not in modified and check.read(name) != self.archive.read(name):
                 raise ValueError(f'Export verification changed unrelated entry {name}')
+        entry_changes = {}
+        for name, value in modified.items():
+            original = self.archive.read(name)
+            if value == original:
+                continue
+            entry_changes[name] = {
+                'source_sha256': sha(original),
+                'output_sha256': sha(value),
+                'source_size_bytes': len(original),
+                'output_size_bytes': len(value),
+                'size_delta_bytes': len(value) - len(original),
+            }
         manifest = {'source_sha256': self.source_sha256, 'output_sha256': sha(blob),
-            'output': str(output), 'changed_entries': [n for n,v in modified.items() if v != self.archive.read(n)],
+            'output': str(output), 'changed_entries': list(entry_changes),
+            'entry_changes': entry_changes,
             'bfres_unchanged': patched_model == self.model, 'game_tested': False,
             'terrain_exported': geometry_report is not None, 'geometry': geometry_report,
             'bone_renames': rename_reports,

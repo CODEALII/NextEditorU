@@ -20,6 +20,8 @@ The default output is a compact program/interface summary. `--json` prints the c
 
 The suite uses synthetic fixtures and, when present, the user-supplied files under `NSMBU Modding Project/`. Local game files are read in memory and are not included in exports or commits.
 
+Each export manifest keeps the backward-compatible `changed_entries` list and adds an `entry_changes` record for every changed archive member, including source/output SHA-256 hashes, byte sizes and size delta. The archive-level hashes and `game_tested: false` remain explicit. The local export regression recomputes these values from the source and reopened output archive.
+
 Check a directed route from a declared start to one or more required points:
 
 ```powershell

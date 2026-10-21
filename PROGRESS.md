@@ -676,3 +676,13 @@ camera behavior and a fully playable custom world remain open.
 - No render-fidelity or game-behavior claims changed. BFRES animations and full
   game shaders remain unsupported; Cemu route traversal and terrain appearance
   remain unverified.
+
+## 2026-10-21 — Add per-entry export fingerprints
+
+- Export manifests now include source and output SHA-256 hashes, byte sizes,
+  and size deltas for each changed archive member, while retaining the existing
+  `changed_entries` list and archive-level hashes.
+- The local roundtrip regression independently recomputes every reported
+  member hash and size from the source and reopened output archive. This makes
+  exported CSV/BFRES changes auditable without treating byte changes as proof
+  of game behavior.

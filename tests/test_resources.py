@@ -81,6 +81,15 @@ class LocalIntegrationTests(unittest.TestCase):
             manifest = loaded.export(out / 'CS_W1.szs')
             changed = Archive((out / 'CS_W1.szs').read_bytes())
             self.assertEqual(manifest['changed_entries'], [p.point_name])
+            self.assertEqual(set(manifest['entry_changes']), {p.point_name})
+            change = manifest['entry_changes'][p.point_name]
+            source_entry = p.archive.read(p.point_name)
+            output_entry = changed.read(p.point_name)
+            self.assertEqual(change['source_sha256'], sha(source_entry))
+            self.assertEqual(change['output_sha256'], sha(output_entry))
+            self.assertEqual(change['source_size_bytes'], len(source_entry))
+            self.assertEqual(change['output_size_bytes'], len(output_entry))
+            self.assertEqual(change['size_delta_bytes'], len(output_entry) - len(source_entry))
             self.assertEqual(changed.read(p.model_name), p.model)
             rows = Table(changed.read(p.point_name)).rows
             self.assertEqual(rows[2][3:5], ['W103', 'RW102W1T0,RW1T0W103'])
