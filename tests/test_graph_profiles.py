@@ -6,6 +6,8 @@ import tempfile
 import unittest
 
 from worldstudio.graph_validation import load_native_graph_profile
+from worldstudio.__main__ import DEFAULT_SOURCE
+from worldstudio.project import WorldProject
 
 
 PROFILE = {
@@ -79,6 +81,46 @@ class NativeGraphProfileTests(unittest.TestCase):
         self.assertEqual(report["required_locations"], ["W102", "W103"])
         self.assertEqual(report["validation_errors"], [])
         self.assertTrue(report["reachable_locations_checked"])
+
+    def test_export_cli_profile_accepts_baseline_and_blocks_disconnected_progression(self):
+        root = Path(__file__).resolve().parents[1]
+        source = root / "NSMBU Modding Project/content/Common/course_select/CS_W1.szs"
+        if not source.is_file():
+            self.skipTest("User-provided local W1 dump unavailable")
+        profile = root / "profiles/w1-core-progression.json"
+        original = source.read_bytes()
+
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            baseline_project = WorldProject.open(source)
+            baseline_path = folder / "baseline.nws.json"
+            baseline_project.save(baseline_path)
+            baseline_output = folder / "baseline-export.szs"
+            accepted = subprocess.run(
+                [sys.executable, "-m", "worldstudio", "export", str(baseline_path),
+                 "--out", str(baseline_output), "--profile", str(profile)],
+                cwd=root, capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            self.assertTrue(baseline_output.is_file())
+            self.assertFalse(json.loads(accepted.stdout)["game_tested"])
+
+            disconnected = WorldProject.open(source)
+            start = next(row for row in disconnected.points.rows if row[1] == "W101")
+            start[3] = ""
+            start[4] = ""
+            disconnected_path = folder / "disconnected.nws.json"
+            disconnected.save(disconnected_path)
+            rejected_output = folder / "rejected-export.szs"
+            rejected = subprocess.run(
+                [sys.executable, "-m", "worldstudio", "export", str(disconnected_path),
+                 "--out", str(rejected_output), "--profile", str(profile)],
+                cwd=root, capture_output=True, text=True, encoding="utf-8")
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("Unreachable location W102", rejected.stderr)
+            self.assertIn("Unreachable location W103", rejected.stderr)
+            self.assertFalse(rejected_output.exists())
+
+        self.assertEqual(source.read_bytes(), original)
 
 
 if __name__ == "__main__":

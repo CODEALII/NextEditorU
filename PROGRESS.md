@@ -1,5 +1,15 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Gate CLI export with an explicit graph profile
+
+- The graph-profile CLI could report reachability, but a later normal export
+  did not reuse that explicit requirement. `worldstudio export --profile` now
+  checks the selected entry and required locations before writing any archive.
+- The local W1 regression accepts the baseline, rejects a project with W101's
+  exit removed because W102/W103 become unreachable, confirms no rejected
+  output was created, and verifies the source SZS is byte-identical. Profile
+  checks remain opt-in and do not claim game unlock semantics.
+
 ## 2026-10-22 — Resolve ambiguous local albedo references
 
 - Some course-select materials contain more than one `*_alb` reference. The

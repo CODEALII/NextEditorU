@@ -54,6 +54,15 @@ python -m worldstudio demo --out build/my-chain
 python -m worldstudio gui build/my-chain/three-level-chain.nws.json
 ```
 
+Require the explicit World 1 entry/required-location graph profile when exporting:
+
+```powershell
+python -m worldstudio export build/my-chain/three-level-chain.nws.json --out build/my-chain/profile-checked.szs --profile profiles/w1-core-progression.json
+```
+
+This optional check blocks export if W101 cannot reach W102 and W103. It checks
+the selected static profile only; it does not model save flags or game unlocks.
+
 After exporting a saved project, reimport the archive and compare every member,
 the export manifest, and any camera companion files against a fresh export:
 

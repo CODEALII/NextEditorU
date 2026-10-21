@@ -17,7 +17,7 @@ The BC1/BC3 base-color path has also been checked against all twelve local world
 ## Next editing milestones
 
 4. Add selectable scene objects and editable transforms with a reversible undo/redo history.
-5. Add explicit world graph profiles for entry points, required levels and optional branches; keep gameplay unlock semantics separate until verified.
+5. Extend the explicit graph-profile workflow with optional profile selection in the desktop editor; the CLI already checks selected entry/required locations before export. Keep gameplay unlock semantics separate until verified.
 6. Expand terrain import beyond one fixed-capacity grass shape only after mesh insertion or replacement has a demonstrated archive roundtrip.
 7. Investigate animation formats and camera runtime behavior using concrete local files and targeted evidence.
 

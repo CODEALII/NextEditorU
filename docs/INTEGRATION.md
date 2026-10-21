@@ -1,5 +1,16 @@
 # Runtime evidence and test protocol
 
+## Profile-gated project export — 2026-10-22
+
+- `python -m worldstudio export <project> --out <archive> --profile <json>`
+  now runs the selected versioned entry/required-location profile before
+  writing. The gate is explicit and optional; it validates encoded graph
+  reachability, not event scripts or in-game unlock rules.
+- The local W1 test accepts the baseline project and rejects one with W101's
+  outgoing destination removed (W102 and W103 become unreachable). It confirms
+  no rejected archive is written and compares the source SZS byte-for-byte.
+  Successful export manifests still retain `game_tested:false`.
+
 ## Ambiguous albedo references in local world models — 2026-10-22
 
 - For materials with multiple `*_alb` references, the preview now uses `_a0`
