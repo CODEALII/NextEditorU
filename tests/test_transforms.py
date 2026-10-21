@@ -60,6 +60,36 @@ class TransformTests(unittest.TestCase):
                            bone('sibling', 3, 0, (4., 5., 6.))])
         self.assertEqual(s.world_positions('test'), {'root': [0., 0., 0.], 'sibling': [4., 5., 6.]})
 
+    def test_affine_transforms_compose_positive_scale_and_rotation(self):
+        q = (0., math.sin(math.pi / 4), 0., math.cos(math.pi / 4))
+        s = self.skeleton([bone('root', 0, -1, (10., 20., 30.), scale=(2., 3., 4.)),
+                           bone('child', 1, 0, (1., 2., 3.), q, flags=0)])
+
+        linear, position = s.world_affine_transforms('test')['child']
+        transformed = [sum(linear[i][j] * (0., 0., 2.)[j] for j in range(3)) + position[i]
+                       for i in range(3)]
+
+        for actual, expected in zip(position, (12., 26., 42.)):
+            self.assertAlmostEqual(actual, expected)
+        for actual, expected in zip(transformed, (16., 26., 42.)):
+            self.assertAlmostEqual(actual, expected)
+
+    def test_affine_transforms_reject_segment_scale_compensation_branch(self):
+        s = self.skeleton([bone('root', 0, -1, (0., 0., 0.)),
+                           bone('compensated', 1, 0, (1., 2., 3.), flags=1 << 23),
+                           bone('child', 2, 1, (3., 0., 2.)),
+                           bone('sibling', 3, 0, (4., 5., 6.))])
+
+        self.assertEqual(set(s.world_affine_transforms('test')), {'root', 'sibling'})
+
+    def test_affine_transforms_reject_camera_facing_billboard_branch(self):
+        s = self.skeleton([bone('root', 0, -1, (0., 0., 0.)),
+                           bone('billboard', 1, 0, (1., 2., 3.), flags=2 << 16),
+                           bone('child', 2, 1, (3., 0., 2.)),
+                           bone('sibling', 3, 0, (4., 5., 6.))])
+
+        self.assertEqual(set(s.world_affine_transforms('test')), {'root', 'sibling'})
+
     def test_cycle_and_missing_parent_rejected(self):
         for bones in ([bone('a', 0, 1, (0., 0., 0.)), bone('b', 1, 0, (0., 0., 0.))],
                       [bone('a', 0, 10, (0., 0., 0.))]):

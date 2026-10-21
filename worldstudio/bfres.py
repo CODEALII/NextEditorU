@@ -177,6 +177,95 @@ class Skeletons:
                 continue
         return result
 
+    def world_affine_transforms(self, model):
+        """Return rest-pose ``(linear, position)`` transforms for safe bones.
+
+        Positive scale is composed with rotation and translation through the
+        hierarchy. Segment-scale compensation and camera-facing billboard modes
+        are omitted because their engine behavior is not reproduced here.
+        """
+        bones = self.models[model]
+        by_index = {b.index: b for b in bones}
+        if len(by_index) != len(bones):
+            raise ValueError('Duplicate bone index')
+        matrices, visiting, unsupported = {}, set(), set()
+
+        class UnsupportedAffine(ValueError):
+            pass
+
+        def multiply(a, b):
+            return [[sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)]
+                    for i in range(3)]
+
+        def apply(matrix, xyz):
+            return [sum(matrix[i][j] * xyz[j] for j in range(3)) for i in range(3)]
+
+        def evaluate(b):
+            if b.index in matrices:
+                return matrices[b.index]
+            if b.index in unsupported:
+                raise UnsupportedAffine(b.name)
+            if b.index in visiting:
+                raise ValueError('Cyclic bone hierarchy')
+            visiting.add(b.index)
+            try:
+                if b.flags & (1 << 23):
+                    raise UnsupportedAffine(f'{b.name}: segment-scale compensation')
+                billboard_mode = (b.flags >> 16) & 0x7
+                if billboard_mode > 1:
+                    raise UnsupportedAffine(f'{b.name}: camera-facing billboard transform')
+                if any(not math.isfinite(value) or value <= 0. or value > 1e7
+                       for value in b.scale):
+                    raise UnsupportedAffine(f'{b.name}: unsupported scale')
+
+                x, y, z, w = b.rotation
+                if b.flags & (1 << 12):
+                    cx, cy, cz = math.cos(x), math.cos(y), math.cos(z)
+                    sx, sy, sz = math.sin(x), math.sin(y), math.sin(z)
+                    rotation = [[cz*cy, cz*sy*sx-sz*cx, cz*sy*cx+sz*sx],
+                                [sz*cy, sz*sy*sx+cz*cx, sz*sy*cx-cz*sx],
+                                [-sy, cy*sx, cy*cx]]
+                else:
+                    norm = x*x + y*y + z*z + w*w
+                    if not all(math.isfinite(value) for value in b.rotation) or abs(norm - 1) > .001:
+                        raise ValueError(f'{b.name}: non-unit bone quaternion')
+                    rotation = [[1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w)],
+                                [2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w)],
+                                [2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)]]
+                linear = [[rotation[i][j] * b.scale[j] for j in range(3)]
+                          for i in range(3)]
+                position = list(b.position)
+                if not all(math.isfinite(value) and abs(value) <= 1e7 for value in position):
+                    raise ValueError(f'{b.name}: invalid bone translation')
+                if b.parent != -1:
+                    if b.parent not in by_index:
+                        raise ValueError('Missing parent bone')
+                    try:
+                        parent_linear, parent_position = evaluate(by_index[b.parent])
+                    except UnsupportedAffine:
+                        unsupported.add(b.index)
+                        raise
+                    position = [a + c for a, c in zip(apply(parent_linear, position), parent_position)]
+                    linear = multiply(parent_linear, linear)
+                if not all(math.isfinite(value) and abs(value) <= 1e12
+                           for row in linear for value in row):
+                    raise ValueError(f'{b.name}: rest-pose matrix exceeds supported bounds')
+                matrices[b.index] = linear, position
+                return matrices[b.index]
+            except UnsupportedAffine:
+                unsupported.add(b.index)
+                raise
+            finally:
+                visiting.discard(b.index)
+
+        result = {}
+        for b in bones:
+            try:
+                result[b.name] = evaluate(b)
+            except UnsupportedAffine:
+                continue
+        return result
+
     def local_position_for_world(self, model, name, world_position, overrides=None):
         """Convert one desired model-space rest position to a bone translation.
 

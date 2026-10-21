@@ -60,6 +60,36 @@ def fixture():
     return bytes(b)
 
 
+def fixture_with_scaled_child_bone(*, child_flags=0):
+    data = bytearray(fixture())
+
+    def rel_ptr(offset, target):
+        struct.pack_into('>I', data, offset, (target - offset) & 0xffffffff)
+
+    root_name, child_name = 0xa00, 0xa05
+    data[root_name:root_name + 11] = b'root\0child\0'
+    struct.pack_into('>H', data, 0x148, 2)
+    struct.pack_into('>II', data, 0x180, 56, 2)
+    for index, (name, target) in enumerate(((root_name, 0xb00), (child_name, 0xb40))):
+        record = 0x180 + 24 + index * 16
+        rel_ptr(record + 8, name)
+        rel_ptr(record + 12, target)
+        rel_ptr(target, name)
+        bone_index = index
+        parent_index = -1 if index == 0 else 0
+        struct.pack_into('>Hh', data, target + 4, bone_index, parent_index)
+        struct.pack_into('>I', data, target + 16, child_flags if index else 0)
+        scale = (1., 1., 1.) if index == 0 else (2., 3., 1.)
+        position = (0., 0., 0.) if index == 0 else (10., 20., 30.)
+        struct.pack_into('>3f', data, target + 20, *scale)
+        struct.pack_into('>4f', data, target + 32, 0., 0., 0., 1.)
+        struct.pack_into('>3f', data, target + 48, *position)
+    struct.pack_into('>H', data, 0x290, 1)  # Bind the shape to the child bone.
+    for index in range(4):
+        struct.pack_into('>I', data, 0x600 + index * 28 + 12, 511 | (511 << 10))
+    return bytes(data)
+
+
 class MeshTests(unittest.TestCase):
     vertices=[(0.,0.,0.),(0.,0.,2.),(2.,0.,0.)]
     faces=[(0,1,2)]
@@ -162,12 +192,36 @@ class MeshTests(unittest.TestCase):
         self.assertAlmostEqual(shapes[0]['positions'][2][0], 0.0, places=6)
         self.assertAlmostEqual(shapes[0]['positions'][2][2], -2.0, places=6)
 
-    def test_scaled_root_remains_unsupported(self):
+    def test_scaled_root_transforms_static_mesh_positions(self):
         data = bytearray(fixture())
-        struct.pack_into('>3f', data, 0x1d4, 2.0, 1.0, 1.0)
+        struct.pack_into('>3f', data, 0x1d4, 2.0, 3.0, 4.0)
 
+        shapes = extract_rigid_model(bytes(data))
+
+        self.assertEqual(shapes[0]['positions'][:3],
+                         [(0.0, 0.0, 0.0), (0.0, 0.0, 8.0), (4.0, 0.0, 0.0)])
+
+    def test_scaled_shape_bone_transforms_positions_and_normals(self):
+        shapes = extract_rigid_model(fixture_with_scaled_child_bone())
+        shape = shapes[0]
+
+        self.assertEqual(shape['positions'][:3],
+                         [(10.0, 20.0, 30.0), (10.0, 20.0, 32.0),
+                          (14.0, 20.0, 30.0)])
+        for actual, expected in zip(shape['normals'][0],
+                                    (3 / math.sqrt(13), 2 / math.sqrt(13), 0.0)):
+            self.assertAlmostEqual(actual, expected, places=6)
+
+    def test_scaled_shape_bone_with_segment_compensation_is_rejected(self):
         with self.assertRaisesRegex(ValueError, 'unsupported rest-pose transform'):
-            extract_rigid_model(bytes(data))
+            extract_rigid_model(fixture_with_scaled_child_bone(child_flags=1 << 23))
+
+    def test_inverse_transpose_normal_transform(self):
+        actual = mesh._transform_normal([[2., 0., 0.], [0., 3., 0.], [0., 0., 1.]],
+                                        (1., 1., 0.))
+
+        for value, expected in zip(actual, (3 / math.sqrt(13), 2 / math.sqrt(13), 0.0)):
+            self.assertAlmostEqual(value, expected, places=6)
 
     def test_supported_gx2_uv_formats_decode_to_normalized_coordinates(self):
         encodings = (
@@ -334,7 +388,7 @@ class LocalDumpMeshTests(unittest.TestCase):
 
     def test_local_translation_root_and_half_float_world_static_meshes(self):
         root = Path(__file__).resolve().parents[1]
-        expected_shapes = {'W2a': 58, 'W3': 40, 'W4': 53, 'W5b': 27,
+        expected_shapes = {'W2a': 58, 'W3': 40, 'W4': 53, 'W5a': 76, 'W5b': 27,
                            'W6a': 61, 'W8a': 18, 'W8b': 42, 'W9b': 20}
         for world, expected_count in expected_shapes.items():
             with self.subTest(world=world):

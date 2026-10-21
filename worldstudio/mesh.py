@@ -30,6 +30,24 @@ def _decode_position(data, offset, fmt):
     raise ValueError(f'Unsupported position format 0x{fmt:x}')
 
 
+def _transform_normal(matrix, normal):
+    a, b, c = matrix[0]
+    d, e, f = matrix[1]
+    g, h, i = matrix[2]
+    cofactor = [[e*i-f*h, f*g-d*i, d*h-e*g],
+                [c*h-b*i, a*i-c*g, b*g-a*h],
+                [b*f-c*e, c*d-a*f, a*e-b*d]]
+    determinant = a*cofactor[0][0] + b*cofactor[0][1] + c*cofactor[0][2]
+    if not math.isfinite(determinant) or abs(determinant) < 1e-12:
+        raise ValueError('singular bone transform cannot transform normals')
+    transformed = [sum(cofactor[row][column] * normal[column] for column in range(3))
+                   for row in range(3)]
+    length = math.sqrt(sum(value * value for value in transformed))
+    if not math.isfinite(length) or length < 1e-12:
+        raise ValueError('invalid inverse-transpose normal transform')
+    return tuple(value / length for value in transformed)
+
+
 def _decode_uv_attribute(data, offset, fmt):
     if fmt == 0x80d:  # GX2 Format_32_32_Single
         return struct.unpack_from('>2f', data, offset)
@@ -43,13 +61,13 @@ def _decode_uv_attribute(data, offset, fmt):
 
 
 def extract_rigid_model(data, model=DEFAULT_MODEL):
-    """Read static triangle shapes from a single identity-root Wii U model.
+    """Read static triangle shapes from one supported Wii U model.
 
     This reader intentionally supports the tested world-model subset only:
     big-endian float32x3 or observed half-float4 (W=1) positions, packed
     10:10:10:2 normals, contiguous u16 triangle lists, and rigid attachment to
-    unscaled rest-pose bones. Textures, animations and scaled bone branches are
-    not evaluated.
+    supported rest-pose bones. Textures, animations, segment-scale compensation
+    and camera-facing billboard modes are not evaluated.
     """
     r = Skeletons(data)
     if r.version != 0x03000001:
@@ -61,7 +79,7 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
     roots = [bone for bone in r.models.get(model, ()) if bone.parent == -1]
     if len(roots) != 1 or roots[0].index != 0:
         raise ValueError('3D preview requires one root bone at index 0')
-    bone_transforms = r.world_transforms(model)
+    bone_transforms = r.world_affine_transforms(model)
     bones_by_index = {bone.index: bone for bone in r.models.get(model, ())}
     materials = r.dictionary(r.ptr(model_offset + 24))
     result = []
@@ -76,7 +94,7 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
         transform = bone_transforms.get(bone.name)
         if transform is None:
             raise ValueError(f'{shape_name}: bone {bone.name} has an unsupported rest-pose transform')
-        bone_rotation, bone_position = transform
+        bone_linear, bone_position = transform
         vertex = r.ptr(shape+32)
         r.bounds(vertex, 32)
         if data[vertex:vertex+4] != b'FVTX' or data[vertex+5] != 1 or data[vertex+12]:
@@ -129,15 +147,16 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
                 if not all(math.isfinite(v) and abs(v) <= 1e5 for v in uv):
                     raise ValueError(f'{shape_name}: invalid texture coordinates in {name} at vertex {index}')
                 uv_values[name].append(uv)
-            positions.append(tuple(sum(bone_rotation[axis][column] * position[column]
-                                       for column in range(3)) + bone_position[axis]
-                                   for axis in range(3)))
-            transformed_normal = [sum(bone_rotation[axis][column] * normal[column]
-                                      for column in range(3)) for axis in range(3)]
-            transformed_length = math.sqrt(sum(value * value for value in transformed_normal))
-            if not math.isfinite(transformed_length) or transformed_length < 1e-6:
-                raise ValueError(f'{shape_name}: invalid rest-pose normal transform at vertex {index}')
-            normals.append(tuple(value / transformed_length for value in transformed_normal))
+            transformed_position = tuple(
+                sum(bone_linear[axis][column] * position[column] for column in range(3)) +
+                bone_position[axis] for axis in range(3))
+            if any(not math.isfinite(value) or abs(value) > 1e7 for value in transformed_position):
+                raise ValueError(f'{shape_name}: transformed position exceeds supported bounds at vertex {index}')
+            positions.append(transformed_position)
+            try:
+                normals.append(_transform_normal(bone_linear, normal))
+            except ValueError as error:
+                raise ValueError(f'{shape_name}: {error} at vertex {index}') from error
         mesh = r.ptr(shape+36)
         r.bounds(mesh, 28)
         if r.u32(mesh) != 4 or r.u32(mesh+4) != 4 or r.u32(mesh+24):

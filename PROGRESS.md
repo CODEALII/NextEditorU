@@ -963,3 +963,18 @@ camera behavior and a fully playable custom world remain open.
   W5a's scaled bone-attached meshes remain unsupported.
 - Full suite: **235 tests passed in 204.003 seconds**; compileall and
   `git diff --check` passed. No animation or game render behavior is inferred.
+
+## 2026-10-21 — Support positive-scale rigid BFRES bones
+
+- Added bounded affine rest-pose transforms for rigid static shapes. Positive
+  scales now compose with local rotations and parent transforms; normals use
+  inverse-transpose handling. Segment-scale-compensated and camera-facing
+  billboard branches remain explicitly unsupported.
+- The local W5a model now parses all 76 rigid shapes. The test also verifies all
+  other supported world models, and synthetic fixtures cover scaled roots,
+  scaled child bones, transformed normals and rejected transform branches.
+- Static parsing now covers all twelve supplied course-select world models
+  (W1/W2a/W3/W4/W5a/W5b/W6a/W7/W8a/W8b/W9a/W9b). This is offline geometry
+  validation only; material/animation fidelity and Cemu appearance are untested.
+- Full suite: **241 tests passed in 208.765 seconds**; `compileall` and
+  `git diff --check` passed. No in-game terrain or route behavior is inferred.
