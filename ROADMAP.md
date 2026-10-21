@@ -58,11 +58,12 @@ the game reaches the map and keyboard-to-left-stick input can be checked.
 - Implemented: baked-light UV transfer uses an exact nearest-XZ spatial tree, so far-offset imported vertices do not scan distance-scaled empty grid rings.
 - Implemented: saved terrain geometry is validated before export, including required fields, topology, and finite supported attributes; malformed projects fail before output creation.
 - Implemented: OBJ imports surface compatibility notes when material libraries/assignments, vertex colors, smoothing groups, object/group boundaries or non-polygon geometry are ignored.
+- Implemented: import and preview embedded GLB 2.0 static triangle meshes with bounded float32 positions/normals, float32 or normalized unsigned-byte/short UVs, identity node transforms, one BIN buffer, and clear rejection of compressed data, skinning, morphs, external buffers, and unsupported layouts. The existing scale/rotation/translation flow and experimental single-grass-shape replacement are shared with OBJ; material rendering and in-game results remain unverified.
 - Implemented: one-entry local caches reuse BFRES material/texture indexes and the parsed shader container across repeated preview builds; cache keys use exact immutable source bytes.
 - Simple planar concave OBJ faces now use ear clipping; malformed, non-planar, duplicate-corner and over-1,024-corner faces are rejected.
 - Compare corrected terrain output against a controlled stock Cemu baseline. Investigate the previous dark patch observation and verify UV, color, culling, and lighting behavior.
 - Add strict import diagnostics, coordinate/scale conversion controls, geometry summaries, and archive reimport validation.
-- Investigate GLB/glTF as an authoring input. Do not claim arbitrary mesh insertion until a BFRES structure and in-game result prove it.
+- Consider external `.gltf` buffers and additional explicitly tested static vertex encodings. Do not claim arbitrary mesh insertion until a BFRES structure and in-game result prove it.
 
 ## Topology, events, and camera
 

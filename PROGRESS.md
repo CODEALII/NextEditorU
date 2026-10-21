@@ -1063,3 +1063,18 @@ camera behavior and a fully playable custom world remain open.
   `git diff --check` passed. This narrows the reverse-engineering question but
   does not identify the AGL caller's skin-value array or confirm a runtime
   shader permutation.
+
+## 2026-10-21 — Add bounded static GLB terrain import
+
+- Added a Binary glTF 2.0 reader for embedded, static triangle meshes and
+  connected it to the editor preview, transform controls and experimental
+  single-grass-shape replacement path. OBJ remains supported.
+- Enforced file/geometry limits and checked GLB chunks, scenes, accessors,
+  alignment, strides, indices and finite values. External buffers, compressed
+  buffer views, transforms, instancing, skinning, morphs, mixed optional
+  attributes and unsupported primitive modes fail with clear errors.
+- GLB materials, textures and animation are not evaluated; the game material
+  stays from the replaced BFRES shape. No Cemu or in-game appearance test was
+  performed.
+- Focused GLB tests passed: **14 tests**; the full suite passed: **260 tests in
+  248.027 seconds**. `compileall` and `git diff --check` passed.

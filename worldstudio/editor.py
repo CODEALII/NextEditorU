@@ -14,6 +14,7 @@ import threading
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
+from .gltf import read_glb
 from .mesh import MAX_FACE_CORNERS, transform_obj_geometry
 from .recent_projects import RecentProjects
 from .session_recovery import SessionRecovery, StaleRecoveryError
@@ -237,6 +238,20 @@ def read_obj(path, include_attributes=False, include_report=False):
     return finish((split_vertices, faces, split_uvs, split_normals))
 
 
+def read_import_mesh(path, *, include_attributes=False, include_report=False):
+    """Read a bounded OBJ or embedded static GLB mesh through one editor path."""
+    path = Path(path)
+    if path.suffix.lower() == ".glb":
+        geometry, warnings = read_glb(path, include_report=True)
+        if not include_attributes:
+            geometry = geometry[:2]
+        return (geometry, warnings) if include_report else geometry
+    if path.suffix.lower() == ".obj":
+        return read_obj(path, include_attributes=include_attributes,
+                        include_report=include_report)
+    raise ValueError("Only Wavefront OBJ and Binary glTF (.glb) meshes are supported")
+
+
 def obj_geometry_summary(vertices, faces):
     """Describe OBJ source counts without implying native export support."""
     label = "face" if len(faces) == 1 else "faces"
@@ -427,7 +442,7 @@ class WorldStudio(ttk.Frame):
         bar.pack(fill="x")
         for title, action in [("New preview", self.new), ("Open project", self.open),
                               ("Recent", self.show_recent_projects),
-                              ("Save project", self.save), ("Import OBJ", self.import_obj),
+                              ("Save project", self.save), ("Import OBJ/GLB", self.import_obj),
                               ("Add node", self.add_node), ("Add route", self.add_route),
                               ("Delete selected", self.delete), ("Validate", self.validate),
                               ("3D model preview", self.open_3d_preview), ("Fit view", self.fit)]:
@@ -771,7 +786,7 @@ class WorldStudio(ttk.Frame):
             try:
                 from .project import resolve_project_path
                 terrain = resolve_project_path(path, self.project_path) if self.project_path else path
-                self.mesh = read_obj(terrain)
+                self.mesh = read_import_mesh(terrain)
             except (OSError, ValueError) as error:
                 self.status.set(f"Terrain unavailable: {error}")
 
@@ -979,11 +994,12 @@ class WorldStudio(ttk.Frame):
             else:
                 from .mesh import _geometry
                 vertices, indices, normals, _ = _geometry(self.mesh[0], self.mesh[1])
-                shapes = [{"name": "Imported OBJ", "material": "Preview mesh", "positions": vertices,
+                source_format = Path(self.project.get("terrain") or "mesh.obj").suffix.upper().lstrip(".")
+                shapes = [{"name": f"Imported {source_format} mesh", "material": "Preview mesh", "positions": vertices,
                            "normals": normals, "indices": indices}]
-                title = "World Studio · imported mesh"
-                model_name = "OBJ • 3D mesh preview"
-                badges = ["OBJ source", "Read-only preview"]
+                title = f"World Studio · imported {source_format} mesh"
+                model_name = f"{source_format} • 3D mesh preview"
+                badges = [f"{source_format} source", "Read-only preview"]
             from .preview3d import open_preview
             report("Preview: packing geometry and opening the WebGL page…")
             all_points = [p for shape in shapes for p in shape["positions"]]
@@ -1403,10 +1419,12 @@ class WorldStudio(ttk.Frame):
             return False
 
     def import_obj(self):
-        path = filedialog.askopenfilename(filetypes=[("Wavefront OBJ", "*.obj")], parent=self)
+        path = filedialog.askopenfilename(filetypes=[("OBJ and Binary glTF", "*.obj *.glb"),
+                                                     ("Wavefront OBJ", "*.obj"),
+                                                     ("Binary glTF", "*.glb")], parent=self)
         if path:
             try:
-                mesh, compatibility_warnings = read_obj(path, include_report=True)
+                mesh, compatibility_warnings = read_import_mesh(path, include_report=True)
                 transform = ObjTransformDialog(self.winfo_toplevel())
                 if transform.result is None:
                     return
@@ -1415,12 +1433,13 @@ class WorldStudio(ttk.Frame):
                 self.dirty = True
                 self._record_edit()
                 self.fit()
-                self.status.set(f"OBJ preview imported · {obj_geometry_summary(*mesh)} · "
+                source_format = Path(path).suffix.upper().lstrip(".")
+                self.status.set(f"{source_format} preview imported · {obj_geometry_summary(*mesh)} · "
                                 f"{obj_transform_summary(transform.result)}. BFRES export is not implemented."
                                 + (" Compatibility: " + "; ".join(compatibility_warnings) + "."
                                    if compatibility_warnings else ""))
             except (OSError, ValueError) as error:
-                messagebox.showerror("Cannot import OBJ", str(error), parent=self)
+                messagebox.showerror("Cannot import mesh", str(error), parent=self)
 
     def close(self):
         if self.may_discard():
@@ -1511,7 +1530,7 @@ class NativeStudio(WorldStudio):
         self.viewport_hint.configure(text="Graph editor: drag a point to move it in the camera plane · drag empty space to orbit · wheel to zoom · click a point to edit. Open 3D model preview for depth-tested BFRES geometry.")
         self.description.configure(text="Native point/segment fields are saved to CSV and exported in the SZS archive. "
             "Known bone XYZ edits modify BFRES; model names and engine indices remain protected. "
-            "Camera controls affect this viewport only. Import OBJ previews terrain. Use OBJ mesh replaces one existing grass mesh experimentally; other terrain remains.")
+            "Camera controls affect this viewport only. Import OBJ or static GLB to preview terrain. Use OBJ/GLB mesh replaces one existing grass mesh experimentally; other terrain remains.")
         toolbar = self.winfo_children()[0]
         replacements = {"New preview": "Reload source", "Add node": "Add draft point", "Add route": "Add segment"}
         for child in toolbar.winfo_children():
@@ -1521,7 +1540,7 @@ class NativeStudio(WorldStudio):
         bar.pack(fill="x", before=self.winfo_children()[1])
         ttk.Button(bar, text="Open native world SZS", command=self.open_szs).pack(side="left", padx=2)
         ttk.Button(bar, text="Export validated SZS", command=self.export_szs).pack(side="left", padx=2)
-        ttk.Button(bar, text="Use OBJ mesh (experimental)", command=self.use_obj_mesh).pack(side="left", padx=2)
+        ttk.Button(bar, text="Use OBJ/GLB mesh (experimental)", command=self.use_obj_mesh).pack(side="left", padx=2)
         ttk.Checkbutton(bar, text="Show path geometry / auxiliary points", variable=self.show_auxiliary,
                         command=self.toggle_auxiliary).pack(side="left", padx=10)
         extra_bar = ttk.Frame(self, padding=(8, 3))
@@ -1950,10 +1969,12 @@ class NativeStudio(WorldStudio):
     def import_obj(self):
         if self.exporting:
             return
-        path = filedialog.askopenfilename(filetypes=[("Wavefront OBJ preview", "*.obj")], parent=self)
+        path = filedialog.askopenfilename(filetypes=[("OBJ and Binary glTF", "*.obj *.glb"),
+                                                     ("Wavefront OBJ", "*.obj"),
+                                                     ("Binary glTF", "*.glb")], parent=self)
         if path:
             try:
-                mesh, compatibility_warnings = read_obj(path, include_report=True)
+                mesh, compatibility_warnings = read_import_mesh(path, include_report=True)
                 transform = ObjTransformDialog(self.winfo_toplevel())
                 if transform.result is None:
                     return
@@ -1965,12 +1986,13 @@ class NativeStudio(WorldStudio):
                 self._record_edit()
                 self.refresh()
                 self.fit()
-                self.status.set(f"OBJ preview imported · {obj_geometry_summary(*mesh)} · "
+                source_format = Path(path).suffix.upper().lstrip(".")
+                self.status.set(f"{source_format} preview imported · {obj_geometry_summary(*mesh)} · "
                                 f"{obj_transform_summary(transform.result)}; native mesh replacement is disabled."
                                 + (" Compatibility: " + "; ".join(compatibility_warnings) + "."
                                    if compatibility_warnings else ""))
             except (OSError, ValueError) as error:
-                messagebox.showerror("Cannot import OBJ", str(error), parent=self)
+                messagebox.showerror("Cannot import mesh", str(error), parent=self)
 
     def open_camera_data(self):
         if self.exporting:
@@ -2011,10 +2033,12 @@ class NativeStudio(WorldStudio):
     def use_obj_mesh(self):
         if self.exporting:
             return
-        path = filedialog.askopenfilename(filetypes=[("Experimental grass mesh OBJ", "*.obj")], parent=self)
+        path = filedialog.askopenfilename(filetypes=[("Experimental OBJ/GLB grass mesh", "*.obj *.glb"),
+                                                     ("Wavefront OBJ", "*.obj"),
+                                                     ("Binary glTF", "*.glb")], parent=self)
         if path:
             try:
-                (vertices, faces, uvs, normals), compatibility_warnings = read_obj(
+                (vertices, faces, uvs, normals), compatibility_warnings = read_import_mesh(
                     path, include_attributes=True, include_report=True)
                 transform = ObjTransformDialog(self.winfo_toplevel())
                 if transform.result is None:
@@ -2029,13 +2053,14 @@ class NativeStudio(WorldStudio):
                 self._record_edit()
                 self.refresh()
                 self.fit()
-                self.status.set(f"Experimental OBJ candidate · {obj_geometry_summary(vertices, faces)} · "
+                source_format = Path(path).suffix.upper().lstrip(".")
+                self.status.set(f"Experimental {source_format} candidate · {obj_geometry_summary(vertices, faces)} · "
                                 f"{obj_transform_summary(transform.result)}. Replaces one existing grass mesh; "
                                 "capacity and layout checks run during export."
                                 + (" Compatibility: " + "; ".join(compatibility_warnings) + "."
                                    if compatibility_warnings else ""))
             except (OSError, ValueError) as error:
-                messagebox.showerror("Cannot use OBJ mesh", str(error), parent=self)
+                messagebox.showerror("Cannot use imported mesh", str(error), parent=self)
 
     def may_discard(self):
         if self.exporting:
@@ -2099,19 +2124,19 @@ class NativeStudio(WorldStudio):
 
 
 class ObjTransformDialog(tk.Toplevel):
-    """Choose import-space conversion without modifying the OBJ source file."""
+    """Choose import-space conversion without modifying the source mesh file."""
 
     def __init__(self, parent):
         super().__init__(parent)
         self.result = None
-        self.title("OBJ coordinates and scale")
+        self.title("Mesh coordinates and scale")
         self.resizable(False, False)
         self.transient(parent.winfo_toplevel())
         self.protocol("WM_DELETE_WINDOW", self.destroy)
-        ttk.Label(self, text="Convert OBJ into the world-map model space",
+        ttk.Label(self, text="Convert the imported mesh into world-map model space",
                   font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=16, pady=(14, 5))
         ttk.Label(self, text="Scale is applied first, then rotation X → Y → Z, then translation. "
-                  "Coordinates are local model units; the source OBJ remains unchanged.",
+                  "Coordinates are local model units; the source file remains unchanged.",
                   wraplength=560).pack(anchor="w", padx=16, pady=(0, 10))
 
         self.values = {key: tk.StringVar(value=value) for key, value in {
@@ -2177,7 +2202,7 @@ class ObjTransformDialog(tk.Toplevel):
             if any(abs(value) > 1e5 for value in settings["translation"]):
                 raise ValueError("Translation must be within ±100,000 model units")
         except ValueError as error:
-            messagebox.showerror("Invalid OBJ transform", str(error), parent=self)
+            messagebox.showerror("Invalid mesh transform", str(error), parent=self)
             return
         self.result = settings
         self.destroy()
