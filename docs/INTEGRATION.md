@@ -1,5 +1,15 @@
 # Runtime evidence and test protocol
 
+## Terrain viewport matches topology-preserving export — 2026-10-22
+
+- With imported OBJ/GLB terrain, the embedded viewport now applies the same
+  topology-preserving BFRES projection as export, then displays the re-extracted
+  positions and normals while retaining the source material and UV channels.
+- The local GLB archive roundtrip regression compares viewport geometry against
+  the exported BFRES and confirms exact equality for positions, normals,
+  indices and UVs. This reduces preview/export mismatch; it does not verify
+  in-game terrain appearance or collision.
+
 ## Static GLB terrain archive roundtrip — 2026-10-22
 
 - Added a local-W1 integration test for importing an embedded GLB mesh into a

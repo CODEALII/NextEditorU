@@ -1147,7 +1147,8 @@ class WorldStudio(ttk.Frame):
         nodes, routes = [], []
         try:
             if hasattr(self, "native"):
-                from .mesh import DEFAULT_MODEL, DEFAULT_SHAPE, _geometry, extract_rigid_model
+                from .mesh import (DEFAULT_MODEL, extract_rigid_model,
+                                   project_terrain_for_preview)
                 from .preview_textures import (attach_base_color_textures,
                                                attach_sampler_diagnostic_textures,
                                                attach_normal_map_textures,
@@ -1157,6 +1158,7 @@ class WorldStudio(ttk.Frame):
                 if preview_model_name not in self.native.skeletons.models:
                     preview_model_name = DEFAULT_MODEL
                 shapes = extract_rigid_model(self.native.model, preview_model_name)
+                terrain_projection_report = None
                 textures = {}
                 normal_textures = {}
                 diagnostic_textures = {}
@@ -1249,19 +1251,15 @@ class WorldStudio(ttk.Frame):
                 )
                 if self.native.geometry is not None:
                     geometry = self.native.geometry
-                    vertices, indices, normals, uvs = _geometry(
-                        geometry["vertices"], geometry["faces"], geometry.get("uvs"), geometry.get("normals"))
-                    for shape in shapes:
-                        if shape["name"] == DEFAULT_SHAPE:
-                            shape.update(positions=vertices, normals=normals, indices=indices,
-                                         material="World Studio imported grass mesh")
-                            shape["uvAttributes"] = {}
-                            if uvs is not None and all(uv is not None for uv in uvs):
-                                shape["uvs"] = uvs
-                                shape["uvAttributes"]["_u0"] = uvs
-                            else:
-                                shape.pop("uvs", None)
-                            break
+                    report("Preview: projecting the terrain onto the exported BFRES topology…")
+                    terrain_projection_report = project_terrain_for_preview(
+                        self.native.model, shapes, geometry["vertices"], geometry["faces"],
+                        model=preview_model_name, uvs=geometry.get("uvs"),
+                        imported_normals=geometry.get("normals"))
+                    texture_notice += (
+                        " The terrain viewport uses the export-equivalent projection onto the existing "
+                        "grass mesh; the imported mesh is a height source, not replacement topology."
+                    )
                 visible_nodes = {n["id"]: n for n in graph["nodes"]
                                  if not n.get("fallback") and all(type(n.get(k)) in (int, float) for k in ("x", "y", "z"))}
                 point_index = {row[1]: index for index, row in enumerate(self.native.points.rows) if len(row) > 1}
@@ -1280,6 +1278,8 @@ class WorldStudio(ttk.Frame):
                 model_name = f"{preview_model_name} • native BFRES static geometry"
                 badges = ["BFRES source", "Static rest pose",
                           f"BC1/BC3 textures ×{len(textures)}" if textures else "Approximate materials"]
+                if terrain_projection_report is not None:
+                    badges.append("Export-equivalent projected terrain")
                 if normal_textures:
                     badges.append(f"BC5 diagnostic maps ×{len(normal_textures)}")
                 if diagnostic_textures:

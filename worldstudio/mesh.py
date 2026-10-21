@@ -1048,3 +1048,27 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
         'normals':'OBJ vn with smooth fallback' if imported_normals is not None else 'generated smooth',
         'imported_normals':imported_normals is not None and any(n is not None for n in imported_normals),
         'unused_triangles':'degenerate','game_verified':False}
+
+
+def project_terrain_for_preview(data, shapes, vertices, faces, *, model=DEFAULT_MODEL,
+                               shape=DEFAULT_SHAPE, uvs=None, imported_normals=None):
+    """Make the preview show the same topology-preserving terrain as export.
+
+    The imported surface describes heights for existing upward-facing vertices;
+    it is not itself the exported BFRES mesh. Reuse the exporter and re-extract
+    the target shape so the viewport shows its displaced positions and normals
+    while retaining the source material, UVs, and auxiliary attributes.
+    """
+    projected_model, report = replace_rigid_mesh(
+        data, vertices, faces, model=model, shape=shape, uvs=uvs,
+        imported_normals=imported_normals, preserve_topology=True)
+    projected_shapes = extract_rigid_model(projected_model, model)
+    projected = next((item for item in projected_shapes if item['name'] == shape), None)
+    target = next((item for item in shapes if item.get('name') == shape), None)
+    if projected is None or target is None:
+        raise ValueError(f'Projected terrain shape is unavailable for preview: {shape}')
+    if len(projected['positions']) != len(target['positions']) or projected['indices'] != target['indices']:
+        raise ValueError('Projected terrain preview does not match the source shape topology')
+    target['positions'] = projected['positions']
+    target['normals'] = projected['normals']
+    return report

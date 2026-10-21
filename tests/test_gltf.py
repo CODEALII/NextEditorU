@@ -8,7 +8,8 @@ from unittest.mock import patch
 from worldstudio.archive import Archive
 from worldstudio.editor import read_import_mesh, read_obj
 from worldstudio.gltf import parse_glb, read_glb
-from worldstudio.mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model, replace_rigid_mesh
+from worldstudio.mesh import (DEFAULT_SHAPE, _geometry, extract_rigid_model,
+                              project_terrain_for_preview, replace_rigid_mesh)
 from worldstudio.project import WorldProject
 from worldstudio.__main__ import DEFAULT_SOURCE
 
@@ -304,6 +305,13 @@ class GlbReaderTests(unittest.TestCase):
             imported, warnings = read_import_mesh(
                 glb_path, include_attributes=True, include_report=True)
             self.assertEqual(warnings, ())
+            source_model = Archive(original_archive).read(project.model_name)
+            preview_shapes = extract_rigid_model(source_model, project.model_name.removesuffix(".bfres") + "_World")
+            preview_report = project_terrain_for_preview(
+                source_model, preview_shapes, imported[0], imported[1],
+                model=project.model_name.removesuffix(".bfres") + "_World",
+                uvs=imported[2], imported_normals=imported[3])
+            self.assertGreater(preview_report["vertices_displaced"], 0)
             project.geometry = {
                 "vertices": imported[0], "faces": imported[1],
                 "uvs": imported[2], "normals": imported[3],
@@ -323,12 +331,17 @@ class GlbReaderTests(unittest.TestCase):
             model = archive.read(project.model_name)
             grass = next(shape for shape in extract_rigid_model(model)
                          if shape["name"] == DEFAULT_SHAPE)
-            source_model = Archive(original_archive).read(project.model_name)
             source_grass = next(shape for shape in extract_rigid_model(source_model)
                                 if shape["name"] == DEFAULT_SHAPE)
+            preview_grass = next(shape for shape in preview_shapes
+                                 if shape["name"] == DEFAULT_SHAPE)
             self.assertEqual(grass["indices"], source_grass["indices"])
             self.assertEqual(grass["uvs"], source_grass["uvs"])
             self.assertEqual(len(grass["positions"]), len(source_grass["positions"]))
+            self.assertEqual(preview_grass["positions"], grass["positions"])
+            self.assertEqual(preview_grass["normals"], grass["normals"])
+            self.assertEqual(preview_grass["indices"], grass["indices"])
+            self.assertEqual(preview_grass["uvs"], grass["uvs"])
             self.assertTrue(any(abs(actual[1] - before[1]) > 1e-5
                                 for actual, before in zip(grass["positions"],
                                                           source_grass["positions"])))

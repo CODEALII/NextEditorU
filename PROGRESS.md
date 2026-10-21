@@ -1,5 +1,16 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Preview terrain as the exported BFRES projection
+
+- The imported OBJ/GLB was previously drawn directly in the world viewport even
+  though export projects its height surface onto the source grass topology.
+  The preview now reuses the exporter, re-extracts the projected BFRES shape,
+  and updates only its positions and normals, retaining the source UVs and
+  materials. The viewport labels this as the export-equivalent projection.
+- Extended the local GLB project/export roundtrip test to compare preview and
+  exported positions, normals, indices and UVs exactly. This verifies preview
+  fidelity to offline export; Cemu appearance and collision remain unverified.
+
 ## 2026-10-22 — Exercise static GLB terrain through archive export
 
 - Added a local-dump end-to-end regression for the GLB path: generate a bounded
