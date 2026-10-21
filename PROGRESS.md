@@ -1316,9 +1316,9 @@ camera behavior and a fully playable custom world remain open.
   `CS_W1.szs` hash in the profile, the GamePad keyboard mapping for WASD, and
   optional latest-session boot-log evidence. Historical pack activations from
   older log sessions cannot satisfy the current-run check.
-- Five synthetic tests cover valid profile readiness, DirectInput rejection
+- Six synthetic tests cover valid profile readiness, DirectInput rejection
   for a WASD test, missing active-pack evidence, archive mismatch, and stale
-  log history from an earlier title session.
+  log history from an earlier title session, plus clean-baseline pack exclusion.
 - Ran the checker on the prepared direct-route profile: its keyboard mapping
   and packaged archive match the intended test artifact. It is ready to launch,
   but has no boot log and no gameplay evidence yet.
@@ -1327,3 +1327,10 @@ camera behavior and a fully playable custom world remain open.
   this explains why that process cannot validate the custom route with WASD.
   The Computer Use window inventory still returns no native windows even after
   explicit user authorization, so actual clicks and held input remain pending.
+- Prepared a separate clean-baseline profile and copied the existing traversal
+  save snapshot to both it and the direct-route profile. SHA-256 checks confirm
+  identical personal and common save files in both profiles. Preflight passes
+  for the clean profile with the mod forbidden and the direct profile with the
+  exact mod archive required. Neither profile has been launched yet.
+- Verification: **301 tests passed in 189.019 seconds**; all six focused Cemu
+  preflight tests passed, and `compileall` plus `git diff --check` passed.

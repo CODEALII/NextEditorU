@@ -93,6 +93,15 @@ class CemuPreflightTests(unittest.TestCase):
         self.assertEqual(report['active_packs_in_log'],
                          ['New Super Mario Bros. U/Workarounds/Title Screen Crash Fix'])
 
+    def test_clean_baseline_rejects_enabled_custom_pack(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = self.make_profile(temporary)
+            report = inspect_profile(profile, forbidden_pack='World Studio Chain')
+        self.assertFalse(report['ready'])
+        self.assertTrue(report['forbidden_pack_present_or_enabled'])
+        self.assertIn("Forbidden graphic pack 'World Studio Chain' is present or enabled",
+                      report['issues'])
+
 
 if __name__ == '__main__':
     unittest.main()

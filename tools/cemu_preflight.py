@@ -42,7 +42,7 @@ def _pack_key(value):
 
 
 def inspect_profile(profile, *, expected_pack=None, archive=None,
-                    require_keyboard=False, require_run=False):
+                    forbidden_pack=None, require_keyboard=False, require_run=False):
     profile = Path(profile).resolve(strict=True)
     if not profile.is_dir():
         raise ValueError('Cemu profile must be a directory')
@@ -74,6 +74,7 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
         rules.append({'path': path.relative_to(profile).as_posix(),
                       'text': path.read_text(encoding='utf-8', errors='replace')})
     selected = None
+    forbidden_configured = None
     if expected_pack:
         needle = expected_pack.casefold()
         selected = next((pack for pack in rules
@@ -86,6 +87,14 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
             if not any(rules_path.casefold().endswith(p.casefold())
                        for p in enabled_pack_paths):
                 issues.append(f'Expected graphic pack {expected_pack!r} is not enabled in settings.xml')
+    if forbidden_pack:
+        key = _pack_key(forbidden_pack)
+        forbidden_configured = (
+            any(key in _pack_key(path) for path in enabled_pack_paths) or
+            any(key in _pack_key(pack['path']) or key in _pack_key(pack['text'])
+                for pack in rules))
+        if forbidden_configured:
+            issues.append(f'Forbidden graphic pack {forbidden_pack!r} is present or enabled')
 
     archive_report = None
     if archive is not None:
@@ -116,6 +125,9 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
     pack_active = (None if not log_text or expected_pack is None else
                    any(_pack_key(expected_pack) in _pack_key(name)
                        for name in active_packs))
+    forbidden_active = (None if not log_text or forbidden_pack is None else
+                        any(_pack_key(forbidden_pack) in _pack_key(name)
+                            for name in active_packs))
     if require_run:
         if not log_path.is_file():
             issues.append('Cemu log.txt is missing; no run evidence is available')
@@ -123,11 +135,14 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
             issues.append('NSMBU v64 module was not found in log.txt')
         if expected_pack and not pack_active:
             issues.append(f'Expected graphic pack {expected_pack!r} is not active in log.txt')
+        if forbidden_pack and forbidden_active:
+            issues.append(f'Forbidden graphic pack {forbidden_pack!r} is active in log.txt')
 
     return {
         'profile': str(profile),
         'enabled_pack_paths': enabled_pack_paths,
         'expected_pack': expected_pack,
+        'forbidden_pack': forbidden_pack,
         'active_packs_in_log': active_packs,
         'controller_api': controller.get('api'),
         'controller_emulated_device': controller.get('emulate'),
@@ -136,6 +151,8 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
         'game_module_loaded': game_module_loaded,
         'title_started': title_started,
         'expected_pack_active_in_log': pack_active,
+        'forbidden_pack_present_or_enabled': forbidden_configured,
+        'forbidden_pack_active_in_log': forbidden_active,
         'run_log_present': bool(current_run_log),
         'archive': archive_report,
         'gameplay_verified': False,
@@ -150,6 +167,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('profile', type=Path)
     parser.add_argument('--expect-pack', help='Pack directory or rules text to require')
+    parser.add_argument('--forbid-pack', help='Pack directory or rules text that must be absent')
     parser.add_argument('--archive', type=Path,
                         help='Expected CS_W1.szs; hash-checked against the profile copy')
     parser.add_argument('--require-keyboard', action='store_true',
@@ -160,6 +178,7 @@ def main(argv=None):
     try:
         report = inspect_profile(args.profile, expected_pack=args.expect_pack,
                                  archive=args.archive,
+                                 forbidden_pack=args.forbid_pack,
                                  require_keyboard=args.require_keyboard,
                                  require_run=args.require_run)
     except (OSError, ValueError) as error:
