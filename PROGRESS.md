@@ -1309,3 +1309,21 @@ camera behavior and a fully playable custom world remain open.
   WASD input. Resume the controlled in-game comparison when the Cemu window is
   available; keep the route cause unresolved until baseline and patched input
   are compared with the same held-key procedure.
+
+## 2026-10-21 — Cemu profile and run preflight
+
+- Added `tools/cemu_preflight.py` to check the selected graphic pack, exact
+  `CS_W1.szs` hash in the profile, the GamePad keyboard mapping for WASD, and
+  optional latest-session boot-log evidence. Historical pack activations from
+  older log sessions cannot satisfy the current-run check.
+- Five synthetic tests cover valid profile readiness, DirectInput rejection
+  for a WASD test, missing active-pack evidence, archive mismatch, and stale
+  log history from an earlier title session.
+- Ran the checker on the prepared direct-route profile: its keyboard mapping
+  and packaged archive match the intended test artifact. It is ready to launch,
+  but has no boot log and no gameplay evidence yet.
+- Ran the same checker read-only on the currently running Cemu 2.6 profile. It
+  loaded NSMBU v64 but used DirectInput and did not activate World Studio Chain;
+  this explains why that process cannot validate the custom route with WASD.
+  The Computer Use window inventory still returns no native windows even after
+  explicit user authorization, so actual clicks and held input remain pending.

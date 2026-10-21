@@ -81,6 +81,8 @@ Follow [INTEGRATION.md](INTEGRATION.md) to prepare an isolated profile and prese
 
 For the stock comparison, use `build/cemu-clean-baseline/launch.ps1` with the local RPX. Its separate MLC and settings enable CrashFix only. Check that profile's `log.txt` for the loaded RPX and active packs before testing. `build/cemu-island-baseline` is not a stock baseline: its current log shows World Studio Chain enabled.
 
+Run `python tools/cemu_preflight.py <profile> --expect-pack WorldStudioChain --archive <CS_W1.szs> --require-keyboard` before a WASD traversal test. This checks that the selected graphic pack is enabled, its packaged archive hash matches the artifact being tested, and the legacy Cemu controller text profile maps W/A/S/D to the Wii U GamePad left stick. After launching, add `--require-run` to require the latest title session in `log.txt` to load the NSMBU v64 module and activate the expected pack. The checker deliberately reports `gameplay_verified: false`; it cannot observe input, movement, level starts, progression or save behavior.
+
 Do not treat a successful boot or rendered map as a traversal pass. Keep every export manifest's `game_tested` field false until route, level, progression, persistence and camera checks have actually been observed.
 
 ## Recent local regressions

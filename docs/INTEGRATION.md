@@ -99,6 +99,18 @@ input setup, UI navigation and CSV quoting changed before the successful patched
 world-map observation. Do not attribute a root cause without a controlled replay.
 No crash stack or failing game function was identified.
 
+## Current process preflight
+
+A read-only check of the only currently running Cemu process found the user
+installation at `C:\Users\Ali\Documents\Cemu_2.6`. Its current log loads
+NSMBU v64 but activates only graphics, LOD and CrashFix packs; it does not
+activate World Studio Chain. Its `controller0.txt` selects DirectInput and a
+Wireless Controller, not the keyboard GamePad profile. Therefore that live
+process is not a valid WASD test of the custom route. The isolated direct-route
+profile does contain the expected keyboard mappings and exact archive, but has
+not been launched. `tools/cemu_preflight.py` now checks these conditions before
+the next controlled comparison.
+
 ## Legacy emulator details actually encountered
 
 - `gp_download=false` opens the legacy first-start wizard. Set true to mark that
