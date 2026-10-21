@@ -150,14 +150,24 @@ class MeshTests(unittest.TestCase):
                          [(100.0, 200.0, -50.0), (100.0, 200.0, -48.0),
                           (102.0, 200.0, -50.0)])
 
-    def test_rotated_or_scaled_root_remains_unsupported(self):
-        for transform_offset, transform in ((0x1d4, (2.0, 1.0, 1.0)),
-                                            (0x1e0, (0.0, 0.0, 0.70710678, 0.70710678))):
-            with self.subTest(transform_offset=transform_offset):
-                data = bytearray(fixture())
-                struct.pack_into('>' + 'f' * len(transform), data, transform_offset, *transform)
-                with self.assertRaisesRegex(ValueError, 'translation-only root'):
-                    extract_rigid_model(bytes(data))
+    def test_rotated_root_transforms_static_positions(self):
+        data = bytearray(fixture())
+        struct.pack_into('>4f', data, 0x1e0, 0.0, 0.7071067811865476, 0.0,
+                         0.7071067811865476)
+
+        shapes = extract_rigid_model(bytes(data))
+
+        self.assertAlmostEqual(shapes[0]['positions'][1][0], 2.0, places=6)
+        self.assertAlmostEqual(shapes[0]['positions'][1][2], 0.0, places=6)
+        self.assertAlmostEqual(shapes[0]['positions'][2][0], 0.0, places=6)
+        self.assertAlmostEqual(shapes[0]['positions'][2][2], -2.0, places=6)
+
+    def test_scaled_root_remains_unsupported(self):
+        data = bytearray(fixture())
+        struct.pack_into('>3f', data, 0x1d4, 2.0, 1.0, 1.0)
+
+        with self.assertRaisesRegex(ValueError, 'unsupported rest-pose transform'):
+            extract_rigid_model(bytes(data))
 
     def test_supported_gx2_uv_formats_decode_to_normalized_coordinates(self):
         encodings = (
@@ -325,7 +335,7 @@ class LocalDumpMeshTests(unittest.TestCase):
     def test_local_translation_root_and_half_float_world_static_meshes(self):
         root = Path(__file__).resolve().parents[1]
         expected_shapes = {'W2a': 58, 'W3': 40, 'W4': 53, 'W5b': 27,
-                           'W6a': 61, 'W8a': 18, 'W9b': 20}
+                           'W6a': 61, 'W8a': 18, 'W8b': 42, 'W9b': 20}
         for world, expected_count in expected_shapes.items():
             with self.subTest(world=world):
                 source = root / 'NSMBU Modding Project/content/Common/course_select' / f'CS_{world}.szs'
@@ -339,6 +349,37 @@ class LocalDumpMeshTests(unittest.TestCase):
                 self.assertTrue(all(shape['positions'] and shape['indices'] for shape in shapes))
                 self.assertTrue(all(math.isfinite(value)
                                     for shape in shapes for point in shape['positions'] for value in point))
+
+    def test_local_w8b_nonroot_rigid_shape_uses_its_bone_transform(self):
+        from worldstudio.mesh import extract_rigid_model
+
+        root = Path(__file__).resolve().parents[1]
+        source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W8b.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W8b dump unavailable')
+        archive = Archive(source.read_bytes())
+        model_data = archive.read('CS_W8b.bfres')
+        skeletons = Skeletons(model_data)
+        model_offset = dict(skeletons.dictionary(skeletons.ptr(32)))['CS_W8b_World']
+        shape_offset = dict(skeletons.dictionary(skeletons.ptr(model_offset + 20)))[
+            'ring4__mtRW801W804c']
+        bone_index = skeletons.u16(shape_offset + 16)
+        self.assertEqual(bone_index, 1)
+        bone = next(bone for bone in skeletons.models['CS_W8b_World']
+                    if bone.index == bone_index)
+        self.assertEqual(bone.position, (540.0, 49.0, -480.0))
+        vertex = skeletons.ptr(shape_offset + 32)
+        attributes = dict(skeletons.dictionary(skeletons.ptr(vertex + 20)))
+        buffer = skeletons.ptr(vertex + 24)
+        start = skeletons.ptr(buffer + 20)
+        local = struct.unpack_from('>3f', model_data,
+                                   start + skeletons.u16(attributes['_p0'] + 6))
+
+        shape = next(shape for shape in extract_rigid_model(model_data, 'CS_W8b_World')
+                     if shape['name'] == 'ring4__mtRW801W804c')
+
+        self.assertEqual(shape['positions'][0],
+                         (local[0] + 540.0, local[1] + 49.0, local[2] - 480.0))
 
     def test_local_dump_in_memory_export_and_byte_boundaries(self):
         root=Path(__file__).resolve().parents[1]

@@ -47,8 +47,8 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
 
     This reader intentionally supports the tested world-model subset only:
     big-endian float32x3 or observed half-float4 (W=1) positions, packed
-    10:10:10:2 normals, contiguous u16 triangle lists, and a translation-only
-    root transform. Textures, animations, skinning and rotated/scaled roots are
+    10:10:10:2 normals, contiguous u16 triangle lists, and rigid attachment to
+    unscaled rest-pose bones. Textures, animations and scaled bone branches are
     not evaluated.
     """
     r = Skeletons(data)
@@ -59,10 +59,10 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
         raise ValueError(f'Missing BFRES model: {model}')
     model_offset = models[model]
     roots = [bone for bone in r.models.get(model, ()) if bone.parent == -1]
-    if len(roots) != 1 or roots[0].index != 0 or roots[0].scale != (1., 1., 1.) or \
-            roots[0].rotation != (0., 0., 0., 1.):
-        raise ValueError('3D preview requires one translation-only root bone')
-    root_translation = roots[0].position
+    if len(roots) != 1 or roots[0].index != 0:
+        raise ValueError('3D preview requires one root bone at index 0')
+    bone_transforms = r.world_transforms(model)
+    bones_by_index = {bone.index: bone for bone in r.models.get(model, ())}
     materials = r.dictionary(r.ptr(model_offset + 24))
     result = []
     for shape_name, shape in r.dictionary(r.ptr(model_offset + 20)):
@@ -70,8 +70,13 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
         if data[shape:shape+4] != b'FSHP' or data[shape+22] or data[shape+23] != 1 or \
                 data[shape+24] or r.u16(shape+20):
             raise ValueError(f'{shape_name}: skinned, morphed or multi-mesh shapes are not supported')
-        if r.u16(shape+16) != roots[0].index:
-            raise ValueError(f'{shape_name}: shape does not bind to the identity root')
+        bone = bones_by_index.get(r.u16(shape+16))
+        if bone is None:
+            raise ValueError(f'{shape_name}: shape references a missing bone')
+        transform = bone_transforms.get(bone.name)
+        if transform is None:
+            raise ValueError(f'{shape_name}: bone {bone.name} has an unsupported rest-pose transform')
+        bone_rotation, bone_position = transform
         vertex = r.ptr(shape+32)
         r.bounds(vertex, 32)
         if data[vertex:vertex+4] != b'FVTX' or data[vertex+5] != 1 or data[vertex+12]:
@@ -124,8 +129,15 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
                 if not all(math.isfinite(v) and abs(v) <= 1e5 for v in uv):
                     raise ValueError(f'{shape_name}: invalid texture coordinates in {name} at vertex {index}')
                 uv_values[name].append(uv)
-            positions.append(tuple(position[axis] + root_translation[axis] for axis in range(3)))
-            normals.append(tuple(v / norm for v in normal))
+            positions.append(tuple(sum(bone_rotation[axis][column] * position[column]
+                                       for column in range(3)) + bone_position[axis]
+                                   for axis in range(3)))
+            transformed_normal = [sum(bone_rotation[axis][column] * normal[column]
+                                      for column in range(3)) for axis in range(3)]
+            transformed_length = math.sqrt(sum(value * value for value in transformed_normal))
+            if not math.isfinite(transformed_length) or transformed_length < 1e-6:
+                raise ValueError(f'{shape_name}: invalid rest-pose normal transform at vertex {index}')
+            normals.append(tuple(value / transformed_length for value in transformed_normal))
         mesh = r.ptr(shape+36)
         r.bounds(mesh, 28)
         if r.u32(mesh) != 4 or r.u32(mesh+4) != 4 or r.u32(mesh+24):

@@ -949,3 +949,17 @@ camera behavior and a fully playable custom world remain open.
   pass the tested static subset; W5a/W8b still contain non-root shape bindings.
 - Full suite: **233 tests passed in 193.021 seconds**; compileall and
   `git diff --check` passed. No in-game geometry or camera result is inferred.
+
+## 2026-10-21 — Transform rigid meshes by their BFRES bone
+
+- Static shape extraction now applies the supported rest-pose rotation and
+  translation for each shape's direct `BoneIndex` attachment, including normal
+  rotation. It reuses the checked hierarchy transform reader and rejects bones
+  whose scale branch is unsupported instead of drawing them at local origin.
+- The W8b world model now parses all 42 static shapes. A local integration test
+  verifies the non-root `ring4` shape receives its stored `(540, 49, -480)` rest
+  translation; synthetic checks cover quaternion rotation and scaled-root
+  rejection. Eleven of twelve supplied world archives now parse in this subset;
+  W5a's scaled bone-attached meshes remain unsupported.
+- Full suite: **235 tests passed in 204.003 seconds**; compileall and
+  `git diff --check` passed. No animation or game render behavior is inferred.
