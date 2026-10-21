@@ -1101,3 +1101,34 @@ camera behavior and a fully playable custom world remain open.
 - Full regression suite: **261 tests passed in 252.313 seconds**. Focused graph,
   shader, and local resource checks also passed. Runtime game behavior remains
   unverified.
+
+## 2026-10-21 — Recheck the clean Cemu title input
+
+- Freshly selected the exact `build/cemu-clean-baseline/Cemu.exe` process and
+  confirmed it was showing `Press 2!`. Enter (configured as Plus) started the
+  opening/demo sequence and returned to the title; it did not reach the map.
+- A later screenshot of the same process showed the opening dinner scene. One
+  Z press (configured as A) left the latest screenshot at `Press 2!` with no
+  visible change. The active controller profile and the title prompt's
+  intended input remain unresolved. No route movement, level launch, or
+  patched-game behavior was tested. This supersedes the earlier note that
+  Enter did not advance the title at all.
+- Updated `docs/INTEGRATION.md` and `ROADMAP.md` to preserve this distinction.
+
+## 2026-10-21 — Improve sampler and terrain-preview feedback
+
+- The WebGL viewer now reads each supported base-color `_a0` sampler's GX2 S/T
+  wrap values. Wrap and Mirror use their corresponding WebGL modes; GX2 Clamp
+  is labeled as a `CLAMP_TO_EDGE` approximation; unsupported MirrorOnce and
+  border modes display a warning and use Repeat. The local W1 scan found seven
+  non-Repeat base samplers, all on power-of-two textures. This remains a base
+  texture preview feature and does not resolve shader UV selection or SRT.
+- Fixed relative terrain references in preview projects so opening, saving in
+  place, and Save As to another directory keep pointing at the same OBJ.
+- Terrain export now records maximum nearest-source XZ distance for baked-light
+  UV projection in the export manifest and warns above the default 128-unit
+  review threshold. The editor surfaces that warning; it is not visual QA.
+- Verification: **270 tests passed in 257.844 seconds**; `compileall` and
+  `git diff --check` passed. The clean Cemu check remained at its title prompt,
+  so route movement, level launches, progression, and terrain appearance remain
+  unverified.

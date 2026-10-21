@@ -14,16 +14,20 @@
 - A new `build/cemu-clean-baseline` folder uses a separate MLC and CrashFix
   only. Its current log confirms `red-pro2.rpx`, v64, module checksum
   `0x6caea914`, no World Studio Chain pack, and no save present at boot. The
-  live Cemu window now reaches the title screen, which currently shows
-  `Press 2!`; the SpotPass offer was declined. A fresh isolated save directory
-  now exists. No map or movement test has been reached.
+  live Cemu window reached the title screen, which showed `Press 2!`; the
+  SpotPass offer was declined. A fresh isolated save directory now exists. No
+  map or traversal test has been reached.
 
   The Cemu input screen reports Wii U GamePad + Keyboard. Its configured keys
   are Z=A, X=B, C=X, V=Y, Enter=Plus, arrows=D-pad and WASD=left stick. The log
   does not record which controller profile was active or any input events. A
-  title prompt reading `Press 2!` has not been matched to this GamePad profile;
-  Enter and Z have not advanced the title to the map, and an earlier X tap led
-  only to a title/demo sequence. If the prompt expects a Wii Remote's `2`
+  fresh process-specific check confirmed `build/cemu-clean-baseline/Cemu.exe`
+  itself was at the `Press 2!` prompt. Enter (configured as Plus) started the
+  opening/demo sequence, which later returned to the title; it did not reach
+  the map. A later screenshot of that same exact process showed the opening
+  dinner scene again. A single Z press (configured as A) left the latest
+  screenshot at `Press 2!` with no visible change. The prompt has not been
+  matched to this GamePad profile. If it expects a Wii Remote's `2`
   button, this profile has no such binding, but that interpretation is not
   confirmed. Do not treat the title prompt as a movement test. Recreate the
   isolated baseline only if its files are missing:

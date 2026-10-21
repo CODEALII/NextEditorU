@@ -13,16 +13,19 @@ enabled, so its no-movement result cannot establish stock baseline behavior.
 The later `cemu-clean-baseline` launch loaded the supplied RPX and activated
 CrashFix only. SpotPass was declined, but the title still displays `Press 2!`.
 Its GamePad + Keyboard bindings include Enter for Plus, Z for A and WASD for
-the left stick. Enter and Z have not advanced the title to the map; an earlier
-X tap only led to a title/demo sequence. No controller-profile activation or
-input events appear in the log. Resolve the start prompt before drawing any
-conclusion about map movement.
+the left stick. A fresh process-specific test confirmed that Enter starts the
+opening/demo sequence, then returns to the title; it did not reach the map. A
+later exact-window screenshot showed the opening dinner scene again. One Z
+press (configured as A) left the latest screenshot at `Press 2!` with no visible
+change. No controller-profile activation or input events appear in the log.
+Resolve the start prompt before drawing any conclusion about map movement.
 
 ## Rendering fidelity
 
 - Implemented: 42 rigid static shapes, 70,193 vertices, 106,736 triangles, route overlays, shape filtering, visibility toggles, and 20 shared BC1/BC3 albedos on all 42 W1 shapes with decoded UV attributes.
 - Implemented: native 3D preview selects the source archive's matching `<archive>_World` model when present. All twelve supplied world models now decode in the tested static subset: W1/W2a/W3/W4/W5a/W5b/W6a/W7/W8a/W8b/W9a/W9b yield 42/58/40/53/76/27/61/34/18/42/3/20 shapes. It supports observed float16x4 positions with W=1 and rigid attachment to supported rest-pose bones, including rotation, translation and positive scale with inverse-transpose normal handling. Segment-scale compensation and camera-facing billboard branches remain unsupported.
 - Verified: supported BC1/BC3 base-color maps attach across all twelve static world models. Local coverage ranges from 2 maps on W9a to 32 each on W2a and W4; ambiguous multi-albedo materials, unsupported texture layouts and missing albedo references keep the explicit approximate-color fallback, with bounded per-shape reasons marked in the mesh list and inspector.
+- Implemented: the WebGL viewer reads the `_a0` GX2 S/T wrap modes for base-color textures. Wrap and Mirror map to their WebGL equivalents; GX2 Clamp uses `CLAMP_TO_EDGE` with an approximation note, while unsupported border and MirrorOnce modes visibly fall back to Repeat. The seven non-Repeat base samplers found on local W1 are power-of-two textures; other models remain subject to their own texture-layout and sampler support.
 - Implemented: `_u0` vertex decoding for observed GX2 `0x80D` float32x2, `0x7` UNorm16x2, `0x207` SNorm16x2, and `0x4` UNorm8x2 formats. W1 inventory and synthetic normalization/bounds tests cover all four; shader UV transforms remain unknown.
 - Implemented: WebGL context, shader/program and mesh-initialization errors show a high-contrast overlay.
 - Implemented: perspective depth planes follow the model bounding radius and camera distance, with a safe near-plane floor while zoomed inside the scene bounds.
@@ -60,6 +63,7 @@ conclusion about map movement.
 - Implemented: OBJ parsing is streamed and bounded to 64 MiB, 64 KiB per line, one million lines, 500,000 attribute records/vertices, 200,000 faces, and 500,000 total corners; coordinates and UVs have explicit finite ranges, and editor status reports source vertex/polygon counts.
 - Implemented: import-time conversion applies nonzero per-axis scale, XYZ rotation, and translation; a Z-up-to-Y-up preset uses a -90° X rotation. UVs are preserved, normals use inverse-transpose scaling, mirrored transforms reverse face winding, and the source OBJ remains unchanged.
 - Implemented: baked-light UV transfer uses an exact nearest-XZ spatial tree, so far-offset imported vertices do not scan distance-scaled empty grid rings.
+- Implemented: terrain export reports the maximum XZ distance from imported vertices to their nearest source vertex and records a configurable 128-unit review warning for baked-light UV projection; the warning is surfaced in the editor and export manifest, without claiming visual correctness.
 - Implemented: saved terrain geometry is validated before export, including required fields, topology, and finite supported attributes; malformed projects fail before output creation.
 - Implemented: OBJ imports surface compatibility notes when material libraries/assignments, vertex colors, smoothing groups, object/group boundaries or non-polygon geometry are ignored.
 - Implemented: import and preview embedded GLB 2.0 static triangle meshes with bounded float32 positions/normals, float32 or normalized unsigned-byte/short UVs, identity node transforms, one BIN buffer, and clear rejection of compressed data, skinning, morphs, external buffers, and unsupported layouts. The existing scale/rotation/translation flow and experimental single-grass-shape replacement are shared with OBJ; material rendering and in-game results remain unverified.
@@ -101,6 +105,7 @@ conclusion about map movement.
 - Add transform handles and route-edit controls with project-level regression tests.
 - Implemented: changed archive members have before/after hashes and sizes in the export manifest; overwriting a changed native or OBJ-preview project rotates two adjacent, openable previous-version backups.
 - Implemented: a Recent menu stores up to ten native and ten preview paths in user settings, filters by editor type, and uses the existing unsaved-change guard when reopening.
+- Implemented: preview projects resolve relative terrain references against the project file on open, preserving the same asset on save and Save As from a different directory.
 - Implemented: native sessions opened from an SZS source or saved JSON, plus saved preview projects, receive a debounced, checksummed recovery snapshot with a 64 MiB limit; snapshots bind to the source-file path/hash, and reopening offers restore while save/discard clears recovery data.
 - Implemented: `verify-export` reimports a saved-project export, compares every archive member against a fresh export, validates the manifest and checks camera companion outputs; runtime behavior remains separate.
 - Implemented: archive, camera companion and manifest export writes roll back files created by the current export if a later output write fails.

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
   <title id="title">NSMBU World Studio progress</title>
-  <desc id="desc">Evidence-based status: 150 automated tests pass; the W1 viewer shows 42 static BFRES shapes, 17 albedos and diagnostic BC5 maps. Cemu route behavior remains unverified because baseline keyboard input does not reach the game.</desc>
+  <desc id="desc">Evidence-based status: 270 automated tests pass; the W1 viewer shows 42 static BFRES shapes, 20 albedos and texture diagnostics. The clean Cemu baseline remains at the title prompt, so route behavior is unverified.</desc>
   <defs>
     <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
       <path d="M8 0H0V8" fill="none" stroke="#07120f" stroke-opacity=".35" stroke-width="1"/>
@@ -21,11 +21,11 @@
   <rect x="48" y="103" width="318" height="74" rx="7" fill="#238636"/>
   <rect x="48" y="103" width="318" height="74" rx="7" fill="url(#grid)"/>
   <text class="label" x="66" y="126">AUTOMATED SUITE</text>
-  <text class="value" x="66" y="157">150 / 150 <tspan font-size="14">PASS</tspan></text>
+  <text class="value" x="66" y="157">270 / 270 <tspan font-size="14">PASS</tspan></text>
   <rect x="379" y="103" width="337" height="74" rx="7" fill="#9e6a03"/>
   <rect x="379" y="103" width="337" height="74" rx="7" fill="url(#grid)"/>
   <text class="label" x="397" y="126">CEMU ROUTE CHECK</text>
-  <text class="value" x="397" y="157">INPUT BLOCKED</text>
+  <text class="value" x="397" y="157">MAP NOT REACHED</text>
   <rect x="729" y="103" width="343" height="74" rx="7" fill="#9e6a03"/>
   <rect x="729" y="103" width="343" height="74" rx="7" fill="url(#grid)"/>
   <text class="label" x="747" y="126">CUSTOM TERRAIN</text>
@@ -44,22 +44,22 @@
   <rect x="32" y="377" width="250" height="139" rx="8" fill="url(#grid)"/>
   <text class="label" x="49" y="404">VISUAL EDITOR</text>
   <text class="copy" x="49" y="431">42 static BFRES shapes · routes</text>
-  <text class="copy" x="49" y="451">17 albedos · BC4 / BC5 channel diagnostics</text>
+  <text class="copy" x="49" y="451">20 albedos · BC4 / BC5 diagnostics</text>
   <text class="tiny" x="49" y="487">Chrome / SwiftShader preview checked</text>
 
   <rect class="tile" x="290" y="377" width="256" height="139" rx="8" fill="#9e6a03"/>
   <rect x="290" y="377" width="256" height="139" rx="8" fill="url(#grid)"/>
   <text class="label" x="307" y="404">ROUTES / PROGRESSION</text>
   <text class="copy" x="307" y="431">3-node graph validates offline</text>
-  <text class="copy" x="307" y="451">Cemu input blocks route testing</text>
+  <text class="copy" x="307" y="451">Title input still unresolved</text>
   <text class="tiny" x="307" y="487">Movement and unlocks unverified</text>
 
   <rect class="tile" x="560" y="236" width="512" height="133" rx="8" fill="#9e6a03"/>
   <rect x="560" y="236" width="512" height="133" rx="8" fill="url(#grid)"/>
   <text class="label" x="578" y="262">GEOMETRY IMPORT</text>
-  <text class="copy" x="578" y="287">Bounded OBJ · scale / rotation / offset</text>
-  <text class="copy" x="578" y="308">Experimental grass replacement · capacity guarded</text>
-  <text class="tiny" x="578" y="344">Game rendering remains unverified</text>
+  <text class="copy" x="578" y="287">Bounded OBJ / GLB · scale / rotate / offset</text>
+  <text class="copy" x="578" y="308">Grass patch · capacity and UV distance checked</text>
+  <text class="tiny" x="578" y="344">Game appearance remains unverified</text>
 
   <rect class="tile" x="560" y="377" width="250" height="139" rx="8" fill="#9e6a03"/>
   <rect x="560" y="377" width="250" height="139" rx="8" fill="url(#grid)"/>
@@ -77,6 +77,6 @@
 
   <circle cx="42" cy="540" r="5" fill="#3fb950"/><text class="tiny" x="54" y="544">verified offline</text>
   <circle cx="177" cy="540" r="5" fill="#d29922"/><text class="tiny" x="189" y="544">partial / runtime QA open</text>
-  <circle cx="373" cy="540" r="5" fill="#d29922"/><text class="tiny" x="385" y="544">input blocked · route unverified</text>
+  <circle cx="373" cy="540" r="5" fill="#d29922"/><text class="tiny" x="385" y="544">title input unresolved · route unverified</text>
   <text class="tiny" x="1072" y="544" text-anchor="end">details: PROGRESS.md</text>
 </svg>

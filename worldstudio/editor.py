@@ -1375,7 +1375,7 @@ class WorldStudio(ttk.Frame):
 
     def open_project_path(self, path):
         try:
-            path = Path(path)
+            path = Path(path).resolve()
             project = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(project, dict):
                 raise ValueError("Not a World Studio preview project object")
@@ -1384,6 +1384,8 @@ class WorldStudio(ttk.Frame):
             issues = validate_preview(project)
             if issues:
                 raise ValueError("\n".join(issues))
+            from .project import resolve_project_path
+            project["terrain"] = resolve_project_path(project.get("terrain"), path)
             self.project, self.project_path = project, Path(path)
             self.selected, self.dirty = None, False
             self._load_mesh()
@@ -2095,7 +2097,13 @@ class NativeStudio(WorldStudio):
         self.set_export_busy(False)
         if succeeded:
             terrain = "Experimental mesh included. " if result.get("terrain_exported") else ""
-            self.status.set(f"Exported verified archive: {result.get('output', '')}. {terrain}Cemu verification is still required.")
+            geometry = result.get("geometry") or {}
+            projection = geometry.get("baked_uv_projection") or {}
+            projection_warning = projection.get("warning")
+            warning = (f" Baked-light UV review: {projection_warning}. Check the export manifest."
+                       if projection_warning else "")
+            self.status.set(f"Exported verified archive: {result.get('output', '')}. {terrain}"
+                            f"Cemu verification is still required.{warning}")
         else:
             self.status.set(f"Export failed: {result}")
             messagebox.showerror("Export failed", str(result), parent=self)

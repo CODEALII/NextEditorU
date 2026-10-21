@@ -14,6 +14,7 @@ from .bfres import Skeletons
 
 DEFAULT_MODEL = 'CS_W1_World'
 DEFAULT_SHAPE = 'polySurface1489__mtGrass'
+DEFAULT_LIGHTMAP_PROJECTION_WARNING_DISTANCE = 128.0
 MAX_FACE_CORNERS = 1024
 _UV_ATTRIBUTE_BYTES = {0x80d: 8, 0x7: 4, 0x207: 4, 0x4: 2}
 _POSITION_ATTRIBUTE_BYTES = {0x811: 12, 0x80f: 8}
@@ -246,7 +247,7 @@ def _nearest_uvs(points, source_points, source_uvs):
         dz = max(low_z - point[2], 0., point[2] - high_z)
         return dx * dx + dz * dz
 
-    result = []
+    result, distances = [], []
     for point in points:
         best, best_distance = None, float('inf')
 
@@ -266,7 +267,8 @@ def _nearest_uvs(points, source_points, source_uvs):
 
         visit(tree)
         result.append(source_uvs[best])
-    return result
+        distances.append(math.sqrt(best_distance))
+    return result, distances
 
 
 def _xz_distance_squared(point, source):
@@ -520,7 +522,8 @@ def _geometry(vertices, faces, uvs=None, imported_normals=None):
 
 
 def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT_SHAPE,
-                       uvs=None, imported_normals=None):
+                       uvs=None, imported_normals=None,
+                       lightmap_projection_warning_distance=DEFAULT_LIGHTMAP_PROJECTION_WARNING_DISTANCE):
     """Return (new_bfres, report), replacing exactly one existing rigid shape.
 
     OBJ units are used directly as model-local game units. OBJ corner UVs and
@@ -530,6 +533,12 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
     present; missing channels receive the documented planar/smooth defaults.
     In-game appearance still needs Cemu QA.
     """
+    try:
+        lightmap_projection_warning_distance = float(lightmap_projection_warning_distance)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError('Lightmap projection warning distance must be finite and nonnegative') from exc
+    if not math.isfinite(lightmap_projection_warning_distance) or lightmap_projection_warning_distance < 0:
+        raise ValueError('Lightmap projection warning distance must be finite and nonnegative')
     vertices, indices, normals, uvs = _geometry(vertices, faces, uvs, imported_normals)
     r = Skeletons(data)
     if r.version != 0x03000001:
@@ -603,7 +612,14 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
                      for i in range(capacity)]
     source_uvs = [tuple(value/65535. for value in struct.unpack_from(
         '>2H', data, start+i*stride+attrs['_u1'][0])) for i in range(capacity)]
-    lightmap_uvs = _nearest_uvs(vertices, source_points, source_uvs)
+    lightmap_uvs, lightmap_projection_distances = _nearest_uvs(vertices, source_points, source_uvs)
+    max_lightmap_projection_distance = max(lightmap_projection_distances, default=0.0)
+    lightmap_projection_warning = None
+    if max_lightmap_projection_distance > lightmap_projection_warning_distance:
+        lightmap_projection_warning = (
+            f'maximum XZ distance {max_lightmap_projection_distance:.3f} exceeds '
+            f'the {lightmap_projection_warning_distance:g}-unit review threshold; '
+            'baked-light UVs use nearest source vertices and need visual review')
     sub = r.ptr(mesh+16)
     count = r.u16(mesh+12)
     r.bounds(sub, count*8)
@@ -650,6 +666,12 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
         'triangles':len(indices)//3,'vertex_capacity':capacity,'index_capacity':index_capacity,
         'material_reused':True,'material':material_name,
         'uvs':'OBJ vt or generated planar XZ; baked channel projected from original XZ mesh',
+        'baked_uv_projection': {
+            'method': 'nearest source vertex in XZ',
+            'max_xz_distance': max_lightmap_projection_distance,
+            'warning_threshold': lightmap_projection_warning_distance,
+            'warning': lightmap_projection_warning,
+        },
         'normals':'OBJ vn with smooth fallback' if imported_normals is not None else 'generated smooth',
         'imported_normals':imported_normals is not None and any(n is not None for n in imported_normals),
         'unused_triangles':'degenerate','game_verified':False}

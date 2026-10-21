@@ -6,12 +6,13 @@ import threading
 import time
 import tempfile
 import unittest
+import json
 from unittest.mock import patch
 
 from worldstudio.editor import (NativeStudio, ObjTransformDialog, WorldStudio,
-                                fit_preview_scale, project_preview_point)
+                                demo_project, fit_preview_scale, project_preview_point)
 from worldstudio.recent_projects import RecentProjects
-from worldstudio.project import WorldProject
+from worldstudio.project import WorldProject, resolve_project_path
 from worldstudio.session_recovery import SessionRecovery
 
 
@@ -450,6 +451,65 @@ class EditorSmokeTests(unittest.TestCase):
         dialog = ObjTransformDialog(self.root)
         self.assertEqual(dialog.result["rotation_degrees"], (-90., 0., 0.))
         self.assertEqual(dialog.result["scale"], (1., 1., 1.))
+
+
+class PreviewProjectPathTests(unittest.TestCase):
+    def test_relative_terrain_survives_open_save_and_save_to_another_folder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source_dir = root / "source"
+            terrain_path = source_dir / "assets" / "island.obj"
+            terrain_path.parent.mkdir(parents=True)
+            terrain_path.write_text("v 0 0 0\n", encoding="utf-8")
+            source_project = source_dir / "preview.json"
+            source_data = demo_project()
+            source_data["terrain"] = "assets/island.obj"
+            source_project.write_text(json.dumps(source_data), encoding="utf-8")
+
+            editor = object.__new__(WorldStudio)
+            editor.project = None
+            editor.project_path = None
+            editor.selected = None
+            editor.dirty = False
+            editor.status = SimpleNamespace(set=lambda value: None)
+            editor.recent_projects = RecentProjects(root / "recent.json")
+            editor._load_mesh = lambda: None
+            editor.refresh = lambda: None
+            editor._reset_edit_history = lambda: None
+            editor._record_recent_project = lambda path: None
+            editor._set_recovery_context = lambda *args, **kwargs: None
+            editor._clear_recovery = lambda *args: None
+
+            editor.open_project_path(source_project)
+            self.assertEqual(Path(editor.project["terrain"]), terrain_path.resolve())
+            self.assertTrue(editor.save())
+            same_location = json.loads(source_project.read_text(encoding="utf-8"))
+            self.assertEqual(resolve_project_path(same_location["terrain"], source_project),
+                             str(terrain_path.resolve()))
+
+            save_as_path = root / "relocated" / "preview-copy.json"
+            editor.project_path = None
+            with patch("worldstudio.editor.filedialog.asksaveasfilename",
+                       return_value=str(save_as_path)):
+                self.assertTrue(editor.save())
+            relocated = json.loads(save_as_path.read_text(encoding="utf-8"))
+            self.assertEqual(resolve_project_path(relocated["terrain"], save_as_path),
+                             str(terrain_path.resolve()))
+
+    def test_export_status_surfaces_baked_uv_projection_warning(self):
+        editor = object.__new__(NativeStudio)
+        status = SimpleNamespace(value="", set=lambda value: setattr(status, "value", value))
+        editor.status = status
+        editor.export_results = SimpleNamespace(get_nowait=lambda: (True, {
+            "output": "world.szs", "terrain_exported": True,
+            "geometry": {"baked_uv_projection": {
+                "warning": "maximum XZ distance exceeds the review threshold"}}}))
+        editor.set_export_busy = lambda busy: None
+
+        editor.poll_export()
+
+        self.assertIn("Baked-light UV review", status.value)
+        self.assertIn("Check the export manifest", status.value)
 
 
 if __name__ == "__main__":

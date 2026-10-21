@@ -4,7 +4,8 @@ from __future__ import annotations
 import base64
 
 from .bfres_texture import (extract_base_color_texture, extract_normal_map_texture,
-                            extract_sampler_diagnostic_texture)
+                            extract_sampler_diagnostic_texture,
+                            extract_sampler_wrap_modes)
 from .bfres_material import extract_texture_srt_parameters
 from .texture_preview import (decode_bc1, decode_bc3, decode_bc4_unorm, decode_bc5_snorm,
                               decode_bc5_unorm, detile_bc1_thin1, detile_bc3_thin1,
@@ -49,18 +50,31 @@ def attach_base_color_textures(model_data, shapes, *, model_name="CS_W1_World",
 
     textures = {}
     material_textures = {}
+    material_wrap_modes = {}
     material_warnings = {}
     failed_materials = set()
     decoded_pixels = 0
     for shape in shapes:
         shape.pop("texture", None)
         shape.pop("textureWarning", None)
+        shape.pop("textureWrap", None)
         if shape.get("uvs") is None:
             continue
         material = shape["material"]
         if material not in material_textures:
             try:
                 texture = extract_base_color_texture(model_data, model_name, material)
+                try:
+                    material_wrap_modes[material] = extract_sampler_wrap_modes(
+                        model_data, model_name, material, sampler_slot="_a0",
+                        texture_name=texture["name"])
+                except (ValueError, KeyError, TypeError, OverflowError) as error:
+                    reason = str(error).strip() or type(error).__name__
+                    material_wrap_modes[material] = {
+                        "samplerSlot": "_a0", "s": "repeat", "t": "repeat",
+                        "gx2": None, "labels": {"s": "Unavailable", "t": "Unavailable"},
+                        "warnings": [f"Sampler state unavailable ({reason}); using Repeat on both axes."],
+                    }
                 if texture["name"] not in textures:
                     pixels = texture["width"] * texture["height"]
                     if pixels > max_texture_pixels:
@@ -98,6 +112,7 @@ def attach_base_color_textures(model_data, shapes, *, model_name="CS_W1_World",
         texture_name = material_textures[material]
         if texture_name:
             shape["texture"] = texture_name
+            shape["textureWrap"] = material_wrap_modes[material]
         else:
             shape["textureWarning"] = material_warnings[material]
     return textures, failed_materials

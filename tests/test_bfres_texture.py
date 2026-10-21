@@ -9,7 +9,8 @@ from worldstudio.archive import Archive
 from worldstudio.bfres import Skeletons
 from worldstudio import bfres_texture
 from worldstudio.bfres_texture import (extract_base_color_texture, extract_bc1_base_texture,
-                                       extract_normal_map_texture, extract_sampler_diagnostic_texture)
+                                       extract_normal_map_texture, extract_sampler_diagnostic_texture,
+                                       extract_sampler_wrap_modes)
 from worldstudio.preview_textures import (attach_base_color_textures, attach_normal_map_textures,
                                           attach_sampler_diagnostic_textures)
 from worldstudio.texture_preview import (decode_bc1, decode_bc3, decode_bc4_unorm,
@@ -19,7 +20,8 @@ from worldstudio.texture_preview import (decode_bc1, decode_bc3, decode_bc4_unor
 from tests.test_mesh import fixture as bfres_fixture
 
 
-def texture_fixture(surface_format, texture_name='Grass_alb', sampler_name=None):
+def texture_fixture(surface_format, texture_name='Grass_alb', sampler_name=None,
+                    sampler_word=0):
     """Small synthetic BFRES material and FTEX record, with no game data."""
     data = bytearray(0x3000)
     data[:len(bfres_fixture())] = bfres_fixture()
@@ -57,6 +59,7 @@ def texture_fixture(surface_format, texture_name='Grass_alb', sampler_name=None)
     if sampler_name:
         pointer(0x7B0, 0x840)
         dictionary(0x840, [(sampler_name, 0xA80)])
+        u32(0xA80, sampler_word)
     data[0xA00:0xA04] = b'FTEX'
     for offset, value in ((8, 4), (12, 4), (16, 1), (20, 1), (24, surface_format),
                           (28, 0), (32, 1), (36, 4096 if surface_format in (0x31, 0x34) else 8192),
@@ -80,6 +83,46 @@ class SyntheticTextureReferenceTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(first, third)
         self.assertEqual(parse.call_count, 2, 'a different immutable BFRES byte string must invalidate the cache')
+
+
+class SyntheticSamplerWrapTests(unittest.TestCase):
+    def test_extracts_webgl_wrap_modes_and_marks_clamp_approximation(self):
+        cases = (
+            (0, 0, 'repeat', 'repeat', 'Wrap', 'Wrap', []),
+            (1, 1, 'mirror', 'mirror', 'Mirror', 'Mirror', []),
+            (0, 2, 'repeat', 'clamp', 'Wrap', 'Clamp',
+             ['GX2 Clamp on T is approximated with WebGL CLAMP_TO_EDGE.']),
+        )
+        for gx2_s, gx2_t, webgl_s, webgl_t, label_s, label_t, warnings in cases:
+            with self.subTest(gx2_s=gx2_s, gx2_t=gx2_t):
+                word = gx2_s | (gx2_t << 3)
+                texture = extract_sampler_wrap_modes(
+                    texture_fixture(0x31, sampler_name='_a0', sampler_word=word),
+                    'CS_W1_World', 'mtGrass', texture_name='Grass_alb')
+                self.assertEqual((texture['s'], texture['t']), (webgl_s, webgl_t))
+                self.assertEqual(texture['gx2'], {'s': gx2_s, 't': gx2_t})
+                self.assertEqual(texture['labels'], {'s': label_s, 't': label_t})
+                self.assertEqual(texture['warnings'], warnings)
+
+    def test_unsupported_mirror_once_mode_has_explicit_repeat_fallback(self):
+        texture = extract_sampler_wrap_modes(
+            texture_fixture(0x31, sampler_name='_a0', sampler_word=3),
+            'CS_W1_World', 'mtGrass', texture_name='Grass_alb')
+        self.assertEqual((texture['s'], texture['t']), ('repeat', 'repeat'))
+        self.assertEqual(texture['labels']['s'], 'MirrorOnce')
+        self.assertIn('GX2 MirrorOnce on S is unsupported; using Repeat', texture['warnings'][0])
+
+    def test_albedo_attachment_keeps_sampler_state_per_material(self):
+        shapes = [{'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}]
+        textures, failed = attach_base_color_textures(
+            texture_fixture(0x31, sampler_name='_a0', sampler_word=1 | (2 << 3)), shapes)
+        self.assertEqual(set(textures), {'Grass_alb'})
+        self.assertFalse(failed)
+        self.assertEqual(shapes[0]['textureWrap']['samplerSlot'], '_a0')
+        self.assertEqual((shapes[0]['textureWrap']['s'], shapes[0]['textureWrap']['t']),
+                         ('mirror', 'clamp'))
+        self.assertEqual(shapes[0]['textureWrap']['warnings'], [
+            'GX2 Clamp on T is approximated with WebGL CLAMP_TO_EDGE.'])
 
     def test_generic_extractor_accepts_only_bc1_and_bc3_albedos(self):
         for fmt in (0x31, 0x33):
@@ -228,6 +271,32 @@ class SyntheticSamplerDiagnosticTests(unittest.TestCase):
 
 
 class LocalTextureReferenceTests(unittest.TestCase):
+    def test_local_w1_albedo_wrap_modes_for_mirror_and_clamp_materials(self):
+        root = Path(__file__).resolve().parents[1]
+        source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W1 dump unavailable')
+        model = Archive(source.read_bytes()).read('CS_W1.bfres')
+        cases = (
+            ('mtKusa', 'Kusa_alb', (1, 1), ('mirror', 'mirror'), []),
+            ('mtDokanGreen', 'Dokan_Green_alb', (2, 2), ('clamp', 'clamp'), [
+                'GX2 Clamp on S is approximated with WebGL CLAMP_TO_EDGE.',
+                'GX2 Clamp on T is approximated with WebGL CLAMP_TO_EDGE.',
+            ]),
+        )
+        for material, texture_name, gx2_modes, webgl_modes, warnings in cases:
+            with self.subTest(material=material):
+                wrap = extract_sampler_wrap_modes(
+                    model, 'CS_W1_World', material, sampler_slot='_a0',
+                    texture_name=texture_name)
+                self.assertEqual((wrap['gx2']['s'], wrap['gx2']['t']), gx2_modes)
+                self.assertEqual((wrap['s'], wrap['t']), webgl_modes)
+                self.assertEqual(wrap['labels'], {
+                    's': 'Mirror' if gx2_modes[0] == 1 else 'Clamp',
+                    't': 'Mirror' if gx2_modes[1] == 1 else 'Clamp',
+                })
+                self.assertEqual(wrap['warnings'], warnings)
+
     def test_local_world_models_attach_supported_base_color_textures(self):
         from worldstudio.mesh import extract_rigid_model
 

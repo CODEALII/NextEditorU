@@ -52,6 +52,51 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("warning.title='Texture fallback: '+mesh.textureWarning", page)
         self.assertIn("+(mesh.textureWarning||'')", page)
 
+    def test_material_sampler_wrap_modes_reach_webgl_texture_state(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise WebGL sampler wrap setup")
+        wrap = {"samplerSlot": "_a0", "s": "mirror", "t": "clamp",
+                "gx2": {"s": 1, "t": 2},
+                "labels": {"s": "Mirror", "t": "Clamp"},
+                "warnings": ["GX2 Clamp on T is approximated with WebGL CLAMP_TO_EDGE."]}
+        scene = {"shapes": [{"name": "test", "material": "mat", "textureWrap": wrap}],
+                 "nodes": [], "routes": []}
+        page = build_document(scene)
+        packed = json.loads(re.search(r"const scene=(.*?);", page).group(1))
+        self.assertEqual(packed["shapes"][0]["textureWrap"], wrap)
+        self.assertIn("textureWrap:shape.textureWrap||null", page)
+        self.assertIn("createTexture(texturePayload,'base',shape.textureWrap)", page)
+        self.assertIn("Sampler wrap note: '+warning", page)
+
+        helper_start = page.index("function gx2WrapToWebGL(gl,mode){")
+        helper_end = page.index("\nfunction wireEdges", helper_start)
+        helper = page[helper_start:helper_end]
+        probe = helper + r"""
+globalThis.atob=value=>Buffer.from(value,'base64').toString('binary');
+let nextId=0;const parameters=[];
+const gl={REPEAT:101,MIRRORED_REPEAT:102,CLAMP_TO_EDGE:103,TEXTURE_2D:1,
+TEXTURE_MIN_FILTER:2,LINEAR:3,TEXTURE_MAG_FILTER:4,TEXTURE_WRAP_S:5,
+TEXTURE_WRAP_T:6,RGBA:7,UNSIGNED_BYTE:8,UNPACK_ALIGNMENT:9,
+createTexture(){return{id:++nextId}},bindTexture(){},pixelStorei(){},texImage2D(){},
+texParameteri(target,name,value){parameters.push([name,value])}};
+const payload={name:'shared',width:1,height:1,rgbaBase64:'AAAAAA=='};
+const mirrored=createTexture(payload,'base',{s:'mirror',t:'clamp'});
+const mirroredAgain=createTexture(payload,'base',{s:'mirror',t:'clamp'});
+const repeated=createTexture(payload,'base',{s:'repeat',t:'repeat'});
+console.log(JSON.stringify({sameModeReusesTexture:mirrored===mirroredAgain,
+differentModesUseDifferentTexture:mirrored!==repeated,
+mirrorWraps:parameters.slice(2,4),repeatWraps:parameters.slice(6,8)}));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True,
+                                text=True, encoding="utf-8")
+        self.assertEqual(json.loads(result.stdout), {
+            "sameModeReusesTexture": True,
+            "differentModesUseDifferentTexture": True,
+            "mirrorWraps": [[5, 102], [6, 103]],
+            "repeatWraps": [[5, 101], [6, 101]],
+        })
+
     def test_webgl_startup_failures_show_an_obvious_viewer_fallback(self):
         page = build_document({"shapes": [], "nodes": [], "routes": []})
         script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
@@ -90,7 +135,8 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("Grass_alb", page)
         self.assertIn("rgbaBase64", page)
         self.assertIn("gl.texImage2D", page)
-        self.assertIn("gl.TEXTURE_WRAP_S,gl.REPEAT", page)
+        self.assertIn("modeS=wrap.s||'repeat'", page)
+        self.assertIn("gx2WrapToWebGL(gl,modeS)", page)
         self.assertNotIn("https://", page)
 
     def test_viewer_resolves_shared_texture_catalog_and_shape_filter(self):

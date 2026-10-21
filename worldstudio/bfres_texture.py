@@ -24,6 +24,86 @@ _DIAGNOSTIC_SLOT_FORMATS = {"_o0": _BC5_DIAGNOSTIC_FORMATS,
                             "_x2": _BC4_DIAGNOSTIC_FORMATS,
                             "_x0": _BC3_SAMPLER_DIAGNOSTIC_FORMATS,
                             "_x1": _BC3_SAMPLER_DIAGNOSTIC_FORMATS}
+_GX2_TEX_CLAMP_NAMES = (
+    "Wrap", "Mirror", "Clamp", "MirrorOnce", "ClampHalfBorder",
+    "MirrorOnceHalfBorder", "ClampBorder", "MirrorOnceBorder", "ClampToEdge",
+)
+
+
+def extract_sampler_wrap_modes(data, model_name, material_name, *, sampler_slot="_a0",
+                               texture_name=None):
+    """Read the GX2 S/T wrap values for one material texture sampler.
+
+    The local preview maps Wrap and Mirror directly to WebGL modes. GX2 Clamp
+    and ClampToEdge both use WebGL CLAMP_TO_EDGE; Clamp is marked as an edge
+    approximation. Border and MirrorOnce modes fall back to Repeat explicitly
+    because WebGL 1 has no equivalent mode.
+    """
+    r, textures, materials = _texture_context(data, model_name)
+    if material_name not in materials:
+        raise ValueError(f'Missing BFRES material: {material_name}')
+    material = materials[material_name]
+    r.bounds(material, 0x48)
+    if data[material:material + 4] != b'FMAT':
+        raise ValueError(f'{material_name}: invalid BFRES material')
+
+    reference_count = data[material + 17]
+    sampler_count = data[material + 16]
+    references = r.ptr(material + 40)
+    samplers = r.dictionary(r.ptr(material + 48))
+    if reference_count != sampler_count or len(samplers) != reference_count:
+        raise ValueError(f'{material_name}: texture-reference and sampler counts do not match')
+    r.bounds(references, reference_count * 8)
+
+    matches = []
+    for index in range(reference_count):
+        reference = references + index * 8
+        name = r.string(r.ptr(reference))
+        texture = r.ptr(reference + 4)
+        if name not in textures or textures[name] != texture:
+            raise ValueError(f'{material_name}: texture reference does not match BFRES dictionary: {name}')
+        sampler_name, sampler = samplers[index]
+        if sampler_name == sampler_slot and (texture_name is None or name == texture_name):
+            matches.append((sampler_name, sampler))
+
+    if len(matches) != 1:
+        expected = f'{sampler_slot} sampler texture'
+        if texture_name is not None:
+            expected += f' for {texture_name}'
+        raise ValueError(f'{material_name}: expected exactly one {expected}, found {len(matches)}')
+
+    _, sampler = matches[0]
+    r.bounds(sampler, 12)  # Wii U BFRES Sampler stores three GX2 words first.
+    word = r.u32(sampler)
+
+    def decode_axis(code, axis):
+        label = _GX2_TEX_CLAMP_NAMES[code] if code < len(_GX2_TEX_CLAMP_NAMES) else f'Unknown ({code})'
+        warnings = []
+        if code == 0:
+            webgl = 'repeat'
+        elif code == 1:
+            webgl = 'mirror'
+        elif code in (2, 8):
+            webgl = 'clamp'
+            if code == 2:
+                warnings.append(f'GX2 Clamp on {axis} is approximated with WebGL CLAMP_TO_EDGE.')
+        else:
+            webgl = 'repeat'
+            warnings.append(f'GX2 {label} on {axis} is unsupported; using Repeat for this preview.')
+        return webgl, label, warnings
+
+    gx2_s = word & 0x7
+    gx2_t = (word >> 3) & 0x7
+    webgl_s, label_s, warnings_s = decode_axis(gx2_s, 'S')
+    webgl_t, label_t, warnings_t = decode_axis(gx2_t, 'T')
+    return {
+        'samplerSlot': sampler_slot,
+        's': webgl_s,
+        't': webgl_t,
+        'gx2': {'s': gx2_s, 't': gx2_t},
+        'labels': {'s': label_s, 't': label_t},
+        'warnings': warnings_s + warnings_t,
+    }
 
 
 def _build_texture_context(data, model_name):

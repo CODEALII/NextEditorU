@@ -74,3 +74,9 @@ Follow [INTEGRATION.md](INTEGRATION.md) to prepare an isolated profile and prese
 For the stock comparison, use `build/cemu-clean-baseline/launch.ps1` with the local RPX. Its separate MLC and settings enable CrashFix only. Check that profile's `log.txt` for the loaded RPX and active packs before testing. `build/cemu-island-baseline` is not a stock baseline: its current log shows World Studio Chain enabled.
 
 Do not treat a successful boot or rendered map as a traversal pass. Keep every export manifest's `game_tested` field false until route, level, progression, persistence and camera checks have actually been observed.
+
+## Recent local regressions
+
+`tests.test_bfres_texture`, `tests.test_texture_preview`, and `tests.test_preview_safety` cover GX2 `_a0` S/T wrap parsing, the WebGL REPEAT/MIRRORED_REPEAT/CLAMP_TO_EDGE mapping, cache separation by wrap pair, and visible fallback notes for unsupported modes. Local W1 checks pin Mirror on `mtKusa` and Clamp on `mtDokanGreen`; sampler-to-UV selection and game shader behavior remain unverified.
+
+`tests.test_editor_smoke.PreviewProjectPathTests` checks that a relative terrain reference still resolves to the same asset after opening, saving in place, and Save As to another directory. `tests.test_mesh` checks the nearest-source XZ projection distance and configurable review warning, while the editor smoke test checks the warning appears after export. The threshold is a review signal; it does not establish visual quality in game.

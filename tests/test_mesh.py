@@ -121,6 +121,8 @@ class MeshTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from('>6H',after,0x800),(0,1,2,0,0,0))
         self.assertEqual(struct.unpack_from('>3f',after,0x600+28),(0,0,2))
         self.assertEqual(struct.unpack_from('>6f',after,0x500),(1,0,1,1,.009999999776482582,1))
+        self.assertEqual(report['baked_uv_projection']['max_xz_distance'], 0.0)
+        self.assertIsNone(report['baked_uv_projection']['warning'])
         self.assertEqual(struct.unpack_from('>I',after,0x600+12)[0],511<<10)
         allowed=set(range(0x600,0x670))|set(range(0x800,0x80c))|set(range(0x500,0x518))|set(range(0x29c,0x2a0))
         self.assertTrue(all(a==b or i in allowed for i,(a,b) in enumerate(zip(before,after))))
@@ -277,9 +279,9 @@ class MeshTests(unittest.TestCase):
             return original_distance(point, source)
 
         with patch.object(mesh, '_xz_distance_squared', counted_distance):
-            projected = mesh._nearest_uvs(points, source_points, source_uvs)
+            projected, distances = mesh._nearest_uvs(points, source_points, source_uvs)
 
-        for point, uv in zip(points, projected):
+        for point, uv, distance in zip(points, projected, distances):
             expected_distance = min((point[0] - source[0]) ** 2 +
                                     (point[2] - source[2]) ** 2
                                     for source in source_points)
@@ -288,7 +290,21 @@ class MeshTests(unittest.TestCase):
             actual_distance = ((point[0] - actual_source[0]) ** 2 +
                                (point[2] - actual_source[2]) ** 2)
             self.assertEqual(actual_distance, expected_distance)
+            self.assertAlmostEqual(distance, math.sqrt(expected_distance))
         self.assertLess(distance_checks, len(points) * len(source_points) // 2)
+
+    def test_baked_uv_projection_warns_for_distant_geometry_and_accepts_threshold_override(self):
+        far_vertices = [(1000., 0., 1000.), (1000., 0., 1002.), (1002., 0., 1000.)]
+        _, report = replace_rigid_mesh(fixture(), far_vertices, self.faces)
+        projection = report['baked_uv_projection']
+        self.assertGreater(projection['max_xz_distance'], 128.)
+        self.assertEqual(projection['warning_threshold'], 128.)
+        self.assertIn('nearest source vertices', projection['warning'])
+
+        _, reviewed = replace_rigid_mesh(fixture(), far_vertices, self.faces,
+                                          lightmap_projection_warning_distance=2000.)
+        self.assertIsNone(reviewed['baked_uv_projection']['warning'])
+        self.assertEqual(reviewed['baked_uv_projection']['warning_threshold'], 2000.)
 
     def test_rejects_capacity_and_bad_input(self):
         with self.assertRaisesRegex(ValueError,'vertex capacity'):
