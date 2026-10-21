@@ -19,7 +19,8 @@ the title prompt. A working game input source is still needed before route QA.
 - Implemented: a BC5 SNORM channel inspector for six local `_n0` maps, with fail-closed sampler-slot checks and signed block decoding; it is explicitly diagnostic and does not alter lighting.
 - Implemented: an on/off wireframe mode built from deduplicated triangle edges for the viewer's supported static shapes.
 - Implemented: a sampled vertex-normal overlay capped at about 5,000 vectors across the scene, with normalized direction and model-scaled length.
-- Next: verify the new viewer toggles in a normal browser and add selectable meshes, material details, and camera/light controls.
+- Implemented: accessible shape-name buttons select a mesh row and populate a safe-text inspector with material, vertex/triangle counts, UV availability, and supported base/BC5 texture references.
+- Next: verify the new viewer controls in a normal browser; add viewport picking, material controls, and adjustable camera/light settings.
 - Investigate BC5 UNORM masks and BC4 slots with material-slot evidence before rendering them. Add UV transforms, transparent material modes, baked light maps, and additional GX2 tile layouts only with local references and fixed regression vectors.
 - Broaden geometry parsing to multiple meshes, more vertex encodings, hierarchy transforms, skinning, and other BFRES variants. The current static geometry subset must reject unsupported layouts clearly.
 

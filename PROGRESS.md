@@ -199,6 +199,18 @@ persistence. No claimed completion of the full custom-overworld mission.
   movement is still unverified: computer-use key taps did not pass the title
   prompt, so no traversal result can be inferred from this boot.
 
+## 2026-10-21 — selectable meshes and geometry inspector
+
+- Added keyboard-accessible mesh-name buttons alongside independent visibility
+  checkboxes. Selection highlights the active row and reports its material,
+  vertex/triangle counts, UV presence, base texture, and BC5 diagnostic map.
+- Inspector values are inserted as text, so BFRES-provided names are not parsed
+  as markup. Automated Node interaction coverage verifies row changes and the
+  displayed geometry and texture data; generated viewer JavaScript is syntax
+  checked. Full regression: **122 tests passed in 94.541 seconds**; `compileall`,
+  `git diff --check`, and the local W101→W102→W103 route validation passed. A
+  normal browser visual check remains outstanding.
+
 Next: run the patched map with an input source Cemu actually accepts, record the
 stock route as a control, then retest Mario's movement and the corrected terrain
 against the same known Cemu profile. Level start, progression, persistence,

@@ -119,6 +119,35 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn('<button id="normals">Normals off</button>', page)
         self.assertIn('if(m.visible)drawOverlay(m.normalOverlay', page)
 
+    def test_mesh_selection_inspector_shows_geometry_uv_and_texture_references(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise viewer mesh selection")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        start = page.index("const list=document.getElementById('shapes')")
+        end = page.index("\nfor(const mesh of meshes)addShapeRow(mesh);", start)
+        helper = page[start:end]
+        probe = r"""
+const registry={shapes:element(),selection:element()};
+const document={getElementById:id=>registry[id],createElement:tag=>element(tag)};
+function element(tag){const e={tagName:tag,children:[],dataset:{},listeners:{},attributes:{},style:{},className:'',textContent:'',hidden:false,append(...items){this.children.push(...items)},appendChild(item){this.children.push(item);return item},replaceChildren(...items){this.children=items},setAttribute(k,v){this.attributes[k]=v},addEventListener(k,fn){this.listeners[k]=fn},classList:{add(name){e.className=[...new Set((e.className+' '+name).trim().split(/\s+/))].join(' ')},remove(name){e.className=e.className.split(/\s+/).filter(x=>x!==name).join(' ')},contains(name){return e.className.split(/\s+/).includes(name)}}};return e}
+""" + helper + r"""
+const a={name:'Grass <test>',material:'mtGrass',color:[.2,.4,.6],textureName:'Grass_alb',normalTextureName:'Grass_nml',vertexCount:12,triangleCount:8,hasUvs:true,visible:true};
+const b={name:'Rock',material:'mtRock',color:[.3,.3,.3],textureName:'',normalTextureName:'',vertexCount:9,triangleCount:4,hasUvs:false,visible:true};
+addShapeRow(a);addShapeRow(b);a.row.children[2].listeners.click();
+if(!a.row.classList.contains('selected'))throw Error('selected row is not marked');
+const first=registry.selection.children.map(x=>x.textContent).join('\n');
+if(!first.includes('Grass <test>')||!first.includes('12 vertices / 8 triangles')||!first.includes('Grass_alb')||!first.includes('Grass_nml (BC5 diagnostic only)'))throw Error(first);
+b.row.children[2].listeners.click();
+if(a.row.classList.contains('selected')||!b.row.classList.contains('selected'))throw Error('selection did not move');
+if(!registry.selection.children.map(x=>x.textContent).join('\n').includes('UV coordinates: absent'))throw Error('missing UV status');
+if(a.row.children[2].tagName!=='button'||a.row.children[2].attributes['aria-label']!=='Inspect Grass <test>')throw Error('selection button is not accessible');
+console.log('mesh selection inspector ok');
+"""
+        result = subprocess.run([node, "-e", probe], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "mesh selection inspector ok")
+
     def test_wireframe_edge_builder_deduplicates_triangle_edges(self):
         node = shutil.which("node")
         if not node:
