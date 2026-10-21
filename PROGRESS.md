@@ -978,3 +978,16 @@ camera behavior and a fully playable custom world remain open.
   validation only; material/animation fidelity and Cemu appearance are untested.
 - Full suite: **241 tests passed in 208.765 seconds**; `compileall` and
   `git diff --check` passed. No in-game terrain or route behavior is inferred.
+
+## 2026-10-21 — Verify base-color preview coverage across worlds
+
+- Added a local-asset integration regression covering supported BC1/BC3
+  texture decoding on all twelve static world models, including texture-map
+  counts, attached-shape counts, encoded RGBA dimensions and accepted formats.
+- W5a attaches 27 maps to 73 of 76 shapes; the full sweep also confirms
+  supported albedos in W2a/W3/W4/W5b/W6a/W7/W8a/W8b/W9a/W9b. Unsupported or
+  ambiguous material references retain the fallback color instead of choosing
+  an unverified texture.
+- Targeted integration test: **1 passed in 40.178 seconds**. Full suite: **242
+  tests passed in 247.342 seconds**; `compileall` and `git diff --check` passed.
+  This is offline preview validation only.

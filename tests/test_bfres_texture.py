@@ -227,6 +227,39 @@ class SyntheticSamplerDiagnosticTests(unittest.TestCase):
 
 
 class LocalTextureReferenceTests(unittest.TestCase):
+    def test_local_world_models_attach_supported_base_color_textures(self):
+        from worldstudio.mesh import extract_rigid_model
+
+        root = Path(__file__).resolve().parents[1]
+        folder = root / 'NSMBU Modding Project/content/Common/course_select'
+        expected = {
+            'W1': (42, 42, 20), 'W2a': (58, 58, 32), 'W3': (40, 39, 19),
+            'W4': (53, 51, 32), 'W5a': (76, 73, 27), 'W5b': (27, 27, 18),
+            'W6a': (61, 61, 21), 'W7': (34, 33, 19), 'W8a': (18, 17, 16),
+            'W8b': (42, 27, 16), 'W9a': (3, 3, 2), 'W9b': (20, 20, 5),
+        }
+        missing = [world for world in expected if not (folder / f'CS_{world}.szs').is_file()]
+        if missing:
+            self.skipTest(f'User-provided local world dumps unavailable: {", ".join(missing)}')
+
+        for world, (shape_count, textured_count, texture_count) in expected.items():
+            with self.subTest(world=world):
+                archive = Archive((folder / f'CS_{world}.szs').read_bytes())
+                model = archive.read(f'CS_{world}.bfres')
+                model_name = f'CS_{world}_World'
+                shapes = extract_rigid_model(model, model_name)
+                textures, _ = attach_base_color_textures(
+                    model, shapes, model_name=model_name)
+
+                self.assertEqual(len(shapes), shape_count)
+                self.assertEqual(sum(bool(shape.get('texture')) for shape in shapes),
+                                 textured_count)
+                self.assertEqual(len(textures), texture_count)
+                for texture in textures.values():
+                    self.assertIn(texture['format'], (0x31, 0x33))
+                    rgba = base64.b64decode(texture['rgbaBase64'], validate=True)
+                    self.assertEqual(len(rgba), texture['width'] * texture['height'] * 4)
+
     def test_local_w1_grass_material_resolves_bc1_base_color(self):
         root = Path(__file__).resolve().parents[1]
         source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
