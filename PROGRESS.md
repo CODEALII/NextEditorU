@@ -902,3 +902,19 @@ camera behavior and a fully playable custom world remain open.
   and `git diff --check`.
 - This exposes stored coordinates for comparison; sampler association, SRT math
   and game shader behavior remain unresolved, so the rendered material is unchanged.
+
+## 2026-10-21 — Preview supported world models across archives
+
+- Native preview now selects the matching `<archive>_World` BFRES model when
+  present, and falls back to the existing W1 model for unsupported archives.
+  Supported base-color decoding follows the selected model; W1-specific normal,
+  sampler, SRT and shader metadata diagnostics remain limited to W1.
+- Local offline fixtures confirm W7 renders 34 static shapes with 19 BC1 maps
+  attached to 33 shapes, and W9a renders 3 shapes with 2 BC1 maps attached to
+  all 3. A 12-archive survey found static parser incompatibilities in several
+  other worlds; this is partial coverage, not arbitrary BFRES support.
+- The W7 editor smoke test also checks that all parsed world nodes fall inside
+  its geometry bounds. Full suite: **228 tests passed in 178.166 seconds**;
+  `compileall` and `git diff --check` passed. Viewer/browser and in-game behavior
+  were not tested; animation, general material fidelity, route movement and
+  progression remain unverified.

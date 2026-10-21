@@ -11,6 +11,7 @@ from unittest.mock import patch
 from worldstudio.editor import (NativeStudio, ObjTransformDialog, WorldStudio,
                                 fit_preview_scale, project_preview_point)
 from worldstudio.recent_projects import RecentProjects
+from worldstudio.project import WorldProject
 from worldstudio.session_recovery import SessionRecovery
 
 
@@ -348,6 +349,40 @@ class EditorSmokeTests(unittest.TestCase):
             time.sleep(0.01)
         self.assertFalse(self.app.exporting)
         self.assertIn("3D preview opened", self.app.status.get())
+
+    def test_static_preview_loads_a_supported_non_w1_world_model(self):
+        root = Path(__file__).resolve().parents[1]
+        source = root / "NSMBU Modding Project/content/Common/course_select/CS_W7.szs"
+        if not source.is_file():
+            self.skipTest("User-provided local W7 dump unavailable")
+        source_copy = Path(self.recent_tmp.name) / "CS_W7.szs"
+        source_copy.write_bytes(source.read_bytes())
+        top = tk.Toplevel(self.root)
+        top.withdraw()
+        studio = NativeStudio(top, WorldProject.open(source_copy))
+        opened = []
+        try:
+            with patch("worldstudio.preview3d.open_preview", side_effect=opened.append):
+                result = studio._build_3d_preview(studio.view_project())
+
+            self.assertIn("34 shapes", result)
+            self.assertEqual(len(opened), 1)
+            scene = opened[0]
+            self.assertEqual(scene["model"], "CS_W7_World • native BFRES static geometry")
+            self.assertEqual(len(scene["shapes"]), 34)
+            self.assertEqual(len(scene["textures"]), 19)
+            self.assertEqual(sum(bool(shape.get("texture")) for shape in scene["shapes"]), 33)
+            self.assertTrue(all(texture["format"] == 0x31 for texture in scene["textures"].values()))
+            self.assertTrue(all("shaderMetadata" not in shape for shape in scene["shapes"]))
+            self.assertTrue(scene["nodes"])
+            positions = [point for shape in scene["shapes"] for point in shape["positions"]]
+            low = [min(point[axis] for point in positions) for axis in range(3)]
+            high = [max(point[axis] for point in positions) for axis in range(3)]
+            for node in scene["nodes"]:
+                self.assertTrue(all(low[axis] <= node[key] <= high[axis]
+                                    for axis, key in enumerate(("x", "y", "z"))))
+        finally:
+            top.destroy()
 
     def test_lightweight_editor_keeps_its_direct_obj_preview_path(self):
         studio = object.__new__(WorldStudio)

@@ -33,7 +33,8 @@ def attach_texture_srt_parameters(model_data, shapes):
     return failed_materials
 
 
-def attach_base_color_textures(model_data, shapes, *, max_texture_pixels=4 * 1024 * 1024,
+def attach_base_color_textures(model_data, shapes, *, model_name="CS_W1_World",
+                               max_texture_pixels=4 * 1024 * 1024,
                                max_scene_pixels=16 * 1024 * 1024):
     """Attach supported material albedos to UV meshes and return one shared catalog.
 
@@ -56,7 +57,7 @@ def attach_base_color_textures(model_data, shapes, *, max_texture_pixels=4 * 102
         material = shape["material"]
         if material not in material_textures:
             try:
-                texture = extract_base_color_texture(model_data, "CS_W1_World", material)
+                texture = extract_base_color_texture(model_data, model_name, material)
                 if texture["name"] not in textures:
                     pixels = texture["width"] * texture["height"]
                     if pixels > max_texture_pixels:

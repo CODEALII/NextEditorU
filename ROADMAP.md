@@ -17,6 +17,7 @@ compared.
 ## Rendering fidelity
 
 - Implemented: 42 rigid static shapes, 70,193 vertices, 106,736 triangles, route overlays, shape filtering, visibility toggles, and 20 shared BC1/BC3 albedos on all 42 W1 shapes with decoded UV attributes.
+- Implemented: native 3D preview selects the source archive's matching `<archive>_World` model when present. In addition to W1, the tested local W7 and W9a models render 34/3 static shapes and decode 19/2 supported base-color maps; unsupported worlds remain explicit parser errors.
 - Implemented: `_u0` vertex decoding for observed GX2 `0x80D` float32x2, `0x7` UNorm16x2, `0x207` SNorm16x2, and `0x4` UNorm8x2 formats. W1 inventory and synthetic normalization/bounds tests cover all four; shader UV transforms remain unknown.
 - Implemented: WebGL context, shader/program and mesh-initialization errors show a high-contrast overlay.
 - Implemented: perspective depth planes follow the model bounding radius and camera distance, with a safe near-plane floor while zoomed inside the scene bounds.

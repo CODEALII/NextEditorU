@@ -10,6 +10,8 @@ This backlog follows verified project dependencies. “Done offline” means par
 
 Implemented offline subcase: static W1 extraction and the selected-mesh inspector now decode all supported named `_uN` coordinate attributes. The local W1 inventory contains `_u1` on 42 shapes and `_u2` on 13; a selector compares each raw chart without assigning sampler meaning. The static geometry parser still rejects multi-mesh, multi-buffer, skinned and other unsupported BFRES layouts.
 
+Implemented offline subcase: the native preview chooses the `<archive>_World` model matching the opened course-select archive. The local W7 model produces 34 static shapes and 19 decoded BC1 base-color maps; W9a produces 3 shapes and 2 maps. Their 3D geometry and graph nodes share the tested W7 coordinate bounds. A read-only survey found the current rigid decoder fully supports W1, W7 and W9a; non-identity roots and unrecognized vertex layouts still reject other world models.
+
 ## Next editing milestones
 
 4. Add selectable scene objects and editable transforms with a reversible undo/redo history.

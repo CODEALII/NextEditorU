@@ -838,13 +838,16 @@ class WorldStudio(ttk.Frame):
         nodes, routes = [], []
         try:
             if hasattr(self, "native"):
-                from .mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model
+                from .mesh import DEFAULT_MODEL, DEFAULT_SHAPE, _geometry, extract_rigid_model
                 from .preview_textures import (attach_base_color_textures,
                                                attach_sampler_diagnostic_textures,
                                                attach_normal_map_textures,
                                                attach_texture_srt_parameters)
                 report("Preview: reading static BFRES geometry…")
-                shapes = extract_rigid_model(self.native.model)
+                preview_model_name = f"{self.native.source.stem}_World"
+                if preview_model_name not in self.native.skeletons.models:
+                    preview_model_name = DEFAULT_MODEL
+                shapes = extract_rigid_model(self.native.model, preview_model_name)
                 textures = {}
                 normal_textures = {}
                 diagnostic_textures = {}
@@ -857,30 +860,32 @@ class WorldStudio(ttk.Frame):
                 warned_normal_materials = set()
                 warned_diagnostic_materials = set()
                 if self.native.geometry is None:
-                    report("Preview: decoding supported material and texture maps…")
-                    textures, warned_materials = attach_base_color_textures(self.native.model, shapes)
-                    normal_textures, warned_normal_materials = attach_normal_map_textures(
-                        self.native.model, shapes)
-                    diagnostic_textures, warned_diagnostic_materials = attach_sampler_diagnostic_textures(
-                        self.native.model, shapes)
-                    for sampler_slot in ("_o1", "_b0", "_s0", "_x2", "_x0", "_x1"):
-                        slot_textures, _ = attach_sampler_diagnostic_textures(
-                            self.native.model, shapes, sampler_slot=sampler_slot)
-                        mask_textures.update(slot_textures)
-                    texture_srt_failures = attach_texture_srt_parameters(self.native.model, shapes)
-                    srt_by_material = {shape["material"]: shape["textureSrt"] for shape in shapes
-                                       if shape.get("textureSrt")}
-                    texture_srt_parameters = sum(len(values) for values in srt_by_material.values())
-                    shader_source = self.native.game_root / "content/Common/shader/shaderfb.szs"
-                    if shader_source.is_file():
-                        report("Preview: resolving local shader-interface metadata…")
-                        try:
-                            from .bfres_shader import attach_shader_metadata, load_shader_archives
-                            shader_archives = load_shader_archives(shader_source)
-                            shader_metadata_failures = attach_shader_metadata(
-                                self.native.model, shapes, shader_archives)
-                        except (OSError, ValueError, TypeError, OverflowError) as error:
-                            shader_metadata_issue = str(error)
+                    report(f"Preview: decoding supported {preview_model_name} base-color maps…")
+                    textures, warned_materials = attach_base_color_textures(
+                        self.native.model, shapes, model_name=preview_model_name)
+                    if preview_model_name == DEFAULT_MODEL:
+                        normal_textures, warned_normal_materials = attach_normal_map_textures(
+                            self.native.model, shapes)
+                        diagnostic_textures, warned_diagnostic_materials = attach_sampler_diagnostic_textures(
+                            self.native.model, shapes)
+                        for sampler_slot in ("_o1", "_b0", "_s0", "_x2", "_x0", "_x1"):
+                            slot_textures, _ = attach_sampler_diagnostic_textures(
+                                self.native.model, shapes, sampler_slot=sampler_slot)
+                            mask_textures.update(slot_textures)
+                        texture_srt_failures = attach_texture_srt_parameters(self.native.model, shapes)
+                        srt_by_material = {shape["material"]: shape["textureSrt"] for shape in shapes
+                                           if shape.get("textureSrt")}
+                        texture_srt_parameters = sum(len(values) for values in srt_by_material.values())
+                        shader_source = self.native.game_root / "content/Common/shader/shaderfb.szs"
+                        if shader_source.is_file():
+                            report("Preview: resolving local shader-interface metadata…")
+                            try:
+                                from .bfres_shader import attach_shader_metadata, load_shader_archives
+                                shader_archives = load_shader_archives(shader_source)
+                                shader_metadata_failures = attach_shader_metadata(
+                                    self.native.model, shapes, shader_archives)
+                            except (OSError, ValueError, KeyError, TypeError, OverflowError) as error:
+                                shader_metadata_issue = str(error)
                 textured_shapes = sum(bool(shape.get("texture")) for shape in shapes)
                 normal_textured_shapes = sum(bool(shape.get("normalTexture")) for shape in shapes)
                 texture_notice = (
@@ -955,8 +960,9 @@ class WorldStudio(ttk.Frame):
                     if route.get("start") in visible_nodes and route.get("end") in visible_nodes:
                         routes.append({"start": route["start"], "end": route["end"],
                                        "kind": "secret" if route.get("unlock") == "secret" else "normal"})
-                title = f"{self.native.source.name} · W1 world"
-                model_name = "CS_W1_World • native BFRES static geometry"
+                world_label = preview_model_name.removesuffix("_World")
+                title = f"{self.native.source.name} · {world_label} world"
+                model_name = f"{preview_model_name} • native BFRES static geometry"
                 badges = ["BFRES source", "Static rest pose",
                           f"BC1/BC3 textures ×{len(textures)}" if textures else "Approximate materials"]
                 if normal_textures:

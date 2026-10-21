@@ -262,6 +262,25 @@ class LocalDumpMeshTests(unittest.TestCase):
         self.assertEqual(len(grass['uvs']),len(grass['positions']))
         self.assertTrue(all(all(math.isfinite(v) for v in uv) for uv in grass['uvs']))
 
+    def test_local_w9a_world_static_meshes_and_base_colors(self):
+        from worldstudio.preview_textures import attach_base_color_textures
+
+        root = Path(__file__).resolve().parents[1]
+        source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W9a.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W9a dump unavailable')
+        archive = Archive(source.read_bytes())
+        model = archive.read('CS_W9a.bfres')
+        shapes = extract_rigid_model(model, 'CS_W9a_World')
+        textures, failed = attach_base_color_textures(model, shapes,
+                                                       model_name='CS_W9a_World')
+
+        self.assertEqual(len(shapes), 3)
+        self.assertEqual(len(textures), 2)
+        self.assertEqual(sum(bool(shape.get('texture')) for shape in shapes), 3)
+        self.assertFalse(failed)
+        self.assertEqual({texture['format'] for texture in textures.values()}, {0x31})
+
     def test_local_dump_in_memory_export_and_byte_boundaries(self):
         root=Path(__file__).resolve().parents[1]
         source=root/'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
