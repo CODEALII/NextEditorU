@@ -238,6 +238,22 @@ class EditorSmokeTests(unittest.TestCase):
         self.app.redo()
         self.assertEqual(self.native.routes.rows[0][1], "revised-road")
 
+    def test_route_bone_identifier_is_readonly_and_preserved_on_apply(self):
+        self.app.tree.selection_set("segment:0")
+        self.app.select_tree()
+        self.assertTrue(self.app.form.grid_slaves(row=0, column=1)[0].instate(("readonly",)))
+
+        self.app.properties[0].set("RENAMED")  # Defend against direct variable edits.
+        self.app.properties[1].set("revised-road")
+        self.app.apply()
+        self.assertEqual(self.native.routes.rows[0][0], "RF001K001")
+        self.assertEqual(self.native.routes.rows[0][1], "revised-road")
+
+        self.app.undo()
+        self.assertEqual(self.native.routes.rows[0], ["RF001K001", "road", ""])
+        self.app.redo()
+        self.assertEqual(self.native.routes.rows[0], ["RF001K001", "revised-road", ""])
+
     def test_3d_preview_build_runs_off_tk_thread_and_keeps_events_live(self):
         started = threading.Event()
         release = threading.Event()

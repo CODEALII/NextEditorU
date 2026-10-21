@@ -1592,7 +1592,8 @@ class NativeStudio(WorldStudio):
             self.properties[i] = var
             entry = ttk.Entry(self.form, textvariable=var)
             entry.grid(row=i, column=1, sticky="ew", padx=(5, 0), pady=3)
-            if kind == "point" and i in (0, 1):
+            if ((kind == "point" and i in (0, 1)) or
+                    (kind == "segment" and i == 0)):
                 entry.configure(state="readonly")
         if kind == "point":
             self.show_native_position(row[1], len(row))
@@ -1634,7 +1635,12 @@ class NativeStudio(WorldStudio):
             self.status.set(f"Updated {index} local XYZ; hierarchy rest positions refreshed. Animation behavior remains unverified.")
             return
         rows = self.native.points.rows if kind == "point" else self.native.routes.rows
-        rows[index] = [self.properties[i].get() for i in sorted(self.properties)]
+        edited_row = [self.properties[i].get() for i in sorted(self.properties)]
+        if kind == "segment" and edited_row:
+            # A route row's first cell names an existing BFRES bone. Keep the
+            # reference stable even if a caller changes the Tk variable directly.
+            edited_row[0] = rows[index][0]
+        rows[index] = edited_row
         if position is not None:
             name = rows[index][1]
             target = self.native.positions if name in self.native.positions else self.native.layout

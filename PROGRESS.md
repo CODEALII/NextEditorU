@@ -781,6 +781,17 @@ camera behavior and a fully playable custom world remain open.
   `compileall` and `git diff --check`. Runtime movement remains unverified; no
   emulator process was started for this audit.
 
+## 2026-10-21 — Protect native route bone identifiers
+
+- Native route IDs name existing BFRES bones, so the selected-route form now
+  displays that column read-only. Apply also restores the original ID before
+  writing the edited row, protecting against direct Tk variable changes.
+- Road type and reserved columns remain editable. A Tk regression checks the
+  readonly control, ID preservation, road-type editing, and undo/redo. The
+  focused test and full suite passed (**217 tests in 150.266 seconds**), with
+  `compileall` and `git diff --check`. This does not add route bones or establish
+  traversal behavior.
+
 ## 2026-10-21 — Report unsupported OBJ features
 
 - OBJ imports now report when they ignore MTL/material assignments, vertex
