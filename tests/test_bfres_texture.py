@@ -3,8 +3,11 @@ import hashlib
 import struct
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from worldstudio.archive import Archive
+from worldstudio.bfres import Skeletons
+from worldstudio import bfres_texture
 from worldstudio.bfres_texture import (extract_base_color_texture, extract_bc1_base_texture,
                                        extract_normal_map_texture, extract_sampler_diagnostic_texture)
 from worldstudio.preview_textures import (attach_base_color_textures, attach_normal_map_textures,
@@ -64,6 +67,20 @@ def texture_fixture(surface_format, texture_name='Grass_alb', sampler_name=None)
 
 
 class SyntheticTextureReferenceTests(unittest.TestCase):
+    def test_repeated_texture_lookups_reuse_one_read_only_bfres_index(self):
+        data = texture_fixture(0x31)
+        bfres_texture._cached_texture_context.cache_clear()
+        self.addCleanup(bfres_texture._cached_texture_context.cache_clear)
+        with patch('worldstudio.bfres_texture.Skeletons', wraps=Skeletons) as parse:
+            first = extract_base_color_texture(data, 'CS_W1_World', 'mtGrass')
+            second = extract_base_color_texture(data, 'CS_W1_World', 'mtGrass')
+            modified = bytearray(data)
+            modified[-1] = 1
+            third = extract_base_color_texture(bytes(modified), 'CS_W1_World', 'mtGrass')
+        self.assertEqual(first, second)
+        self.assertEqual(first, third)
+        self.assertEqual(parse.call_count, 2, 'a different immutable BFRES byte string must invalidate the cache')
+
     def test_generic_extractor_accepts_only_bc1_and_bc3_albedos(self):
         for fmt in (0x31, 0x33):
             with self.subTest(format=fmt):

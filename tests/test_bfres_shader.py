@@ -1,15 +1,45 @@
 import unittest
 from pathlib import Path
+import tempfile
+from unittest.mock import patch
 
 from worldstudio.archive import Archive
 from worldstudio.bfres import Skeletons
 from worldstudio.bfres_shader import (attach_shader_metadata,
                                       extract_material_shader_assignments,
+                                      load_shader_archives,
                                       resolve_material_option_variation)
+from worldstudio import bfres_shader
 from worldstudio.mesh import extract_rigid_model
 
 
 class BfresShaderMetadataTests(unittest.TestCase):
+    def test_shader_container_cache_reuses_unchanged_bytes_and_returns_fresh_maps(self):
+        class FakeArchive:
+            def __init__(self, data):
+                self.data = data
+                self.entries = ('path/one.sharcfb', 'path/ignored.bin')
+
+            def read(self, entry):
+                return b'interface' if entry.endswith('.sharcfb') else b'ignored'
+
+        bfres_shader._parse_shader_container.cache_clear()
+        self.addCleanup(bfres_shader._parse_shader_container.cache_clear)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'shaderfb.szs'
+            path.write_bytes(b'container bytes')
+            with patch('worldstudio.bfres_shader.Archive', side_effect=FakeArchive) as parse:
+                first = load_shader_archives(path)
+                first.clear()
+                second = load_shader_archives(path)
+                path.write_bytes(b'updated container')
+                third = load_shader_archives(path)
+        self.assertEqual(second, {'one': b'interface'})
+        self.assertEqual(third, {'one': b'interface'})
+        self.assertEqual(parse.call_count, 2)
+        self.assertEqual(parse.call_args_list[0].args, (b'container bytes',))
+        self.assertEqual(parse.call_args_list[1].args, (b'updated container',))
+
     def _assets(self):
         root = Path(__file__).resolve().parents[1]
         world_source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'

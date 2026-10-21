@@ -7,6 +7,8 @@ UNorm `_o0` / BC4 UNorm `_o1` diagnostic map. It also exposes a read-only
 sampler catalog for observed W1 slots. It does not infer sampler semantics or
 interpret light maps, shader parameters or animation.
 """
+from functools import lru_cache
+
 from .bfres import Skeletons
 
 
@@ -24,6 +26,29 @@ _DIAGNOSTIC_SLOT_FORMATS = {"_o0": _BC5_DIAGNOSTIC_FORMATS,
                             "_x1": _BC3_SAMPLER_DIAGNOSTIC_FORMATS}
 
 
+def _build_texture_context(data, model_name):
+    """Parse the dictionaries shared by every texture lookup in one BFRES."""
+    reader = Skeletons(data)
+    textures = dict(reader.dictionary(reader.ptr(0x24)))
+    models = dict(reader.dictionary(reader.ptr(0x20)))
+    if model_name not in models:
+        raise ValueError(f'Missing BFRES model: {model_name}')
+    materials = dict(reader.dictionary(reader.ptr(models[model_name] + 24)))
+    return reader, textures, materials
+
+
+@lru_cache(maxsize=1)
+def _cached_texture_context(data, model_name):
+    """Reuse a read-only BFRES index for repeated W1 sampler lookups."""
+    return _build_texture_context(data, model_name)
+
+
+def _texture_context(data, model_name):
+    if isinstance(data, bytes) and isinstance(model_name, str):
+        return _cached_texture_context(data, model_name)
+    return _build_texture_context(data, model_name)
+
+
 def _extract_material_texture(data, model_name, material_name, texture_name, *, suffix,
                               formats, kind, expected_slot=None):
     """Return a supported raw GX2 texture referenced by one BFRES material.
@@ -31,13 +56,7 @@ def _extract_material_texture(data, model_name, material_name, texture_name, *, 
     The supported surface is a single-slice 2D, one-sample, 2D Thin1 texture
     stored in the BFRES image payload. The returned bytes remain GX2-tiled.
     """
-    r = Skeletons(data)
-    textures = dict(r.dictionary(r.ptr(0x24)))
-    models = dict(r.dictionary(r.ptr(0x20)))
-    if model_name not in models:
-        raise ValueError(f'Missing BFRES model: {model_name}')
-    model = models[model_name]
-    materials = dict(r.dictionary(r.ptr(model + 24)))
+    r, textures, materials = _texture_context(data, model_name)
     if material_name not in materials:
         raise ValueError(f'Missing BFRES material: {material_name}')
     material = materials[material_name]

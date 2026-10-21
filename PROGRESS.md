@@ -694,8 +694,8 @@ camera behavior and a fully playable custom world remain open.
   local shader-interface metadata, and packing/opening the offline page.
 - The editor smoke test confirms a worker status update reaches the UI while
   Tk continues servicing other events and edits remain locked until completion.
-- The focused editor smoke suite passed (**7 tests**); `compileall` and
-  `git diff --check` passed. Full-suite verification follows before push.
+- The focused editor smoke suite passed (**7 tests**); the full suite passed
+  (**190 tests in 133.396 seconds**), with `compileall` and `git diff --check`.
 
 ## 2026-10-21 — Preserve the previous native project save
 
@@ -705,6 +705,8 @@ camera behavior and a fully playable custom world remain open.
 - A local regression reloads both the saved and backup projects and checks
   that each contains the intended version. This keeps one previous version;
   rotation and recent-project discovery remain open roadmap items.
+- The full suite passed (**191 tests in 138.955 seconds**); `compileall` and
+  `git diff --check` passed.
 
 ## 2026-10-21 — Report unsupported OBJ features
 
@@ -715,5 +717,23 @@ camera behavior and a fully playable custom world remain open.
 - Existing geometry parsing and its default return shape stay compatible. A
   regression confirms the polygon faces still import while all five warning
   categories are reported for a mixed-feature fixture.
-- The focused OBJ suite passed (**13 tests**) and `compileall` passed. Full
-  regression verification follows before push.
+- The focused OBJ suite passed (**13 tests**); the full suite passed (**192
+  tests in 138.027 seconds**), with `compileall` and `git diff --check`.
+
+## 2026-10-21 — Reuse immutable BFRES and shader indexes
+
+- Profiled the local W1 preview pipeline. Across three runs, texture catalog
+  extraction/decoding had a 3.784-second median without the index cache and a
+  3.152-second median with it, a 16.7% improvement in that component. This is
+  not an end-to-end preview benchmark.
+- Added one-entry caches keyed by exact immutable BFRES or shader-container
+  bytes. Repeated material/sampler reads reuse the BFRES dictionaries; repeated
+  preview opens reuse the SZS shader-container parse. Replacing source bytes
+  invalidates each cache, and shader callers get a fresh dictionary.
+- Three local cold shader-container loads had a 1.898-second median; warm
+  reads were 0.004 seconds median. The cache retains 17,993,893 bytes of
+  extracted SHARCFB payloads in-process. No shader semantics are cached or
+  inferred.
+- Synthetic cache tests and local W1 material/texture/shader checks passed.
+  The full suite passed (**194 tests in 137.866 seconds**), with `compileall`
+  and `git diff --check`.

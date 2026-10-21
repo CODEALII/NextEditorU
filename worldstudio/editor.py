@@ -617,14 +617,8 @@ class WorldStudio(ttk.Frame):
                     if shader_source.is_file():
                         report("Preview: resolving local shader-interface metadata…")
                         try:
-                            from .archive import Archive
-                            from .bfres_shader import attach_shader_metadata
-                            shader_container = Archive(shader_source.read_bytes())
-                            shader_archives = {
-                                entry.rsplit("/", 1)[-1][:-len(".sharcfb")]: shader_container.read(entry)
-                                for entry in shader_container.entries
-                                if entry.lower().endswith(".sharcfb")
-                            }
+                            from .bfres_shader import attach_shader_metadata, load_shader_archives
+                            shader_archives = load_shader_archives(shader_source)
                             shader_metadata_failures = attach_shader_metadata(
                                 self.native.model, shapes, shader_archives)
                         except (OSError, ValueError, TypeError, OverflowError) as error:

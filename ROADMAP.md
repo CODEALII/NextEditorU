@@ -52,6 +52,7 @@ is still needed before baseline/patch route QA.
 - Implemented: baked-light UV transfer uses an exact nearest-XZ spatial tree, so far-offset imported vertices do not scan distance-scaled empty grid rings.
 - Implemented: saved terrain geometry is validated before export, including required fields, topology, and finite supported attributes; malformed projects fail before output creation.
 - Implemented: OBJ imports surface compatibility notes when material libraries/assignments, vertex colors, smoothing groups, object/group boundaries or non-polygon geometry are ignored.
+- Implemented: one-entry local caches reuse BFRES material/texture indexes and the parsed shader container across repeated preview builds; cache keys use exact immutable source bytes.
 - Simple planar concave OBJ faces now use ear clipping; malformed, non-planar, duplicate-corner and over-1,024-corner faces are rejected.
 - Compare corrected terrain output against a controlled stock Cemu baseline. Investigate the previous dark patch observation and verify UV, color, culling, and lighting behavior.
 - Add strict import diagnostics, coordinate/scale conversion controls, geometry summaries, and archive reimport validation.
@@ -82,7 +83,7 @@ is still needed before baseline/patch route QA.
 - Implemented: changed archive members have before/after hashes and sizes in the export manifest; overwriting a changed native project keeps one adjacent, openable previous-version backup.
 - Add recent projects, recoverable sessions, multi-version backup rotation, and export/reimport comparison.
 - Implemented: archive, camera companion and manifest export writes roll back files created by the current export if a later output write fails.
-- Profile large models and projects before adding background parsing or more caching. A current local W1 page embedding decoded maps measured 21.01 MiB; this is payload size, not a browser performance benchmark.
+- Profile larger models/projects before further caching. Three local W1 texture-catalog runs had a median of 3.784 s without the material index cache and 3.152 s with it (16.7% in that stage only). Three cold shader-container loads had a 1.898 s median; warm reads returned in 0.004 s median while retaining 17,993,893 bytes of extracted shader archive data in-process. These are local component timings, not end-to-end browser or rendering benchmarks.
 
 ## Central acceptance milestone
 

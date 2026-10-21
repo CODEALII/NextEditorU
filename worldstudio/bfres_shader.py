@@ -4,8 +4,27 @@ Only exact archive/program/symbol names are joined. Material option values can
 be mapped to an AGL-style candidate index; shape-specific variants and GX2
 instructions remain unevaluated.
 """
+from functools import lru_cache
+from pathlib import Path
+
+from .archive import Archive
 from .bfres import Skeletons
 from .shader_archive import parse_sharcfb
+
+
+@lru_cache(maxsize=1)
+def _parse_shader_container(data):
+    """Cache the parsed local shader container by its immutable bytes."""
+    container = Archive(data)
+    return tuple(
+        (entry.rsplit('/', 1)[-1][:-len('.sharcfb')], container.read(entry))
+        for entry in container.entries if entry.lower().endswith('.sharcfb')
+    )
+
+
+def load_shader_archives(path):
+    """Load local SHARCFB files, reusing an unchanged container parse."""
+    return dict(_parse_shader_container(Path(path).read_bytes()))
 
 
 def resolve_material_option_variation(program, options):
