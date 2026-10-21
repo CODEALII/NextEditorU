@@ -26,9 +26,11 @@ SZS path. Existing exports and original game directories are protected. A
 manifest lists changed members/hashes and never labels an export game-tested.
 
 **Import OBJ** previews terrain. **Use OBJ mesh (experimental)** additionally
-selects one capacity-bounded native replacement: `CS_W1_World/beltmodel14__mtGrass`.
-It preserves the existing material, layout and submesh partitions, generates
-normals/UVs and bounds, and makes unused triangles degenerate. Other landscape
+selects one capacity-bounded native replacement: `CS_W1_World/polySurface1489__mtGrass`,
+the main World 1 grass surface.
+It preserves the existing material, layout and submesh partitions, reads OBJ
+normals/UVs when available and generates defaults otherwise, updates bounds,
+and makes unused triangles degenerate. Other landscape
 shapes remain. It accepts only the verified rigid grass layout, not arbitrary
 BFRES files/materials/animations. OBJ units are model-local game units; the
 original `examples/island-game.obj` is suitable for this experiment.

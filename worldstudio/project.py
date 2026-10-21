@@ -282,7 +282,9 @@ class WorldProject:
         if self.geometry is not None:
             from .mesh import replace_rigid_mesh
             patched_model, geometry_report = replace_rigid_mesh(patched_model,
-                self.geometry['vertices'], self.geometry['faces'])
+                self.geometry['vertices'], self.geometry['faces'],
+                uvs=self.geometry.get('uvs'),
+                imported_normals=self.geometry.get('normals'))
         modified = {self.point_name: self.points.encode(), self.route_name: self.routes.encode(),
                     self.model_name: patched_model}
         blob = self.archive.replace(modified)

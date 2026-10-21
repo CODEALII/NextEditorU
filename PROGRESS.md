@@ -75,12 +75,31 @@ Completed:
 - Full local suite: **51 tests passed in 77.548 seconds**, including actual
   resource checks and original-file protection. This does not verify gameplay.
 
+## 2026-10-21 — main terrain mesh import correction
+
+- The first geometry target, `beltmodel14__mtGrass`, spans only a narrow strip
+  of the World 1 model. Replacing it with the example island made a large
+  uncovered area appear, so that earlier visual result is not a valid island
+  test.
+- Switched the experimental exporter to `polySurface1489__mtGrass`, the main
+  grass shape, and now imports OBJ corner UVs/normals with seam splitting.
+  `_u1` baked-light coordinates are sampled from the original surface by
+  nearest XZ vertex; `_c0` is set to neutral white. This is structurally tested,
+  while the texture/channel interpretation and runtime appearance remain
+  hypotheses until compared in Cemu.
+- OBJ parsing and mesh exporter tests: **10 passed**. A corrected isolated
+  Cemu pack was prepared at `build/cemu-island-mainlight`, but a controlled
+  baseline comparison and final traversal observation are still outstanding.
+- New export report: `build/island-mainlight/`; its manifest correctly says
+  `game_tested:false`. No game file or original save was overwritten.
+
 Not yet proven / outstanding:
 - Actual game traversal, level launch, clear-triggered unlock/save persistence,
   camera behavior and cutscene interactions for the topology experiment.
 - A fully original in-game island: arbitrary mesh/material import/export is absent.
-  The original OBJ now has a bounded native mesh-export path, but its in-game
-  rendering is not yet verified and other stock shapes remain.
+  The original OBJ now has a bounded native mesh-export path targeting the main
+  grass shape, but its in-game rendering is not yet verified and other stock
+  shapes remain.
 - New node/route bones and safe engine/script index remapping. Draft add/delete
   is allowed in the editor but export blocks unresolved references/index changes.
 - Runtime camera behavior and event integration, animation authoring, executable
@@ -88,7 +107,7 @@ Not yet proven / outstanding:
   camera-table editing and offline event-table conversion are implemented, but
   they do not yet establish in-game behavior.
 
-Next steps: complete the pending human traversal/launch test, compare the island
-render against a controlled baseline and correct its broad dark patches, then
-verify fresh clear-triggered unlocks and save persistence. No claimed completion
-of the full custom-overworld mission.
+Next steps: compare the corrected main-grass island render against a controlled
+baseline, complete the pending human traversal/launch test, then verify fresh
+clear-triggered unlocks and save persistence. No claimed completion of the full
+custom-overworld mission.

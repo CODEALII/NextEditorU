@@ -15,9 +15,9 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 
-def read_obj(path):
-    """Read vertex/face geometry, including OBJ negative vertex indices."""
-    vertices, faces = [], []
+def read_obj(path, include_attributes=False):
+    """Read Wavefront geometry and, on request, split OBJ corner attributes."""
+    vertices, texcoords, source_normals, raw_faces = [], [], [], []
     for line in Path(path).read_text(encoding="utf-8-sig").splitlines():
         fields = line.split("#", 1)[0].split()
         if not fields:
@@ -27,22 +27,57 @@ def read_obj(path):
             if len(xyz) != 3 or not all(math.isfinite(v) for v in xyz):
                 raise ValueError("OBJ vertex must contain three finite coordinates")
             vertices.append(xyz)
+        elif fields[0] == "vt":
+            uv = tuple(float(value) for value in fields[1:3])
+            if len(uv) != 2 or not all(math.isfinite(v) for v in uv):
+                raise ValueError("OBJ texture coordinate must contain two finite values")
+            texcoords.append(uv)
+        elif fields[0] == "vn":
+            normal = tuple(float(value) for value in fields[1:4])
+            if len(normal) != 3 or not all(math.isfinite(v) for v in normal):
+                raise ValueError("OBJ normal must contain three finite values")
+            source_normals.append(normal)
         elif fields[0] == "f":
             face = []
             for item in fields[1:]:
-                index = int(item.split("/")[0])
-                if index == 0:
-                    raise ValueError("OBJ vertex indices start at one")
-                index = index - 1 if index > 0 else len(vertices) + index
-                if not 0 <= index < len(vertices):
-                    raise ValueError("OBJ face references a missing vertex")
-                face.append(index)
+                parts = item.split("/")
+                if len(parts) > 3 or not parts[0]:
+                    raise ValueError("Invalid OBJ face corner")
+                def resolve(raw, values, label):
+                    if not raw:
+                        return None
+                    index = int(raw)
+                    if index == 0:
+                        raise ValueError(f"OBJ {label} indices start at one")
+                    index = index - 1 if index > 0 else len(values) + index
+                    if not 0 <= index < len(values):
+                        raise ValueError(f"OBJ face references a missing {label}")
+                    return index
+                face.append((resolve(parts[0], vertices, "vertex"),
+                             resolve(parts[1] if len(parts) > 1 else "", texcoords, "texture"),
+                             resolve(parts[2] if len(parts) > 2 else "", source_normals, "normal")))
             if len(face) < 3:
                 raise ValueError("OBJ face must contain at least three vertices")
-            faces.append(tuple(face))
-    if not vertices or not faces:
+            raw_faces.append(tuple(face))
+    if not vertices or not raw_faces:
         raise ValueError("OBJ needs vertices and polygon faces")
-    return vertices, faces
+    if not include_attributes:
+        return vertices, [tuple(corner[0] for corner in face) for face in raw_faces]
+    # BFRES stores attributes per vertex; OBJ permits independent indices per
+    # face corner. Split seam vertices so each exported vertex has one UV/normal.
+    split_vertices, split_uvs, split_normals, faces, remap = [], [], [], [], {}
+    for face in raw_faces:
+        split_face = []
+        for position, uv, normal in face:
+            key = position, uv, normal
+            if key not in remap:
+                remap[key] = len(split_vertices)
+                split_vertices.append(vertices[position])
+                split_uvs.append(texcoords[uv] if uv is not None else None)
+                split_normals.append(source_normals[normal] if normal is not None else None)
+            split_face.append(remap[key])
+        faces.append(tuple(split_face))
+    return split_vertices, faces, split_uvs, split_normals
 
 
 def demo_project():
@@ -855,8 +890,9 @@ class NativeStudio(WorldStudio):
         path = filedialog.askopenfilename(filetypes=[("Experimental grass mesh OBJ", "*.obj")], parent=self)
         if path:
             try:
-                vertices, faces = read_obj(path)
-                self.native.geometry = {"vertices": vertices, "faces": faces}
+                vertices, faces, uvs, normals = read_obj(path, include_attributes=True)
+                self.native.geometry = {"vertices": vertices, "faces": faces,
+                                        "uvs": uvs, "normals": normals}
                 self.native.terrain = str(Path(path).resolve())
                 self.mesh = vertices, faces
                 self.dirty = True

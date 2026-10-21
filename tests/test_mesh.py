@@ -3,7 +3,7 @@ import unittest
 import hashlib
 from pathlib import Path
 
-from worldstudio.mesh import replace_rigid_mesh
+from worldstudio.mesh import DEFAULT_SHAPE, replace_rigid_mesh
 from worldstudio.archive import Archive
 from worldstudio.bfres import Skeletons
 
@@ -35,7 +35,11 @@ def fixture():
     ptr(0x1c0,string('root'));h(0x1c6,65535)
     struct.pack_into('>3f',b,0x1d4,1,1,1)
     struct.pack_into('>4f',b,0x1e0,0,0,0,1)
-    dictionary(0x240,[('beltmodel14__mtGrass',0x280)])
+    dictionary(0x240,[(DEFAULT_SHAPE,0x280)])
+    dictionary(0x3a0,[('mtGrass',0x780)])
+    b[0x780:0x784]=b'FMAT'
+    ptr(0x118,0x3a0)
+    h(0x28e,0)
     b[0x280:0x284]=b'FSHP';b[0x297]=1;h(0x29a,1)
     ptr(0x2a0,0x300);ptr(0x2a4,0x480);ptr(0x2b4,0x500)
     b[0x300:0x304]=b'FVTX';b[0x304]=4;b[0x305]=1;u(0x308,4)
@@ -84,6 +88,16 @@ class MeshTests(unittest.TestCase):
         allowed=set(range(0x600,0x670))|set(range(0x800,0x80c))|set(range(0x500,0x518))|set(range(0x29c,0x2a0))
         self.assertTrue(all(a==b or i in allowed for i,(a,b) in enumerate(zip(before,after))))
 
+    def test_imported_uvs_and_normals_are_written(self):
+        uvs=[(0.25,0.75),(0.5,0.25),(1.0,0.0)]
+        normals=[(0,0,1),(0,0,1),(0,0,1)]
+        after,report=replace_rigid_mesh(fixture(),self.vertices,self.faces,
+                                        uvs=uvs,imported_normals=normals)
+        self.assertEqual(struct.unpack_from('>2f',after,0x600+16),(0.25,0.75))
+        self.assertEqual(struct.unpack_from('>2H',after,0x600+24),(0,0))
+        self.assertEqual(struct.unpack_from('>I',after,0x600+12)[0],511<<20)
+        self.assertTrue(report['imported_normals'])
+
     def test_rejects_capacity_and_bad_input(self):
         with self.assertRaisesRegex(ValueError,'vertex capacity'):
             replace_rigid_mesh(fixture(),self.vertices*2,self.faces)
@@ -123,14 +137,15 @@ class LocalDumpMeshTests(unittest.TestCase):
         r=Skeletons(before)
         self.assertEqual(r.models,Skeletons(after).models)
         model=dict(r.dictionary(r.ptr(32)))['CS_W1_World']
-        shape=dict(r.dictionary(r.ptr(model+20)))['beltmodel14__mtGrass']
+        shape=dict(r.dictionary(r.ptr(model+20)))[DEFAULT_SHAPE]
         vb=r.ptr(shape+32);buf=r.ptr(vb+24);start=r.ptr(buf+20)
         stride=r.u16(buf+12);capacity=r.u32(vb+8)
         attrs={n:r.u16(a+6) for n,a in r.dictionary(r.ptr(vb+20))}
         permitted=bytearray(len(before))
         def allow(at,size):permitted[at:at+size]=b'\1'*size
         for i in range(capacity):
-            for name,width in (('_p0',12),('_n0',4),('_u0',8),('_u1',4)):
+            for name,width in (('_p0',12),('_n0',4),('_u0',8),('_u1',4),('_c0',4)):
+                if name not in attrs: continue
                 allow(start+i*stride+attrs[name],width)
         mesh=r.ptr(shape+36);ib=r.ptr(mesh+20);istart=r.ptr(ib+20)
         allow(istart,r.u32(mesh+8)*2)
@@ -144,6 +159,8 @@ class LocalDumpMeshTests(unittest.TestCase):
         expected=tuple(i for face in faces for i in face)
         self.assertEqual(triangle_indices[:len(expected)],expected)
         self.assertTrue(all(i==0 for i in triangle_indices[len(expected):]))
+        if '_c0' in attrs:
+            self.assertEqual(after[start+attrs['_c0']:start+attrs['_c0']+4],b'\xff'*4)
         self.assertEqual(hashlib.sha256(source.read_bytes()).digest(),source_hash)
 
 

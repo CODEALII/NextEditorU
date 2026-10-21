@@ -13,16 +13,60 @@ from .bfres import Skeletons
 
 
 DEFAULT_MODEL = 'CS_W1_World'
-DEFAULT_SHAPE = 'beltmodel14__mtGrass'
+DEFAULT_SHAPE = 'polySurface1489__mtGrass'
 
 
-def _geometry(vertices, faces):
+def _nearest_uvs(points, source_points, source_uvs):
+    """Transfer baked-light UVs by nearest source XZ vertex using a grid."""
+    cell_size = 128.
+    grid = {}
+    for i, point in enumerate(source_points):
+        key = math.floor(point[0] / cell_size), math.floor(point[2] / cell_size)
+        grid.setdefault(key, []).append(i)
+    if not grid:
+        raise ValueError('Original shape has no lightmap source vertices')
+    min_x, max_x = min(k[0] for k in grid), max(k[0] for k in grid)
+    min_z, max_z = min(k[1] for k in grid), max(k[1] for k in grid)
+    result = []
+    for point in points:
+        cx, cz = math.floor(point[0] / cell_size), math.floor(point[2] / cell_size)
+        best, best_distance = None, float('inf')
+        max_ring = max(abs(cx-min_x), abs(cx-max_x), abs(cz-min_z), abs(cz-max_z))
+        for ring in range(max_ring + 1):
+            for dx in range(-ring, ring + 1):
+                for dz in range(-ring, ring + 1):
+                    if max(abs(dx), abs(dz)) != ring:
+                        continue
+                    for i in grid.get((cx+dx, cz+dz), ()):
+                        src = source_points[i]
+                        distance = (point[0]-src[0])**2 + (point[2]-src[2])**2
+                        if distance < best_distance:
+                            best, best_distance = i, distance
+            if best is not None:
+                left = point[0] - (cx-ring)*cell_size
+                right = (cx+ring+1)*cell_size - point[0]
+                down = point[2] - (cz-ring)*cell_size
+                up = (cz+ring+1)*cell_size - point[2]
+                outside_distance = max(0., min(left, right, down, up))
+                if best_distance <= outside_distance**2:
+                    break
+        result.append(source_uvs[best])
+    return result
+
+
+def _geometry(vertices, faces, uvs=None, imported_normals=None):
     if not vertices or not faces or len(vertices) > 65535:
         raise ValueError('Mesh needs 1..65535 vertices and polygon faces')
     vertices = [tuple(float(v) for v in xyz) for xyz in vertices]
     if any(len(xyz) != 3 or not all(math.isfinite(v) and abs(v) <= 100000 for v in xyz)
            for xyz in vertices):
         raise ValueError('Mesh coordinates must be finite and within 100000 units')
+    for values, label, width in ((uvs, 'texture coordinates', 2),
+                                 (imported_normals, 'normals', 3)):
+        if values is not None and (len(values) != len(vertices) or any(
+                value is not None and (len(value) != width or not all(math.isfinite(float(v)) for v in value))
+                for value in values)):
+            raise ValueError(f'OBJ {label} must have one finite value per vertex')
     triangles = []
     normals = [[0., 0., 0.] for _ in vertices]
     for face in faces:
@@ -43,17 +87,29 @@ def _geometry(vertices, faces):
     for i, n in enumerate(normals):
         length = math.sqrt(sum(v*v for v in n))
         normals[i] = tuple(v / length for v in n) if length > 1e-12 else (0., 1., 0.)
-    return vertices, triangles, normals
+    if imported_normals is not None:
+        for i, source in enumerate(imported_normals):
+            if source is None:
+                continue
+            length = math.sqrt(sum(float(v)*float(v) for v in source))
+            if length <= 1e-12:
+                raise ValueError('OBJ normals must not be zero vectors')
+            normals[i] = tuple(float(v)/length for v in source)
+    return vertices, triangles, normals, uvs
 
 
-def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT_SHAPE):
+def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT_SHAPE,
+                       uvs=None, imported_normals=None):
     """Return (new_bfres, report), replacing exactly one existing rigid shape.
 
-    OBJ units are used directly as model-local game units. Smooth normals and
-    planar XZ UVs are generated; OBJ material/UV/normal definitions are not read.
-    Existing terrain elsewhere remains visible. In-game appearance needs Cemu QA.
+    OBJ units are used directly as model-local game units. OBJ corner UVs and
+    normals are kept when supplied; positions are split at attribute seams
+    because BFRES stores one set of attributes per vertex. Existing terrain
+    elsewhere remains visible. OBJ vt/vn data is kept when
+    present; missing channels receive the documented planar/smooth defaults.
+    In-game appearance still needs Cemu QA.
     """
-    vertices, indices, normals = _geometry(vertices, faces)
+    vertices, indices, normals, uvs = _geometry(vertices, faces, uvs, imported_normals)
     r = Skeletons(data)
     if r.version != 0x03000001:
         raise ValueError('Rigid mesh replacement only supports BFRES version 0x03000001')
@@ -88,8 +144,15 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
         if data[a+4] != 0:
             raise ValueError('Unexpected vertex buffer index')
         attrs[name] = (r.u16(a+6), r.u32(a+8))
-    if set(attrs) != {'_p0', '_n0', '_u0', '_u1'} or {n:f for n,(_,f) in attrs.items()} != {'_p0':0x811,'_n0':0x20b,'_u0':0x80d,'_u1':7}:
-        raise ValueError('Unsupported vertex attribute layout; expected tested grass format')
+    base_attrs = {'_p0':0x811,'_n0':0x20b,'_u0':0x80d,'_u1':7}
+    formats = {n:f for n,(_,f) in attrs.items()}
+    if formats not in (base_attrs, {**base_attrs, '_c0':0x0A}):
+        raise ValueError('Unsupported vertex attribute layout; expected tested grass format with optional RGBA color')
+    material_list = r.dictionary(r.ptr(model_offset + 24))
+    material_index = r.u16(s+14)
+    if material_index >= len(material_list):
+        raise ValueError('Shape references a missing material')
+    material_name = material_list[material_index][0]
     buffer = r.ptr(v+24)
     r.bounds(buffer, 24)
     size, stride = r.u32(buffer+4), r.u16(buffer+12)
@@ -97,7 +160,9 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
         raise ValueError('Invalid vertex allocation')
     start = r.ptr(buffer+20)
     r.bounds(start, size)
-    for name, width in (('_p0',12),('_n0',4),('_u0',8),('_u1',4)):
+    for name, width in (('_p0',12),('_n0',4),('_u0',8),('_u1',4),('_c0',4)):
+        if name not in attrs:
+            continue
         if attrs[name][0]+width > stride:
             raise ValueError('Vertex attribute exceeds stride')
     mesh = r.ptr(s+36)
@@ -113,6 +178,11 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
     if r.u32(ib+4) < index_capacity*2 or r.u16(ib+14) != 1:
         raise ValueError('Invalid index allocation')
     r.bounds(index_start, r.u32(ib+4))
+    source_points = [struct.unpack_from('>3f', data, start+i*stride+attrs['_p0'][0])
+                     for i in range(capacity)]
+    source_uvs = [tuple(value/65535. for value in struct.unpack_from(
+        '>2H', data, start+i*stride+attrs['_u1'][0])) for i in range(capacity)]
+    lightmap_uvs = _nearest_uvs(vertices, source_points, source_uvs)
     sub = r.ptr(mesh+16)
     count = r.u16(mesh+12)
     r.bounds(sub, count*8)
@@ -141,9 +211,15 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
         struct.pack_into('>3f',out,at+attrs['_p0'][0],*p)
         packed = sum((round(max(-1.,min(1.,n[k]))*511)&1023) << (10*k) for k in range(3))
         struct.pack_into('>I',out,at+attrs['_n0'][0],packed)
-        uv = [(p[k]-lo[k])/max(hi[k]-lo[k],.01) for k in (0,2)]
+        planar = [(p[k]-lo[k])/max(hi[k]-lo[k],.01) for k in (0,2)]
+        uv = planar if uvs is None or uvs[source] is None else [float(x) for x in uvs[source]]
         struct.pack_into('>2f',out,at+attrs['_u0'][0],*uv)
-        struct.pack_into('>2H',out,at+attrs['_u1'][0],*(round(x*65535) for x in uv))
+        # `_u1` is the source mesh's baked-light channel, not OBJ's diffuse UV.
+        # Project new vertices onto the original XZ lightmap layout.
+        uv1 = lightmap_uvs[source]
+        struct.pack_into('>2H',out,at+attrs['_u1'][0],*(round(max(0.,min(1.,x))*65535) for x in uv1))
+        if '_c0' in attrs:
+            out[at+attrs['_c0'][0]:at+attrs['_c0'][0]+4] = b'\xff\xff\xff\xff'
     struct.pack_into('>'+str(index_capacity)+'H',out,index_start,*(indices+[0]*(index_capacity-len(indices))))
     for i in range(bounds_count):
         struct.pack_into('>6f',out,bounds_start+i*24,*(center+extent))
@@ -151,5 +227,8 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
     struct.pack_into('>f',out,s+28,radius)
     return bytes(out), {'model':model,'shape':shape,'vertices':len(vertices),
         'triangles':len(indices)//3,'vertex_capacity':capacity,'index_capacity':index_capacity,
-        'material_reused':True,'uvs':'generated planar XZ','normals':'generated smooth',
+        'material_reused':True,'material':material_name,
+        'uvs':'OBJ vt or generated planar XZ; baked channel projected from original XZ mesh',
+        'normals':'OBJ vn with smooth fallback' if imported_normals is not None else 'generated smooth',
+        'imported_normals':imported_normals is not None and any(n is not None for n in imported_normals),
         'unused_triangles':'degenerate','game_verified':False}
