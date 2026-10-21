@@ -1443,3 +1443,18 @@ camera behavior and a fully playable custom world remain open.
   common save hashes exactly match Clean and Direct, including the earlier
   uncontrolled map-state change. This includes no course completion or unlock
   transition.
+
+## 2026-10-21 — Native route destination picker
+
+- Added an ordered point-ID picker to both normal and secret destination fields
+  in the native editor. It excludes the selected point from new target choices,
+  preserves unresolved existing IDs until the user removes them, and applies
+  changes only after explicit confirmation. The user edits the paired BFRES
+  path-chain field separately, with native graph/export validation still in
+  effect.
+- Added GUI regression coverage for the two target controls, preservation of an
+  unknown target, selected-ID wiring, and apply/undo/redo behavior.
+- Verification: all **301 tests** passed in 185.566 seconds; all 26 focused
+  editor smoke tests passed after adding redo coverage; `compileall` and
+  `git diff --check` passed. This is editor evidence only; no route or level
+  behavior has been verified in Cemu.

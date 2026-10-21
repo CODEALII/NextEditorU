@@ -1797,6 +1797,12 @@ class NativeStudio(WorldStudio):
                     self.form, text="Edit order", width=9,
                     command=lambda field=var: self.edit_path_chain(field),
                 ).grid(row=i, column=2, padx=(5, 0), pady=3)
+            if kind == "point" and i in (3, 6):
+                ttk.Button(
+                    self.form, text="Edit targets", width=11,
+                    command=lambda field=var, point_name=row[1]:
+                        self.edit_point_destinations(field, point_name),
+                ).grid(row=i, column=2, padx=(5, 0), pady=3)
             if ((kind == "point" and i in (0, 1)) or
                     (kind == "segment" and i == 0)):
                 entry.configure(state="readonly")
@@ -1851,6 +1857,26 @@ class NativeStudio(WorldStudio):
         dialog = PathChainDialog(
             self.winfo_toplevel(), variable.get(), route_ids,
             chain_status=chain_status if chain_context is not None else None)
+        self.wait_window(dialog)
+        if dialog.result is not None:
+            variable.set(dialog.result)
+
+    def edit_point_destinations(self, variable, point_name):
+        if self.exporting:
+            return
+        point_ids = [row[1] for row in self.native.points.rows
+                     if len(row) > 1 and row[1] != point_name]
+        dialog = PathChainDialog(
+            self.winfo_toplevel(), variable.get(), point_ids,
+            dialog_title="Edit point destinations",
+            heading="Ordered destination point IDs",
+            item_label="Point ID",
+            help_text=("Existing values stay in place, including unresolved IDs. "
+                       "Edit the matching path-chain field separately; choosing a "
+                       "destination does not confirm in-game connectivity."),
+            apply_label="Apply destinations",
+            unknown_label="Point ID not present in this archive; preserved unless removed: ",
+        )
         self.wait_window(dialog)
         if dialog.result is not None:
             variable.set(dialog.result)
@@ -2293,26 +2319,31 @@ class NativeStudio(WorldStudio):
 
 
 class PathChainDialog(tk.Toplevel):
-    """Edit the order of BFRES route IDs in one native point path field."""
+    """Edit ordered IDs in a native point destination or path-chain field."""
 
-    def __init__(self, parent, current_value, route_ids, chain_status=None):
+    def __init__(self, parent, current_value, route_ids, chain_status=None, *,
+                 dialog_title="Edit point path order",
+                 heading="Ordered BFRES path IDs", item_label="BFRES ID",
+                 help_text=("Existing values remain in place, including unresolved IDs. "
+                            "Choosing a BFRES ID does not confirm its game behavior."),
+                 apply_label="Apply chain",
+                 unknown_label="Not found in current BFRES; preserved unless removed: "):
         super().__init__(parent)
         self.original = current_value
-        self.route_ids = tuple(sorted(set(route_ids)))
+        self.value_ids = tuple(sorted(set(route_ids)))
         self.changed = False
         self.result = None
         self.chain_status = chain_status
-        self.title("Edit point path order")
+        self.title(dialog_title)
         self.resizable(False, False)
         self.transient(parent.winfo_toplevel())
         self.protocol("WM_DELETE_WINDOW", self.cancel)
 
-        ttk.Label(self, text="Ordered BFRES path IDs",
+        ttk.Label(self, text=heading,
                   font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=14, pady=(12, 4))
         ttk.Label(
             self,
-            text=("Existing values remain in place, including unresolved IDs. "
-                  "Choosing a BFRES ID does not confirm its game behavior."),
+            text=help_text,
             wraplength=480,
         ).pack(anchor="w", padx=14, pady=(0, 8))
 
@@ -2340,22 +2371,21 @@ class PathChainDialog(tk.Toplevel):
             if token:
                 self.items.insert("end", token)
 
-        unresolved = [token for token in self._tokens() if token not in self.route_ids]
+        unresolved = [token for token in self._tokens() if token not in self.value_ids]
         if unresolved:
             ttk.Label(
                 content,
-                text="Not found in current BFRES; preserved unless removed: " +
-                     ", ".join(unresolved[:6]),
+                text=unknown_label + ", ".join(unresolved[:6]),
                 wraplength=480,
                 foreground="#ffd18a",
             ).pack(anchor="w", pady=(5, 0))
 
         add_row = ttk.Frame(self, padding=(14, 8, 14, 4))
         add_row.pack(fill="x")
-        ttk.Label(add_row, text="BFRES ID").pack(side="left", padx=(0, 8))
+        ttk.Label(add_row, text=item_label).pack(side="left", padx=(0, 8))
         self.route_choice = tk.StringVar(value="")
         self.choice = ttk.Combobox(
-            add_row, textvariable=self.route_choice, values=self.route_ids,
+            add_row, textvariable=self.route_choice, values=self.value_ids,
             state="readonly", width=25,
         )
         self.choice.pack(side="left", fill="x", expand=True)
@@ -2371,7 +2401,7 @@ class PathChainDialog(tk.Toplevel):
         self.down_button = ttk.Button(actions, text="Move down", command=lambda: self.move_selected(1))
         self.down_button.pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="Cancel", command=self.cancel).pack(side="right", padx=(8, 0))
-        ttk.Button(actions, text="Apply chain", command=self.apply).pack(side="right")
+        ttk.Button(actions, text=apply_label, command=self.apply).pack(side="right")
 
         self.items.bind("<<ListboxSelect>>", self.update_actions)
         self.route_choice.trace_add("write", self.update_actions)
@@ -2388,7 +2418,7 @@ class PathChainDialog(tk.Toplevel):
         selected = selection[0] if selection else None
         candidate = self.route_choice.get()
         self.add_button.state([
-            "!disabled" if candidate in self.route_ids and candidate not in tokens
+            "!disabled" if candidate in self.value_ids and candidate not in tokens
             else "disabled"
         ])
         self.remove_button.state(["!disabled"] if selected is not None else ["disabled"])
@@ -2405,7 +2435,7 @@ class PathChainDialog(tk.Toplevel):
 
     def add_selected(self):
         candidate = self.route_choice.get()
-        if candidate not in self.route_ids or candidate in self._tokens():
+        if candidate not in self.value_ids or candidate in self._tokens():
             return
         index = self.items.size()
         self.items.insert("end", candidate)

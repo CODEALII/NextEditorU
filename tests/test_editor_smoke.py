@@ -364,6 +364,43 @@ class EditorSmokeTests(unittest.TestCase):
         self.app.undo()
         self.assertEqual(self.native.points.rows[0][4], before)
 
+    def test_point_destination_picker_preserves_unknown_targets_and_undoes(self):
+        before = self.native.points.rows[0][3]
+        self.app.tree.selection_set("point:0")
+        self.app.select_tree()
+        self.root.update()
+        destination_variable = self.app.properties[3]
+        destination_variable.set("W199")
+        target_buttons = [widget for widget in self.app.form.winfo_children()
+                          if isinstance(widget, ttk.Button) and
+                          widget.cget("text") == "Edit targets"]
+        self.assertEqual(len(target_buttons), 2)
+
+        def finish_dialog():
+            dialog = next(child for child in self.root.winfo_children()
+                          if isinstance(child, PathChainDialog))
+            self.assertEqual(dialog.title(), "Edit point destinations")
+            self.assertNotIn("W101", dialog.value_ids)
+            self.assertEqual(tuple(dialog.items.get(0, "end")), ("W199",))
+            dialog.choice.set("W102")
+            dialog.add_selected()
+            dialog.apply()
+
+        edit_button = next(
+            widget for widget in self.app.form.winfo_children()
+            if isinstance(widget, ttk.Button) and widget.cget("text") == "Edit targets")
+        self.root.after(0, finish_dialog)
+        edit_button.invoke()
+
+        self.assertEqual(destination_variable.get(), "W199,W102")
+        self.assertEqual(self.native.points.rows[0][3], before)
+        self.app.apply()
+        self.assertEqual(self.native.points.rows[0][3], "W199,W102")
+        self.app.undo()
+        self.assertEqual(self.native.points.rows[0][3], before)
+        self.app.redo()
+        self.assertEqual(self.native.points.rows[0][3], "W199,W102")
+
     def test_native_tree_filter_clears_properties_when_selected_item_is_hidden(self):
         self.app.tree.selection_set("bone:K001")
         self.root.update()
