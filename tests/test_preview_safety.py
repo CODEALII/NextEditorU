@@ -96,7 +96,7 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn('"RouteW1_alb":{"name":"RouteW1_alb"', page)
         self.assertIn("scene.textures?.[shape.texture]", page)
         self.assertIn("textureCache.set(key,texture)", page)
-        self.assertIn("mesh.normalTextureName+' '+mesh.diagnosticTextureName+' '+mesh.maskTextureName).toLowerCase()", page)
+        self.assertIn("mesh.normalTextureName+' '+mesh.diagnosticTextureName+' '+mesh.maskTextureName).concat(' ',bc4Search).toLowerCase()", page)
 
     def test_viewer_exposes_bc5_diagnostic_and_optional_approximate_lighting(self):
         page = build_document({
@@ -263,6 +263,27 @@ console.log(JSON.stringify(Object.entries(maps).map(([kind,payload])=>textureMap
             "Sampler _o0 | Mask | 4x8 | BC5 UNorm",
             "Sampler _o1 | RouteW1_msk | 128x256 | BC4 UNorm",
         ])
+
+    def test_bc4_sampler_selector_orders_route_slot_and_lists_available_maps(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise the BC4 sampler selector")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        self.assertIn('<select id="bc4-slot" aria-label="BC4 diagnostic sampler">', page)
+        self.assertIn("bc4Button.textContent=`${selectedBc4Slot} BC4", page)
+        self.assertIn("const activeBc4Texture=m.bc4Textures[selectedBc4Slot]||null", page)
+        start = page.index("function uniqueBc4Slots(meshes){")
+        end = page.index("\nconst textureThumbnailCache", start)
+        helper = page[start:end]
+        probe = helper + r"""
+console.log(JSON.stringify([
+uniqueBc4Slots([{bc4Textures:{_b0:{},_o1:{}}},{bc4Textures:{_s0:{},_o1:{}}}]),
+uniqueBc4Slots([{bc4Textures:{_b0:{},_s0:{}}}]),
+uniqueBc4Slots([])
+]));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        self.assertEqual(json.loads(result.stdout), [["_o1", "_b0", "_s0"], ["_b0", "_s0"], []])
 
     def test_viewport_pick_ids_and_hidpi_pixel_coordinates(self):
         node = shutil.which("node")

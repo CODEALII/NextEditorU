@@ -479,3 +479,21 @@ camera behavior and a fully playable custom world remain open.
   Top, applied target `(12.5, -3, 7.25)`, selected a route mesh and reported
   its `RouteW1_msk | 128x256 | BC4 UNorm` map without a WebGL error overlay.
   Screenshot evidence stays ignored under `local/evidence/`.
+
+## 2026-10-21 — selectable multi-slot BC4 diagnostics
+
+- Extended bounded BC4 decoding and local reference checks to the observed
+  `_b0`, `_s0`, and `_x2` slots alongside `_o1`. The selector exposes all four
+  slots and 16 supported maps across the 42-shape W1 scene; each mesh inspector
+  row names its sampler. All remain grayscale channel diagnostics because the
+  game's material semantics are unknown.
+- Added fixed raw/detiled local-W1 vectors for one map in each added slot and
+  reference-pairing coverage. Focused checks passed: **26 viewer tests** and
+  **15 BFRES texture tests**.
+- Headless Chrome/SwiftShader loaded 42 shapes, switched through `_o1`, `_b0`,
+  `_s0`, and `_x2`, updated the inspector labels, and reported no WebGL error.
+  The captured `_x2` view is ignored at
+  `local/evidence/preview-w1-bc4-slots-controls.png`.
+- Full regression: **160 tests passed in 101.599 seconds**. `compileall`,
+  `git diff --check`, progress SVG parsing, and W101 → W102/W103 reachability
+  passed.

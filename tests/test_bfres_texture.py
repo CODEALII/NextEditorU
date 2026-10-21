@@ -154,6 +154,13 @@ class SyntheticSamplerDiagnosticTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'supported diagnostic map format'):
             extract_sampler_diagnostic_texture(
                 texture_fixture(0x35, 'RouteW1_msk', '_o1'), 'CS_W1_World', 'mtGrass', '_o1')
+        for slot, name in (('_b0', 'BakeMap'), ('_s0', 'SpecMap'), ('_x2', 'RingSpec')):
+            texture = extract_sampler_diagnostic_texture(
+                texture_fixture(0x34, name, slot), 'CS_W1_World', 'mtGrass', slot)
+            self.assertEqual((texture['name'], texture['format']), (name, 0x34))
+        with self.assertRaisesRegex(ValueError, 'Unsupported diagnostic sampler slot'):
+            extract_sampler_diagnostic_texture(
+                texture_fixture(0x34, 'UnknownMap', '_z0'), 'CS_W1_World', 'mtGrass', '_z0')
 
     def test_diagnostic_catalog_attaches_bounded_channel_preview(self):
         shape = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
@@ -176,6 +183,13 @@ class SyntheticSamplerDiagnosticTests(unittest.TestCase):
         self.assertEqual(shape['maskTexture'], 'RouteW1_msk')
         self.assertEqual(textures['RouteW1_msk']['samplerSlot'], '_o1')
         self.assertEqual(textures['RouteW1_msk']['format'], 0x34)
+        self.assertFalse(failed)
+        spec_shape = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
+        textures, failed = attach_sampler_diagnostic_textures(
+            texture_fixture(0x34, 'Dokan_spm', '_s0'), [spec_shape], sampler_slot='_s0')
+        self.assertEqual(set(textures), {'_s0:Dokan_spm'})
+        self.assertEqual(spec_shape['bc4Samplers'], {'_s0': '_s0:Dokan_spm'})
+        self.assertEqual(textures['_s0:Dokan_spm']['samplerSlot'], '_s0')
         self.assertFalse(failed)
 
 
@@ -364,6 +378,57 @@ class LocalTextureReferenceTests(unittest.TestCase):
         self.assertEqual(rgba[0::4], rgba[1::4])
         self.assertEqual(rgba[1::4], rgba[2::4])
         self.assertEqual(set(rgba[3::4]), {255})
+
+    def test_local_w1_other_bc4_sampler_slots_have_stable_thin1_fingerprints(self):
+        root = Path(__file__).resolve().parents[1]
+        source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W1 dump unavailable')
+        model = Archive(source.read_bytes()).read('CS_W1.bfres')
+        cases = (
+            ('_b0', 'mtCourseRing', 'Bake_CS_W1_World_g00_b00_f00', 1024, 512,
+             '1ab33ecf1cdfb836c676f1bfcb8cac6b4ba09cd0171f6772d23e2cfb7539d60b',
+             'a99d1acaf77fb1a60cfb2b1a6940f672d8fa9f44086262959d70f8181e90da4d'),
+            ('_s0', 'mtDokanBlue', 'Dokan_spm', 128, 128,
+             '6b614457bb4b92c285a9cad5c8f18ffa00edcaa1f7737f8d511aeb9993ac29f4',
+             '7f5180ff330f8a10450ec5c4972e0721cbacdd5a13c94ca7c8ad0046a6b1d87b'),
+            ('_x2', 'mtCourseRing', 'CourseRing_spm', 32, 32,
+             '03218ed70fcf64f3ef6dc27de2131cd1d803c413893b74c53c1bbd2638d98c0d',
+             'a500115ecc1e4cbcdd5b7b53171c5675d42694c672ccc6507f18a83b63693036'),
+        )
+        for slot, material, name, width, height, raw_hash, compact_hash in cases:
+            with self.subTest(slot=slot):
+                texture = extract_sampler_diagnostic_texture(model, 'CS_W1_World', material, slot)
+                self.assertEqual((texture['name'], texture['format'], texture['width'], texture['height']),
+                                 (name, 0x34, width, height))
+                self.assertEqual(hashlib.sha256(texture['data']).hexdigest(), raw_hash)
+                compact = detile_bc4_thin1(
+                    texture['data'], width, height, texture['pitch'], tile_mode=texture['tile_mode'],
+                    swizzle=texture['swizzle'], depth=texture['depth'])
+                self.assertEqual(hashlib.sha256(compact).hexdigest(), compact_hash)
+                rgba = decode_bc4_unorm(compact, width, height)
+                self.assertEqual(len(rgba), width * height * 4)
+                self.assertEqual(rgba[0::4], rgba[1::4])
+                self.assertEqual(rgba[1::4], rgba[2::4])
+
+    def test_local_w1_bc4_catalog_attaches_only_verified_sampler_slot_pairs(self):
+        from worldstudio.mesh import extract_rigid_model
+
+        root = Path(__file__).resolve().parents[1]
+        source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W1 dump unavailable')
+        model = Archive(source.read_bytes()).read('CS_W1.bfres')
+        shapes = extract_rigid_model(model)
+        expected = {'_o1': (1, 7), '_b0': (1, 36), '_s0': (13, 35), '_x2': (1, 1)}
+        for slot, (texture_count, shape_count) in expected.items():
+            with self.subTest(slot=slot):
+                textures, _ = attach_sampler_diagnostic_textures(model, shapes, sampler_slot=slot)
+                mapped = [shape for shape in shapes if slot in shape.get('bc4Samplers', {})]
+                self.assertEqual(len(textures), texture_count)
+                self.assertEqual(len(mapped), shape_count)
+                self.assertTrue(all(payload['format'] == 0x34 and payload['samplerSlot'] == slot
+                                    for payload in textures.values()))
 
 
 if __name__ == '__main__':

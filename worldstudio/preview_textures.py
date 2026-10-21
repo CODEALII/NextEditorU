@@ -130,13 +130,12 @@ def attach_sampler_diagnostic_textures(model_data, shapes, *, sampler_slot="_o0"
                                        max_scene_pixels=8 * 1024 * 1024):
     """Attach supported BC channel maps from an observed W1 sampler slot.
 
-    `_o0` supplies BC5 UNorm and `_o1` supplies BC4 UNorm in the local W1 file.
-    `_o0` maps attach as ``diagnosticTexture`` and `_o1` maps as ``maskTexture``.
-    Stored channel values are shown without claiming a rendering role.
+    `_o0` supplies BC5 UNorm; the locally observed `_o1`, `_b0`, `_s0`, and
+    `_x2` references supply BC4 UNorm. Stored values remain diagnostic only.
     """
-    if sampler_slot not in ("_o0", "_o1"):
-        raise ValueError("Supported diagnostic sampler slots are _o0 and _o1")
-    shape_field = "diagnosticTexture" if sampler_slot == "_o0" else "maskTexture"
+    if sampler_slot not in ("_o0", "_o1", "_b0", "_s0", "_x2"):
+        raise ValueError("Unsupported diagnostic sampler slot")
+    shape_field = {"_o0": "diagnosticTexture", "_o1": "maskTexture"}.get(sampler_slot)
     if type(max_texture_pixels) is not int or max_texture_pixels <= 0:
         raise ValueError("max_texture_pixels must be a positive integer")
     if type(max_scene_pixels) is not int or max_scene_pixels <= 0:
@@ -154,7 +153,9 @@ def attach_sampler_diagnostic_textures(model_data, shapes, *, sampler_slot="_o0"
             try:
                 texture = extract_sampler_diagnostic_texture(
                     model_data, "CS_W1_World", material, sampler_slot)
-                if texture["name"] not in textures:
+                catalog_key = (texture["name"] if sampler_slot in ("_o0", "_o1")
+                               else f"{sampler_slot}:{texture['name']}")
+                if catalog_key not in textures:
                     pixels = texture["width"] * texture["height"]
                     if pixels > max_texture_pixels:
                         raise ValueError(f"{texture['name']}: diagnostic texture exceeds the pixel limit")
@@ -176,18 +177,22 @@ def attach_sampler_diagnostic_textures(model_data, shapes, *, sampler_slot="_o0"
                         rgba = decode_bc4_unorm(compact, texture["width"], texture["height"])
                     else:
                         raise ValueError(f"{texture['name']}: unsupported diagnostic preview format")
-                    textures[texture["name"]] = {
+                    textures[catalog_key] = {
                         "name": texture["name"], "width": texture["width"],
                         "height": texture["height"],
                         "format": texture["format"], "samplerSlot": sampler_slot,
                         "rgbaBase64": base64.b64encode(rgba).decode("ascii"),
                     }
                     decoded_pixels += pixels
-                material_textures[material] = texture["name"]
+                material_textures[material] = catalog_key
             except (ValueError, KeyError, TypeError, OverflowError):
                 material_textures[material] = None
                 failed_materials.add(material)
         texture_name = material_textures[material]
         if texture_name:
-            shape[shape_field] = texture_name
+            payload = textures[texture_name]
+            if shape_field:
+                shape[shape_field] = payload["name"]
+            if payload["format"] == 0x34:
+                shape.setdefault("bc4Samplers", {})[sampler_slot] = texture_name
     return textures, failed_materials

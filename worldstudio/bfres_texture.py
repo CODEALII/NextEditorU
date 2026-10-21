@@ -14,7 +14,10 @@ _NORMAL_MAP_FORMATS = {0x235: "BC5 SNORM"}
 _BC4_DIAGNOSTIC_FORMATS = {0x34: "BC4 UNorm"}
 _BC5_DIAGNOSTIC_FORMATS = {0x35: "BC5 UNorm"}
 _DIAGNOSTIC_SLOT_FORMATS = {"_o0": _BC5_DIAGNOSTIC_FORMATS,
-                            "_o1": _BC4_DIAGNOSTIC_FORMATS}
+                            "_o1": _BC4_DIAGNOSTIC_FORMATS,
+                            "_b0": _BC4_DIAGNOSTIC_FORMATS,
+                            "_s0": _BC4_DIAGNOSTIC_FORMATS,
+                            "_x2": _BC4_DIAGNOSTIC_FORMATS}
 
 
 def _extract_material_texture(data, model_name, material_name, texture_name, *, suffix,
@@ -133,12 +136,13 @@ def extract_sampler_diagnostic_texture(data, model_name, material_name, sampler_
     """Return one supported BC texture by observed local W1 sampler slot.
 
     Sampler and texture-reference order must correspond and the table sizes
-    must agree. `_o0` currently accepts BC5 UNorm and `_o1` accepts BC4 UNorm.
+    must agree. `_o0` accepts BC5 UNorm; the locally observed `_o1`, `_b0`,
+    `_s0`, and `_x2` slots accept BC4 UNorm for diagnostic display only.
     This identifies the stored format and slot only; it does not infer shader
     meaning. Those mappings are only evidenced for the supplied W1 file.
     """
     if not isinstance(sampler_slot, str) or sampler_slot not in _DIAGNOSTIC_SLOT_FORMATS:
-        raise ValueError("Supported diagnostic sampler slots are _o0 and _o1")
+        raise ValueError("Unsupported diagnostic sampler slot")
     return _extract_material_texture(data, model_name, material_name, None, suffix=None,
                                     formats=_DIAGNOSTIC_SLOT_FORMATS[sampler_slot],
                                     kind="diagnostic map", expected_slot=sampler_slot)
