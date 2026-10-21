@@ -64,7 +64,9 @@ This optional check blocks export if W101 cannot reach W102 and W103. It checks
 the selected static profile only; it does not model save flags or game unlocks.
 The native editor offers the same opt-in check from the **Graph check** toolbar
 menu. **Validate** and SZS export both apply the selected JSON profile; selecting
-a new source world clears it so a check cannot silently carry over.
+a new source world clears it so a check cannot silently carry over. A successful
+profile-gated export records the normalized profile and its SHA-256 in the
+manifest while keeping `game_tested: false`.
 
 After exporting a saved project, reimport the archive and compare every member,
 the export manifest, and any camera companion files against a fresh export:
@@ -74,6 +76,11 @@ python -m worldstudio verify-export build/my-chain/three-level-chain.nws.json bu
 ```
 
 This checks offline package consistency; its report keeps `game_tested` false.
+For a profile-gated export, pass the same profile to the verifier:
+
+```powershell
+python -m worldstudio verify-export build/my-chain/three-level-chain.nws.json build/my-chain/profile-checked.szs --profile profiles/w1-core-progression.json
+```
 
 Inspect the named interface in a local shader archive:
 

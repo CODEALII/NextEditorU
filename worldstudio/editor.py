@@ -2635,13 +2635,16 @@ class NativeStudio(WorldStudio):
         self.set_export_busy(False)
         if succeeded:
             terrain = "Experimental mesh included. " if result.get("terrain_exported") else ""
+            graph = result.get("graph_validation") or {}
+            graph_note = (f" Static profile passed: {', '.join(graph.get('required_locations', []))}."
+                          if graph.get("passed") else "")
             geometry = result.get("geometry") or {}
             projection = geometry.get("baked_uv_projection") or {}
             projection_warning = projection.get("warning")
             warning = (f" Baked-light UV review: {projection_warning}. Check the export manifest."
                        if projection_warning else "")
             self.status.set(f"Exported verified archive: {result.get('output', '')}. {terrain}"
-                            f"Cemu verification is still required.{warning}")
+                            f"Cemu verification is still required.{graph_note}{warning}")
         else:
             self.status.set(f"Export failed: {result}")
             messagebox.showerror("Export failed", str(result), parent=self)
@@ -2659,11 +2662,16 @@ class NativeStudio(WorldStudio):
         path = filedialog.asksaveasfilename(defaultextension=".szs", filetypes=[("New world mod archive", "*.szs")], initialfile=self.native.source.name, parent=self)
         if path:
             native = self.native
+            graph_profile = self.graph_profile_path
             self.set_export_busy(True)
             self.status.set("Exporting and compressing Yaz0… controls are locked while archive verification runs.")
             def worker():
                 try:
-                    self.export_results.put((True, native.export(path)))
+                    if graph_profile is None:
+                        result = native.export(path)
+                    else:
+                        result = native.export(path, graph_profile=graph_profile)
+                    self.export_results.put((True, result))
                 except Exception as error:
                     # The worker never accesses Tk; all status/dialog work occurs
                     # in poll_export on the GUI thread, including unexpected errors.

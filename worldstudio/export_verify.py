@@ -11,11 +11,11 @@ from .project import sha
 
 _MANIFEST_FIELDS = (
     'source_sha256', 'changed_entries', 'entry_changes', 'bfres_unchanged',
-    'terrain_exported', 'geometry', 'bone_renames', 'camera_files',
+    'terrain_exported', 'geometry', 'graph_validation', 'bone_renames', 'camera_files',
 )
 
 
-def verify_export(project, output):
+def verify_export(project, output, *, graph_profile=None):
     """Compare an exported archive with a fresh project export and its manifest.
 
     This verifies local package consistency and re-importability. It does not
@@ -39,11 +39,16 @@ def verify_export(project, output):
         raise ValueError('Export manifest does not match this project source')
     if manifest.get('output_sha256') != sha(output_bytes):
         raise ValueError('Exported archive hash does not match its manifest')
+    if manifest.get('graph_validation') is not None and graph_profile is None:
+        raise ValueError('This export used a graph profile; pass --profile to verify it')
 
     actual_archive = Archive(output_bytes)
     with tempfile.TemporaryDirectory(prefix='worldstudio-verify-') as temporary:
         expected_path = Path(temporary) / output.name
-        expected_manifest = project.export(expected_path)
+        if graph_profile is None:
+            expected_manifest = project.export(expected_path)
+        else:
+            expected_manifest = project.export(expected_path, graph_profile=graph_profile)
         expected_archive = Archive(expected_path.read_bytes())
         if set(actual_archive.entries) != set(expected_archive.entries):
             missing = sorted(set(expected_archive.entries) - set(actual_archive.entries))
@@ -82,6 +87,7 @@ def verify_export(project, output):
         'archive_entries': len(actual_archive.entries),
         'changed_entries': manifest.get('changed_entries', []),
         'camera_files': sorted(manifest.get('camera_files', {})),
+        'graph_validation': manifest.get('graph_validation'),
         'game_tested': False,
         'note': 'Local archive and companion outputs match a fresh project export; game behavior is not tested.',
     }

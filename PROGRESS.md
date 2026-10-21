@@ -20,6 +20,14 @@
 - Follow-up validation/export unification: **61 editor and graph tests passed**;
   `compileall` and `git diff --check` also pass. The full repository suite was
   not rerun for this follow-up.
+- Profile-gated exports now carry the normalized profile, a canonical SHA-256,
+  and a static-pass result in the sidecar manifest. `verify-export --profile`
+  reruns that same check and compares the recorded provenance; the verifier
+  refuses to treat a profile-gated manifest as verified when no profile is
+  supplied. This remains offline evidence and preserves `game_tested: false`.
+- The full suite passes after the export and verifier change: **344 tests in
+  280.528 seconds**. The profile regression checks same-profile roundtrip,
+  rejects a weaker/different profile and rejects verification without a profile.
 
 ## 2026-10-22 — Resolve ambiguous local albedo references
 

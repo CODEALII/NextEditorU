@@ -102,7 +102,39 @@ class NativeGraphProfileTests(unittest.TestCase):
                 cwd=root, capture_output=True, text=True, encoding="utf-8")
             self.assertEqual(accepted.returncode, 0, accepted.stderr)
             self.assertTrue(baseline_output.is_file())
-            self.assertFalse(json.loads(accepted.stdout)["game_tested"])
+            manifest = json.loads(accepted.stdout)
+            self.assertFalse(manifest["game_tested"])
+            graph_validation = manifest["graph_validation"]
+            self.assertEqual(graph_validation["entry_points"], ["W101"])
+            self.assertEqual(graph_validation["required_locations"], ["W102", "W103"])
+            self.assertEqual(len(graph_validation["profile_sha256"]), 64)
+            self.assertTrue(graph_validation["passed"])
+
+            verified = subprocess.run(
+                [sys.executable, "-m", "worldstudio", "verify-export",
+                 str(baseline_path), str(baseline_output), "--profile", str(profile)],
+                cwd=root, capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(verified.returncode, 0, verified.stderr)
+            self.assertTrue(json.loads(verified.stdout)["verified"])
+            self.assertEqual(json.loads(verified.stdout)["graph_validation"], graph_validation)
+
+            weaker_profile = folder / "weaker-profile.json"
+            weaker_data = json.loads(profile.read_text(encoding="utf-8"))
+            weaker_data["required_locations"] = ["W102"]
+            weaker_profile.write_text(json.dumps(weaker_data), encoding="utf-8")
+            mismatched_profile = subprocess.run(
+                [sys.executable, "-m", "worldstudio", "verify-export",
+                 str(baseline_path), str(baseline_output), "--profile", str(weaker_profile)],
+                cwd=root, capture_output=True, text=True, encoding="utf-8")
+            self.assertNotEqual(mismatched_profile.returncode, 0)
+            self.assertIn("graph_validation", mismatched_profile.stderr)
+
+            missing_profile = subprocess.run(
+                [sys.executable, "-m", "worldstudio", "verify-export",
+                 str(baseline_path), str(baseline_output)],
+                cwd=root, capture_output=True, text=True, encoding="utf-8")
+            self.assertNotEqual(missing_profile.returncode, 0)
+            self.assertIn("pass --profile to verify it", missing_profile.stderr)
 
             disconnected = WorldProject.open(source)
             start = next(row for row in disconnected.points.rows if row[1] == "W101")

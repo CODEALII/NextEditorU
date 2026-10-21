@@ -49,26 +49,9 @@ def direct_route_demo(project):
 
 def _validate_with_graph_profile(project, profile_path):
     """Validate a project against explicitly selected entry/required nodes."""
-    from .graph_validation import load_native_graph_profile, validate_native_world
-
-    world = re.search(r'pointW([1-9])', project.point_name)
-    if not world:
-        raise ValueError('Cannot match graph profile to the source world')
-    world_prefix = f'W{world[1]}'
-    profile = load_native_graph_profile(profile_path, world_prefix)
-    references = set(project.references)
-    for rename in project.bone_renames:
-        references.discard(rename.get('old'))
-        if rename.get('new'):
-            references.add(rename['new'])
-    issues = set(project.validate())
-    issues.update(validate_native_world(
-        project.points.rows, project.routes.rows, known_references=references,
-        initial_points=project.points.initial, initial_routes=project.routes.initial,
-        world_prefix=world_prefix,
-        entry_points=profile['entry_points'],
-        required_locations=profile['required_locations']))
-    return sorted(issues)
+    from .graph_validation import validate_native_project_profile
+    _, issues = validate_native_project_profile(project, profile_path)
+    return issues
 
 
 def _shader_summary(report, limit=24):
@@ -145,6 +128,8 @@ def main():
     verify = sub.add_parser('verify-export', help='Reimport an export and compare it with the saved project')
     verify.add_argument('project', help='Saved World Studio JSON project')
     verify.add_argument('archive', type=Path, help='Exported world archive produced with its manifest')
+    verify.add_argument('--profile', type=Path,
+                        help='Graph profile required by a profile-gated export')
     args = parser.parse_args()
     try:
         if args.command in (None, 'gui'):
@@ -249,14 +234,11 @@ def main():
             print(json.dumps(manifest, indent=2))
         elif args.command == 'export':
             project = WorldProject.load(args.project)
-            if args.profile:
-                issues = _validate_with_graph_profile(project, args.profile)
-                if issues:
-                    raise ValueError('Graph validation failed:\n' + '\n'.join(issues))
-            print(json.dumps(project.export(args.out), indent=2))
+            print(json.dumps(project.export(args.out, graph_profile=args.profile), indent=2))
         elif args.command == 'verify-export':
             from .export_verify import verify_export
-            report = verify_export(WorldProject.load(args.project), args.archive)
+            report = verify_export(WorldProject.load(args.project), args.archive,
+                                   graph_profile=args.profile)
             print(json.dumps(report, indent=2))
             if not report['verified']:
                 parser.exit(1, 'Export verification failed.\n')

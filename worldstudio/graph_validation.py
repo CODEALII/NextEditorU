@@ -5,6 +5,7 @@ point CSVs also contain helper, trigger, and camera points, so callers must
 identify the playable entry and required locations instead of treating every
 point as a level node.
 """
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -486,3 +487,39 @@ def validate_native_world(
                 issues.append(f"Unreachable location {location}")
 
     return sorted(set(issues))
+
+
+def validate_native_project_profile(project, profile_path):
+    """Validate a native project against an explicit profile and describe it."""
+    world = re.search(r"pointW([1-9])", getattr(project, "point_name", ""))
+    if not world:
+        raise ValueError("Cannot match graph profile to the source world")
+    world_prefix = f"W{world[1]}"
+    profile = load_native_graph_profile(profile_path, world_prefix)
+    references = set(project.references)
+    for rename in getattr(project, "bone_renames", []):
+        references.discard(rename.get("old"))
+        if rename.get("new"):
+            references.add(rename["new"])
+    issues = set(project.validate())
+    issues.update(validate_native_world(
+        project.points.rows, project.routes.rows, known_references=references,
+        initial_points=project.points.initial, initial_routes=project.routes.initial,
+        world_prefix=world_prefix,
+        entry_points=profile["entry_points"],
+        required_locations=profile["required_locations"]))
+    effective_profile = {
+        "format": _GRAPH_PROFILE_FORMAT,
+        "world_prefix": profile["world_prefix"],
+        "entry_points": list(profile["entry_points"]),
+        "required_locations": list(profile["required_locations"]),
+    }
+    canonical = json.dumps(effective_profile, sort_keys=True,
+                           separators=(",", ":")).encode("utf-8")
+    record = {
+        **effective_profile,
+        "profile_sha256": hashlib.sha256(canonical).hexdigest(),
+        "passed": not issues,
+        "scope": "native point/route table reachability; no event or game-state simulation",
+    }
+    return record, sorted(issues)

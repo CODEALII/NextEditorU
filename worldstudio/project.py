@@ -471,10 +471,17 @@ class WorldProject:
                 raise ValueError(f'Camera source changed or is missing: {name}')
         return self
 
-    def export(self, output):
+    def export(self, output, *, graph_profile=None):
         errors = self.validate()
         if errors:
             raise ValueError('\n'.join(errors))
+        graph_validation = None
+        if graph_profile is not None:
+            from .graph_validation import validate_native_project_profile
+            graph_validation, profile_issues = validate_native_project_profile(
+                self, graph_profile)
+            if profile_issues:
+                raise ValueError('Graph validation failed:\n' + '\n'.join(profile_issues))
         if sha(self.source.read_bytes()) != self.source_sha256:
             raise ValueError('Source archive has changed; reload it before exporting')
         output = Path(output).resolve()
@@ -532,6 +539,7 @@ class WorldProject:
             'entry_changes': entry_changes,
             'bfres_unchanged': patched_model == self.model, 'game_tested': False,
             'terrain_exported': geometry_report is not None, 'geometry': geometry_report,
+            'graph_validation': graph_validation,
             'bone_renames': rename_reports,
             'camera_files': {n: {'source_sha256': sha(self.camera_original[n]), 'output_sha256': sha(v)}
                              for n,v in camera_outputs.items()},

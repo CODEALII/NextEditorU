@@ -14,6 +14,10 @@
   JSON profile for Validate and SZS export and clears it when switching source
   archives. This offline gate does not demonstrate route traversal or
   progression in Cemu.
+- A successful profile-gated export records the normalized profile, its
+  canonical SHA-256 and the static check result in the sidecar manifest.
+  `verify-export --profile` recalculates and compares this provenance; the
+  manifest continues to mark `game_tested:false`.
 
 ## Ambiguous albedo references in local world models — 2026-10-22
 
