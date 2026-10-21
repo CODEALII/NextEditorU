@@ -1120,15 +1120,18 @@ camera behavior and a fully playable custom world remain open.
 - The WebGL viewer now reads each supported base-color `_a0` sampler's GX2 S/T
   wrap values. Wrap and Mirror use their corresponding WebGL modes; GX2 Clamp
   is labeled as a `CLAMP_TO_EDGE` approximation; unsupported MirrorOnce and
-  border modes display a warning and use Repeat. The local W1 scan found seven
-  non-Repeat base samplers, all on power-of-two textures. This remains a base
-  texture preview feature and does not resolve shader UV selection or SRT.
+  border modes display a warning and use Repeat. A scan of all twelve supplied
+  worlds found 76 non-Repeat albedo materials among 415 supported entries; all
+  their textures are power-of-two, and the world-model regression now checks
+  that condition. This remains a base-texture preview feature and does not
+  resolve shader UV selection or SRT.
 - Fixed relative terrain references in preview projects so opening, saving in
   place, and Save As to another directory keep pointing at the same OBJ.
 - Terrain export now records maximum nearest-source XZ distance for baked-light
   UV projection in the export manifest and warns above the default 128-unit
   review threshold. The editor surfaces that warning; it is not visual QA.
-- Verification: **270 tests passed in 257.844 seconds**; `compileall` and
-  `git diff --check` passed. The clean Cemu check remained at its title prompt,
-  so route movement, level launches, progression, and terrain appearance remain
-  unverified.
+- Verification: **270 tests passed in 257.844 seconds**; the expanded twelve-
+  world sampler/NPOT regression passed separately in 39.777 seconds. `compileall`
+  and `git diff --check` passed. The clean Cemu check remained at its title
+  prompt, so route movement, level launches, progression, and terrain
+  appearance remain unverified.

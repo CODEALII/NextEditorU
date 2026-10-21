@@ -334,6 +334,19 @@ class LocalTextureReferenceTests(unittest.TestCase):
                     self.assertEqual(bool(fallback_reason),
                                      has_uvs and shape['material'] in failed_materials,
                                      shape['name'])
+                    if has_texture:
+                        wrap = shape.get('textureWrap')
+                        self.assertIsInstance(wrap, dict, shape['name'])
+                        self.assertIn(wrap.get('s'), ('repeat', 'mirror', 'clamp'),
+                                      shape['name'])
+                        self.assertIn(wrap.get('t'), ('repeat', 'mirror', 'clamp'),
+                                      shape['name'])
+                        if wrap['s'] != 'repeat' or wrap['t'] != 'repeat':
+                            texture = textures[shape['texture']]
+                            for dimension in (texture['width'], texture['height']):
+                                self.assertGreater(dimension, 0, shape['name'])
+                                self.assertEqual(dimension & (dimension - 1), 0,
+                                                 f'{world}/{shape["material"]} has NPOT texture wrap')
                     if fallback_reason:
                         self.assertLessEqual(len(fallback_reason), 240, shape['name'])
                 for texture in textures.values():
