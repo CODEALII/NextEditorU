@@ -1411,3 +1411,20 @@ camera behavior and a fully playable custom world remain open.
   Keep the Cemu process and save isolated until a controlled hold can be run;
   do not compare its save against the earlier snapshots while this session is
   live.
+
+## 2026-10-21 — Direct profile reaches the World 1 map
+
+- Continued isolated Direct profile PID 8868 through the title, save and
+  controller screens into the World 1 map. Mario is visibly at the Crushing-Cogs
+  Tower. `tools/cemu_preflight.py` passes with the expected pack, current run
+  log and keyboard configuration; the runtime archive and packaged copy both
+  hash to `8a473f413788cb5b3fab07f5f6ae174a6948159b39cc6019df97ef7ae24c3d35`.
+- A single `D` press, a `Z` press, and a click on the tower entrance did not
+  move Mario off the tower or launch a level. The run remains on the map. The
+  Computer Use API sends key presses without a duration, so this does not
+  reproduce a sustained stick hold and cannot show that the route is broken.
+- This supersedes the earlier statement that Direct remained in title/demo
+  flow. It verifies map loading for that exact build only. The modified
+  W102-to-W103 traversal, course entry, progression, persistence and terrain
+  appearance remain unverified; Chain PID 19444 is still open for its separate
+  test, so do not compare its save snapshot yet.

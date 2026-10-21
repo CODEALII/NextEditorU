@@ -25,13 +25,23 @@
   to W102. Therefore the controlled first-node movement does not exercise the
   modified W102-to-W103 link. That link uses `RW102W1T0` and `RW1T0W103` and
   still needs a controlled traversal test. The Direct profile activated the expected
-  archive (`8a473f413788cb5b3fab07f5f6ae174a6948159b39cc6019df97ef7ae24c3d35`);
-  it remained in the title/demo flow and did not reach the map, so it provides
-  no movement result.
+  archive (`8a473f413788cb5b3fab07f5f6ae174a6948159b39cc6019df97ef7ae24c3d35`)
+  and, in a later run documented below, reached the World 1 map. Its movement
+  and course entry are not verified.
 - In a later live check at Acorn Plains-2, two individual `W` presses changed
   Mario's facing but did not move him off the node. The Computer Use key API
   exposes only a press, not a timed hold, so these taps do not test the required
   travel duration and do not show that the route is broken.
+- Follow-up Direct-profile run (PID 8868, separate MLC): the game passed the
+  title/save/controller flow and loaded the World 1 map at the Crushing-Cogs
+  Tower. Its active-pack log and archive preflight match the expected
+  `WorldStudioChain` build exactly (SHA-256
+  `8a473f413788cb5b3fab07f5f6ae174a6948159b39cc6019df97ef7ae24c3d35`). A
+  single `D` tap, `Z` tap, and mouse click on Mario/the tower entrance left the
+  map open and Mario at the tower. This is a verified map-load result, not a
+  traversal or level-entry result. The Computer Use API only sends key presses,
+  so this run could not reproduce the two-second held input from the earlier
+  Clean/Chain comparison.
 - Before the latest Chain retest, Clean, Chain and Direct passed
   `tools/cemu_preflight.py` with current-run title/module and pack checks, and
   `--compare-save-to` confirmed byte-identical save snapshots. The current Chain
