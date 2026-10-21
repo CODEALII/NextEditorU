@@ -44,6 +44,46 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertNotIn("</script><script>alert(1)", page)
         self.assertIn("<\\/script>", page)
 
+    def test_vertex_color_diagnostic_packs_raw_channels_and_reports_display_clamping(self):
+        node = shutil.which("node")
+        colors = [(0.0, 0.5, 1.0, 1.0), (1.25, -0.25, 0.5, 0.9),
+                  (0.2, 0.3, 0.4, 1.0)]
+        page = build_document({"shapes": [{"name": "colored", "material": "mat",
+                                            "positions": [(0, 0, 0), (1, 0, 0), (0, 1, 0)],
+                                            "normals": [(0, 0, 1)] * 3,
+                                            "indices": [0, 1, 2], "vertexColors": colors,
+                                            "vertexAttributes": {"_c0": {"format": 0x80f}}}],
+                               "nodes": [], "routes": []})
+        embedded = json.loads(re.search(r"const scene=(.*?);", page).group(1))
+        flat = [value for color in colors for value in color]
+        self.assertEqual(base64.b64decode(embedded["shapes"][0]["vertexColorsPacked"]),
+                         struct.pack("<12f", *flat))
+        self.assertIn('<button id="vertex-colors" disabled>_c0 colors off</button>', page)
+        self.assertIn("attribute vec4 aVertexColor", page)
+        self.assertIn("gl.vertexAttribPointer(cLoc,4,gl.FLOAT,false,0,0)", page)
+        self.assertIn("clamp(vVertexColor.rgb,0.0,1.0)", page)
+        self.assertIn("shader behavior and the role of alpha are not evaluated.", page)
+        self.assertIn("BFRES _c0${formatLabel} · raw ${rawRange}", page)
+        if not node:
+            self.skipTest("Node.js is required to exercise vertex color statistics")
+        start = page.index("function vertexColorMetrics(")
+        end = page.index("\nif(gl)", start)
+        probe = page[start:end] + "\nconst values=" + json.dumps(flat) + ";" + \
+            "console.log(JSON.stringify(vertexColorMetrics(new Float32Array(values))));"
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True,
+                                text=True, encoding="utf-8")
+        metrics = json.loads(result.stdout)
+        self.assertEqual(metrics["vertexCount"], 3)
+        self.assertEqual(metrics["finiteComponents"], 12)
+        self.assertEqual(metrics["outOfDisplayRangeComponents"], 2)
+        for actual, expected in zip(metrics["min"], [0, -0.25, 0.4, 0.9]):
+            self.assertAlmostEqual(actual, expected)
+        for actual, expected in zip(metrics["max"], [1.25, 0.5, 1, 1]):
+            self.assertAlmostEqual(actual, expected)
+        with self.assertRaisesRegex(ValueError, "match the position count"):
+            build_document({"shapes": [{"positions": [(0, 0, 0)],
+                                         "vertexColors": []}], "nodes": [], "routes": []})
+
     def test_texture_fallback_reason_is_shown_as_inspector_text(self):
         page = build_document({"shapes": [], "nodes": [], "routes": []})
         self.assertIn("textureWarning:shape.textureWarning||''", page)

@@ -1214,5 +1214,27 @@ camera behavior and a fully playable custom world remain open.
 - Verification: **287 tests passed in 254.168 seconds**; the local
   `test_terrain_project_roundtrip_export_and_reopen` passed separately in
   19.988 seconds. Mesh tests (33), `compileall`, and `git diff --check` passed.
-- Next: inspect local `_c0` vertex-color layouts and add a clearly labeled
-  diagnostic preview if its format and viewer data path can be verified.
+- Follow-up: `_c0` format and viewer inspection are recorded in the next
+  milestone.
+
+## 2026-10-21 — `_c0` vertex-color diagnostic preview
+
+- Scanned all twelve supplied per-world BFRES files read-only: `_c0` appears on
+  319 shapes, with 289 GX2 `0x00A` UNorm8x4 shapes (455,212 vertices) and 30
+  `0x80F` half-float4 shapes (46,546 vertices). All decoded values are finite;
+  120 half-float components exceed the 0–1 display range. W1 contains 21 and
+  one shape in those respective formats.
+- Added bounds-checked `_c0` decoding for the two observed layouts. The viewer
+  packs the raw values, offers an optional `_c0 colors` mode, clamps RGB only
+  for display, and reports raw RGBA ranges plus out-of-range counts in the
+  selected-mesh inspector. Unsupported formats remain labeled as undecoded.
+- Headless Chrome/SwiftShader loaded the local W1 page with 42 shapes and 20
+  albedos, enabled `_c0 colors`, and displayed the selected shape's format and
+  ranges without a WebGL error overlay. Ignored capture:
+  `local/evidence/preview-w1-c0-diagnostic.png`.
+- Verification: **289 tests passed in 257.500 seconds**; focused mesh/preview
+  suites passed 66 tests, and `compileall` plus `git diff --check` passed.
+  Stored channel inspection does not establish shader use, alpha behavior,
+  material fidelity, Cemu appearance, or gameplay.
+- Next: inspect the W1 shader-interface bindings for `_c0` and record whether
+  the local shader metadata provides evidence of an input binding.

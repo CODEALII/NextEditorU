@@ -18,6 +18,7 @@ DEFAULT_LIGHTMAP_PROJECTION_WARNING_DISTANCE = 128.0
 MAX_FACE_CORNERS = 1024
 _UV_ATTRIBUTE_BYTES = {0x80d: 8, 0x7: 4, 0x207: 4, 0x4: 2}
 _POSITION_ATTRIBUTE_BYTES = {0x811: 12, 0x80f: 8}
+_VERTEX_COLOR_ATTRIBUTE_BYTES = {0x0a: 4, 0x80f: 8}
 
 
 def _decode_position(data, offset, fmt):
@@ -59,6 +60,15 @@ def _decode_uv_attribute(data, offset, fmt):
     if fmt == 0x4:  # GX2 Format_8_8_UNorm
         return tuple(value / 255. for value in struct.unpack_from('>2B', data, offset))
     return None
+
+
+def _decode_vertex_color_attribute(data, offset, fmt):
+    """Decode supported BFRES `_c0` data without assigning shader meaning."""
+    if fmt == 0x0a:  # GX2 Format_8_8_8_8_UNorm
+        return tuple(value / 255. for value in struct.unpack_from('>4B', data, offset))
+    if fmt == 0x80f:  # GX2 Format_16_16_16_16_Single
+        return struct.unpack_from('>4e', data, offset)
+    raise ValueError(f'Unsupported vertex color format 0x{fmt:x}')
 
 
 def extract_rigid_model(data, model=DEFAULT_MODEL):
@@ -127,6 +137,15 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
         for name, (offset, fmt) in uv_attributes.items():
             if offset + _UV_ATTRIBUTE_BYTES[fmt] > stride or size < count * stride:
                 raise ValueError(f'{shape_name}: texture-coordinate attribute {name} exceeds its allocation')
+        color_attribute = attrs.get('_c0')
+        color_format = color_attribute[1] if color_attribute else None
+        vertex_colors = None
+        if color_format in _VERTEX_COLOR_ATTRIBUTE_BYTES:
+            color_offset = color_attribute[0]
+            color_width = _VERTEX_COLOR_ATTRIBUTE_BYTES[color_format]
+            if color_offset + color_width > stride or size < count * stride:
+                raise ValueError(f'{shape_name}: vertex color attribute exceeds its allocation')
+            vertex_colors = []
         positions, normals = [], []
         uv_values = {name: [] for name in uv_attributes}
         for index in range(count):
@@ -148,6 +167,11 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
                 if not all(math.isfinite(v) and abs(v) <= 1e5 for v in uv):
                     raise ValueError(f'{shape_name}: invalid texture coordinates in {name} at vertex {index}')
                 uv_values[name].append(uv)
+            if vertex_colors is not None:
+                color = _decode_vertex_color_attribute(data, base + color_offset, color_format)
+                if not all(math.isfinite(value) for value in color):
+                    raise ValueError(f'{shape_name}: invalid vertex color in _c0 at vertex {index}')
+                vertex_colors.append(color)
             transformed_position = tuple(
                 sum(bone_linear[axis][column] * position[column] for column in range(3)) +
                 bone_position[axis] for axis in range(3))
@@ -204,6 +228,8 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
             extracted['uvAttributes'] = uv_values
         if '_u0' in uv_values:
             extracted['uvs'] = uv_values['_u0']
+        if vertex_colors is not None:
+            extracted['vertexColors'] = vertex_colors
         result.append(extracted)
     if not result:
         raise ValueError(f'{model}: no supported shapes found')

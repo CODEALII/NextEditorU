@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import worldstudio.mesh as mesh
-from worldstudio.mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model, replace_rigid_mesh
+from worldstudio.mesh import (DEFAULT_SHAPE, _decode_vertex_color_attribute, _geometry,
+                              extract_rigid_model, replace_rigid_mesh)
 from worldstudio.archive import Archive
 from worldstudio.bfres import Skeletons
 
@@ -149,6 +150,17 @@ class MeshTests(unittest.TestCase):
                          {'format': 0x80d, 'offset': 16})
         self.assertEqual(shapes[0]['vertexAttributes']['_u1'],
                          {'format': 7, 'offset': 24})
+
+    def test_supported_vertex_color_formats_decode_without_clamping_source_values(self):
+        data = struct.pack('>4B4e', 0, 64, 128, 255, 0.25, 1.5, -0.5, 1.0)
+
+        unorm = _decode_vertex_color_attribute(data, 0, 0x0a)
+        half_float = _decode_vertex_color_attribute(data, 4, 0x80f)
+
+        self.assertEqual(unorm, (0.0, 64 / 255, 128 / 255, 1.0))
+        self.assertEqual(half_float, (0.25, 1.5, -0.5, 1.0))
+        with self.assertRaisesRegex(ValueError, 'Unsupported vertex color format'):
+            _decode_vertex_color_attribute(data, 0, 0x123)
 
     def test_half_float_vec4_positions_decode_with_unit_homogeneous_w(self):
         data = bytearray(fixture())
@@ -476,6 +488,14 @@ class LocalDumpMeshTests(unittest.TestCase):
         self.assertEqual(Counter(name for shape in shapes
                                  for name in shape.get('uvAttributes', {})),
                          {'_u0': 42, '_u1': 42, '_u2': 13})
+        colored_shapes = [shape for shape in shapes if '_c0' in shape['vertexAttributes']]
+        self.assertEqual(Counter(shape['vertexAttributes']['_c0']['format']
+                                 for shape in colored_shapes), {0x0a: 21, 0x80f: 1})
+        self.assertTrue(all(len(shape['vertexColors']) == len(shape['positions'])
+                            for shape in colored_shapes))
+        self.assertTrue(all(math.isfinite(value)
+                            for shape in colored_shapes
+                            for color in shape['vertexColors'] for value in color))
         self.assertTrue(all(len(values) == len(shape['positions'])
                             for shape in shapes
                             for values in shape.get('uvAttributes', {}).values()))
