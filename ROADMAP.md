@@ -4,12 +4,14 @@ World Studio is an offline research prototype. Items below describe work still n
 
 ## Highest priority: verify route movement
 
-The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still failed. Retest with one known Cemu window, the World Studio pack visibly enabled, and an input device mapped to that window. Then verify the original route as a control, the custom route, level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
+The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still failed. The isolated baseline window and keyboard mapping are now identified, yet computer-use taps do not reach the emulated controller. First obtain a working input source; then compare baseline and patched routes in the same profile and verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
 
-The isolated `cemu-island-mainlight` process now has a log confirming both the
+The isolated `cemu-island-mainlight` process has a log confirming both the
 World Studio Chain and crash-fix packs activated and reached the title screen.
-The saved profile maps keyboard input, but computer-use key taps did not advance
-the title prompt. A working game input source is still needed before route QA.
+In the isolated baseline window, Cemu displayed Acorn Plains-1 with a Keyboard
+profile mapping `D` to right, but neither a `D` nor Right key tap moved Mario.
+Computer-use input is not a usable game controller here; a working input source
+is still needed before baseline/patch route QA.
 
 ## Rendering fidelity
 

@@ -336,3 +336,13 @@ camera behavior and a fully playable custom world remain open.
   `local/evidence/preview-w1-pick-rAF.png` (ignored local evidence). Full
   regression: **127 tests passed in 97.515 seconds**; `compileall`,
   `git diff --check`, and local W1 graph validation passed.
+
+## 2026-10-21 — Cemu baseline input retest
+
+- Identified the isolated baseline Cemu window by executable path and confirmed
+  its GamePad/Keyboard profile maps `D` to right. The game was at the Acorn
+  Plains-1 node. After dismissing the open input-settings panel, both `D` and
+  Right-arrow taps left Mario visibly stationary.
+- This fails the baseline input check, so it cannot distinguish route data from
+  emulator input. Logged the evidence in `docs/INTEGRATION.md`; a physical or
+  otherwise accepted controller source is still needed for traversal QA.

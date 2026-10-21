@@ -46,6 +46,12 @@
   path bones are present. This proves the declared resource references exist,
   not that Cemu can move along them. The mainlight profile has no captured boot
   log, so activation and runtime behavior for that exact pack remain unverified.
+- On 2026-10-21, the isolated baseline process was selected by its exact path
+  (`build/cemu-island-baseline/Cemu.exe`) and shown at the Acorn Plains-1 node.
+  Its open input panel confirmed Wii U GamePad / Keyboard and `D` on the right
+  stick. After closing that panel, a `D` tap and a Right-arrow tap both left
+  Mario on the same node. This verifies neither map motion nor the patch; the
+  computer-use key taps are not reaching the emulated controller in this run.
 
 Earlier attempts displayed black after initial dialogs. They were inconclusive:
 input setup, UI navigation and CSV quoting changed before the successful patched
