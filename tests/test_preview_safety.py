@@ -493,12 +493,22 @@ console.log(JSON.stringify({direction:Array.from(previewLightDirection),intensit
         page = build_document({"shapes": [{"name": "mesh", "material": "mat",
                                             "positions": [], "normals": [],
                                             "indices": [0, 1, 2],
-                                            "uvs": [(0, 0), (1, 0), (2, -1)]}],
+                                            "uvs": [(0, 0), (1, 0), (2, -1)],
+                                            "uvAttributes": {"_u0": [(0, 0), (1, 0), (2, -1)],
+                                                             "_u1": [(0.25, 0.75), (0.5, 0.5), (1, 0)]},
+                                            "vertexAttributes": {"_u0": {"format": 0x80d},
+                                                                 "_u1": {"format": 0x7}}}],
                                "nodes": [], "routes": []})
         self.assertIn("uvsPacked:shape.uvsPacked||null", page)
-        self.assertIn("Raw UV layout · untransformed", page)
-        self.assertIn("no texture SRT or sampler transform is applied", page)
+        self.assertIn("uvAttributesPacked:shape.uvAttributesPacked||{}", page)
+        self.assertIn("Raw BFRES ${name}${formatLabel} · untransformed", page)
+        self.assertIn("no texture SRT or sampler transform is applied; shader input names do not establish sampler usage", page)
         self.assertIn("V increases upward", page)
+        embedded = json.loads(re.search(r"const scene=(.*?);", page).group(1))
+        shape = embedded["shapes"][0]
+        self.assertEqual(base64.b64decode(shape["uvAttributesPacked"]["_u1"]),
+                         struct.pack("<6f", 0.25, 0.75, 0.5, 0.5, 1, 0))
+        self.assertNotIn("_u0", shape["uvAttributesPacked"])
         start = page.index("function uvChartMetrics(")
         end = page.index("\nfunction drawUvChart", start)
         metrics_helper = page[start:end]
@@ -523,6 +533,39 @@ console.log(JSON.stringify({stats,drawn:drawUvChart(canvas,uvs,indices,stats)}))
             "triangleCount": 3, "validTriangleCount": 1,
             "invalidTriangleCount": 2, "bounds": [0, -1, 2, 0]})
         self.assertEqual(output["drawn"], 1)
+
+        unpack_start = page.index("function unpackArray(")
+        packed_helpers = page[unpack_start:page.index("\nif(gl)", unpack_start)]
+        uv_diagnostic = page[page.index("function addUvDiagnostic("):page.index("\nfunction selectMesh")]
+        u0 = base64.b64encode(struct.pack("<6f", 0, 0, 1, 0, 2, -1)).decode("ascii")
+        u1 = base64.b64encode(struct.pack("<6f", .25, .75, .5, .5, 1, 0)).decode("ascii")
+        triangle = base64.b64encode(struct.pack("<3H", 0, 1, 2)).decode("ascii")
+        selector_probe = packed_helpers + "\n" + metrics_helper + "\n" + draw_helper + "\n" + uv_diagnostic + r'''
+const context={clearRect(){},fillRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},
+  strokeRect(){},closePath(){},fillText(){}};
+function element(tag){return{tag,children:[],events:{},appendChild(child){this.children.push(child);if(this.tag==='select'&&this.children.length===1)this.value=child.value},
+  setAttribute(){},addEventListener(name,callback){this.events[name]=callback},replaceChildren(...children){this.children=children},
+  getContext(){return context}}}
+global.document={createElement:element};
+const panel=element('div'),mesh={uvsPacked:'U0',uvAttributesPacked:{_u1:'U1'},indicesPacked:'IDX',
+  vertexAttributes:{_u0:{format:2061},_u1:{format:7}}};
+global.atob=value=>Buffer.from(value==='U0'?'__U0__':value==='U1'?'__U1__':'__IDX__','base64').toString('binary');
+addUvDiagnostic(panel,mesh);
+const chartPanel=panel.children.find(item=>item.className==='uv-diagnostic');
+if(!chartPanel)throw Error(panel.children.map(item=>item.textContent).join('|'));
+const selector=chartPanel.children[1],title=chartPanel.children[0];
+const initial={label:title.textContent,options:selector.children.map(item=>item.textContent)};
+selector.value='_u1';selector.events.change();
+console.log(JSON.stringify({initial,selected:title.textContent,stats:chartPanel.children[3].children.map(item=>item.textContent)}));
+'''.replace('__U0__', u0).replace('__U1__', u1).replace('__IDX__', triangle)
+        result = subprocess.run([node, "-e", selector_probe], capture_output=True,
+                                text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        chart = json.loads(result.stdout)
+        self.assertEqual(chart["initial"]["label"], "Raw BFRES _u0 · format 0x80D · untransformed")
+        self.assertEqual(chart["initial"]["options"], ["_u0 · format 0x80D", "_u1 · format 0x7"])
+        self.assertEqual(chart["selected"], "Raw BFRES _u1 · format 0x7 · untransformed")
+        self.assertTrue(any(value.startswith("Bounds U 0.250…1.000") for value in chart["stats"]))
 
     def test_shader_option_candidate_is_embedded_and_labeled_as_unresolved(self):
         metadata = {

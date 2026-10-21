@@ -940,8 +940,10 @@ class WorldStudio(ttk.Frame):
                         if shape["name"] == DEFAULT_SHAPE:
                             shape.update(positions=vertices, normals=normals, indices=indices,
                                          material="World Studio imported grass mesh")
+                            shape["uvAttributes"] = {}
                             if uvs is not None and all(uv is not None for uv in uvs):
                                 shape["uvs"] = uvs
+                                shape["uvAttributes"]["_u0"] = uvs
                             else:
                                 shape.pop("uvs", None)
                             break

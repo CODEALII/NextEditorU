@@ -140,6 +140,8 @@ The checked-in [Tsuru AGL material binding](https://github.com/Zenith-Team/Tsuru
 
 For each supported static W1 shape, the material inspector also joins the program's declared vertex input symbol to the exact BFRES `ShaderAssign` attribute target, then checks whether that named source attribute exists in the shape and reports its stored vertex format and offset. For example, route input `_u4` / `aTexCoordRouteMask` maps to BFRES `_u2` at format `0x80D`, offset 24; `_u3` / `aTexCoordBake0` maps to `_u1` at format `0x7`, offset 44. `0x7` is reported as a raw format identifier only; the preview does not decode that representation or infer which UV set a sampler uses from names alone.
 
+The static geometry extractor now decodes all named `_uN` attributes for the four tested 2-component GX2 formats, not only `_u0`. In the local W1 model `_u1` appears on all 42 supported shapes as `0x7` UNorm16x2, while `_u2` appears on 13 shapes as `0x80D` float32x2. The inspector can switch its raw chart between supported sets and reports each stored format. This exposes the source coordinates for the declared `_u3`/`_u4` bindings, but does not establish shader data flow, texture sampler association, or runtime appearance.
+
 Reproduce the local metadata view with:
 
 ```

@@ -138,11 +138,23 @@ class MeshTests(unittest.TestCase):
                 for actual, wanted in zip(shape['uvs'][0], expected):
                     self.assertAlmostEqual(actual, wanted, places=6)
 
+    def test_extracts_multiple_named_uv_attributes(self):
+        data = bytearray(fixture())
+        for index, values in enumerate(((32768, 16384), (65535, 0), (0, 65535), (1, 2))):
+            struct.pack_into('>2H', data, 0x600 + index * 28 + 24, *values)
+
+        shape = extract_rigid_model(bytes(data))[0]
+
+        self.assertEqual(shape['uvAttributes']['_u0'], shape['uvs'])
+        self.assertEqual(shape['uvAttributes']['_u1'][0], (32768 / 65535, 16384 / 65535))
+        self.assertEqual(shape['uvAttributes']['_u1'][1], (1., 0.))
+        self.assertEqual(len(shape['uvAttributes']['_u1']), len(shape['positions']))
+
     def test_supported_uv_format_must_fit_vertex_stride(self):
         data = bytearray(fixture())
         struct.pack_into('>H', data, 0x41e, 27)
         struct.pack_into('>I', data, 0x420, 0x4)
-        with self.assertRaisesRegex(ValueError, 'texture-coordinate attribute exceeds'):
+        with self.assertRaisesRegex(ValueError, 'texture-coordinate attribute .* exceeds'):
             extract_rigid_model(bytes(data))
 
     def test_far_uv_projection_is_exact_without_distance_scaled_grid_search(self):
@@ -238,6 +250,12 @@ class LocalDumpMeshTests(unittest.TestCase):
         self.assertEqual(Counter(shape['vertexAttributes']['_u0']['format'] for shape in shapes),
                          {0x80d: 36, 0x7: 3, 0x207: 2, 0x4: 1})
         self.assertTrue(all(len(shape['uvs']) == len(shape['positions']) for shape in shapes))
+        self.assertEqual(Counter(name for shape in shapes
+                                 for name in shape.get('uvAttributes', {})),
+                         {'_u0': 42, '_u1': 42, '_u2': 13})
+        self.assertTrue(all(len(values) == len(shape['positions'])
+                            for shape in shapes
+                            for values in shape.get('uvAttributes', {}).values()))
         self.assertTrue(all(math.isfinite(value) for shape in shapes for uv in shape['uvs']
                             for value in uv))
         grass=next(shape for shape in shapes if shape['name']=='polySurface1489__mtGrass')

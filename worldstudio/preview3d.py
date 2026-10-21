@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from array import array
 import base64
+import math
 import sys
 import json
 import tempfile
@@ -42,7 +43,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 #error{display:none;position:absolute;inset:0;z-index:4;place-items:center;padding:24px;text-align:center;color:#ffe6b3;background:rgba(7,12,18,.94)}
 @media(max-width:900px){.side{width:245px;right:12px;top:112px;bottom:58px}.top{left:12px;right:12px;align-items:flex-start;flex-wrap:wrap}.actions{top:46px;right:270px;justify-content:flex-start}.badges{display:none}.bottom{left:12px;right:12px}.labels{right:270px}}
 </style>
-<style>.inspector{min-height:0;overflow-y:auto;overscroll-behavior:contain}.texture-srt,.shader-interface{margin-top:3px;padding:6px 8px;border:1px solid #293949;border-radius:8px;background:#101a25}.texture-srt summary,.shader-interface summary{cursor:pointer;color:#d8e7f2;font-size:10px}.texture-srt .inspector-row,.shader-interface .inspector-row{display:block;margin-top:5px;font-size:10px;font-variant-numeric:tabular-nums}.uv-diagnostic{margin-top:6px;padding:7px;border:1px solid #293949;border-radius:8px;background:#101a25}.uv-diagnostic strong{display:block;font-size:11px}.uv-diagnostic canvas{position:static;inset:auto;width:100%;height:auto;aspect-ratio:16/9;margin-top:6px;border:1px solid #344456;border-radius:5px;display:block;background:#101a25}.uv-diagnostic .inspector-row{display:block;margin-top:4px;font-size:10px;font-variant-numeric:tabular-nums}</style>
+<style>.inspector{min-height:0;overflow-y:auto;overscroll-behavior:contain}.texture-srt,.shader-interface{margin-top:3px;padding:6px 8px;border:1px solid #293949;border-radius:8px;background:#101a25}.texture-srt summary,.shader-interface summary{cursor:pointer;color:#d8e7f2;font-size:10px}.texture-srt .inspector-row,.shader-interface .inspector-row{display:block;margin-top:5px;font-size:10px;font-variant-numeric:tabular-nums}.uv-diagnostic{margin-top:6px;padding:7px;border:1px solid #293949;border-radius:8px;background:#101a25}.uv-diagnostic strong{display:block;font-size:11px}.uv-diagnostic select{width:100%;margin-top:6px;padding:6px;border:1px solid #344456;border-radius:6px;color:#e6eef7;background:#172433}.uv-diagnostic canvas{position:static;inset:auto;width:100%;height:auto;aspect-ratio:16/9;margin-top:6px;border:1px solid #344456;border-radius:5px;display:block;background:#101a25}.uv-diagnostic .inspector-row{display:block;margin-top:4px;font-size:10px;font-variant-numeric:tabular-nums}</style>
 </head>
 <body>
 <div id="stage"><canvas id="view"></canvas>
@@ -125,7 +126,7 @@ if(shape.maskTexture&&!maskPayload)throw Error('Missing BC4 texture payload for 
 const bc4Payloads={};for(const [slot,key] of Object.entries(shape.bc4Samplers||{})){const payload=typeof key==='string'?scene.maskTextures?.[key]:key;if(!payload)throw Error('Missing BC4 texture payload for '+slot+':'+key);bc4Payloads[slot]=payload}if(maskPayload&&!bc4Payloads._o1)bc4Payloads._o1=maskPayload;const samplerPreviews={};for(const [slot,key] of Object.entries(shape.samplerTextures||{})){if(slot!=='_x0'&&slot!=='_x1')continue;const payload=typeof key==='string'?scene.maskTextures?.[key]:key;if(!payload)throw Error('Missing sampler texture payload for '+slot+':'+key);samplerPreviews[slot]=payload}
 const tangentData=normalPayload?makeTangents(positions,normals,uvs,indices):null;
 const bc4Textures=Object.fromEntries(Object.entries(bc4Payloads).map(([slot,payload])=>[slot,createTexture(payload,'bc4-unorm-'+slot)]));
-return{name:shape.name,material:shape.material,textureName:typeof shape.texture==='string'?shape.texture:(shape.texture?.name||''),normalTextureName:typeof shape.normalTexture==='string'?shape.normalTexture:(shape.normalTexture?.name||''),diagnosticTextureName:typeof shape.diagnosticTexture==='string'?shape.diagnosticTexture:(shape.diagnosticTexture?.name||''),maskTextureName:typeof shape.maskTexture==='string'?shape.maskTexture:(shape.maskTexture?.name||''),texturePreview:texturePayload,normalPreview:normalPayload,diagnosticPreview:diagnosticPayload,maskPreview:bc4Payloads._o1||maskPayload,bc4Previews:bc4Payloads,samplerPreviews,bc4Textures,center:meshBounds.center,radius:meshBounds.radius,color:colorFor(shape.material,index),vertexCount:positions.length/3,triangleCount:Math.floor((shape.indexCount??shape.indices.length)/3),hasUvs:!!uvs,uvsPacked:shape.uvsPacked||null,indicesPacked:shape.indicesPacked||null,count:shape.indexCount??shape.indices.length,wireCount:wireIndices.length,normalOverlay:normalSegments.length?{buffer:buffer(normalSegments),count:normalSegments.length/3}:null,visible:true,pos:buffer(positions),normal:buffer(normals),tangent:tangentData?buffer(tangentData):null,uv:uvs?buffer(uvs):null,texture:texturePayload?createTexture(texturePayload,'base'):null,normalTexture:normalPayload?createTexture(normalPayload,'bc5-snorm'):null,diagnosticTexture:diagnosticPayload?createTexture(diagnosticPayload,'bc5-unorm'):null,maskTexture:bc4Textures._o1||null,index:buffer(indices,gl.ELEMENT_ARRAY_BUFFER),wireIndex:buffer(wireIndices,gl.ELEMENT_ARRAY_BUFFER)}
+return{name:shape.name,material:shape.material,textureName:typeof shape.texture==='string'?shape.texture:(shape.texture?.name||''),normalTextureName:typeof shape.normalTexture==='string'?shape.normalTexture:(shape.normalTexture?.name||''),diagnosticTextureName:typeof shape.diagnosticTexture==='string'?shape.diagnosticTexture:(shape.diagnosticTexture?.name||''),maskTextureName:typeof shape.maskTexture==='string'?shape.maskTexture:(shape.maskTexture?.name||''),texturePreview:texturePayload,normalPreview:normalPayload,diagnosticPreview:diagnosticPayload,maskPreview:bc4Payloads._o1||maskPayload,bc4Previews:bc4Payloads,samplerPreviews,bc4Textures,center:meshBounds.center,radius:meshBounds.radius,color:colorFor(shape.material,index),vertexCount:positions.length/3,triangleCount:Math.floor((shape.indexCount??shape.indices.length)/3),hasUvs:!!uvs,uvsPacked:shape.uvsPacked||null,uvAttributesPacked:shape.uvAttributesPacked||{},vertexAttributes:shape.vertexAttributes||{},indicesPacked:shape.indicesPacked||null,count:shape.indexCount??shape.indices.length,wireCount:wireIndices.length,normalOverlay:normalSegments.length?{buffer:buffer(normalSegments),count:normalSegments.length/3}:null,visible:true,pos:buffer(positions),normal:buffer(normals),tangent:tangentData?buffer(tangentData):null,uv:uvs?buffer(uvs):null,texture:texturePayload?createTexture(texturePayload,'base'):null,normalTexture:normalPayload?createTexture(normalPayload,'bc5-snorm'):null,diagnosticTexture:diagnosticPayload?createTexture(diagnosticPayload,'bc5-unorm'):null,maskTexture:bc4Textures._o1||null,index:buffer(indices,gl.ELEMENT_ARRAY_BUFFER),wireIndex:buffer(wireIndices,gl.ELEMENT_ARRAY_BUFFER)}
 })}catch(e){showError('Could not build the 3D preview: '+(e?.message||String(e)))}}
 const materials=new Map();for(const m of meshes)if(!materials.has(m.material))materials.set(m.material,m.color);
 const textureSrtByShape=new Map((scene.shapes||[]).map(shape=>[shape.name,shape.textureSrt||{}]));for(const mesh of meshes)mesh.textureSrt=textureSrtByShape.get(mesh.name)||{};
@@ -155,17 +156,20 @@ for(let triangle=0;triangle<totalTriangles;triangle+=sampleStep){const offset=tr
 context.stroke();context.fillStyle='#a9bac9';context.font='9px Segoe UI, sans-serif';context.fillText('U →',width-pad-23,height-4);context.fillText('V ↑',3,pad+5);return drawn
 }
 function addUvDiagnostic(selection,mesh){
-if(!mesh.uvsPacked)return;
+const packedUvSets={...(mesh.uvAttributesPacked||{})};if(mesh.uvsPacked&&!packedUvSets._u0)packedUvSets._u0=mesh.uvsPacked;
+const names=Object.keys(packedUvSets).sort((a,b)=>Number(a.slice(2))-Number(b.slice(2)));
+if(!names.length)return;
 try{
-const uvs=unpackArray(mesh.uvsPacked,Float32Array,4),indices=mesh.indicesPacked?unpackArray(mesh.indicesPacked,Uint16Array,2):new Uint16Array(),stats=uvChartMetrics(uvs,indices);
-if(!stats)return;
-const panel=document.createElement('div');panel.className='uv-diagnostic';const title=document.createElement('strong');title.textContent='Raw UV layout · untransformed';panel.appendChild(title);
-if(!stats.bounds){const empty=document.createElement('span');empty.className='inspector-row';empty.textContent='UV values are present but non-finite; no chart can be drawn.';panel.appendChild(empty);selection.appendChild(panel);return}
-const canvas=document.createElement('canvas');canvas.width=360;canvas.height=203;canvas.setAttribute('role','img');canvas.setAttribute('aria-label','Raw UV triangle layout; V increases upward');panel.appendChild(canvas);
-const drawn=drawUvChart(canvas,uvs,indices,stats),rows=[`Bounds U ${stats.bounds[0].toFixed(3)}…${stats.bounds[2].toFixed(3)} · V ${stats.bounds[1].toFixed(3)}…${stats.bounds[3].toFixed(3)}`,`Out-of-range UV vertices: ${stats.outOfRangeCount.toLocaleString()} / ${stats.finiteUvCount.toLocaleString()}`,`Triangles: ${stats.validTriangleCount.toLocaleString()} valid · ${stats.invalidTriangleCount.toLocaleString()} invalid${drawn<stats.validTriangleCount?` · display sampled ${drawn.toLocaleString()}`:''}`];
-if(stats.bounds.some(value=>Math.abs(value)>1024))rows.push('Chart clipped to ±1,024 UV units for readability.');
-for(const value of rows){const row=document.createElement('span');row.className='inspector-row';row.textContent=value;panel.appendChild(row)}
-const note=document.createElement('span');note.className='inspector-row';note.textContent='Raw coordinates only: no texture SRT or sampler transform is applied.';panel.appendChild(note);selection.appendChild(panel)
+const indices=mesh.indicesPacked?unpackArray(mesh.indicesPacked,Uint16Array,2):new Uint16Array();
+const panel=document.createElement('div');panel.className='uv-diagnostic';const title=document.createElement('strong');panel.appendChild(title);
+const selector=document.createElement('select');selector.setAttribute('aria-label','BFRES UV attribute');
+for(const name of names){const option=document.createElement('option'),format=mesh.vertexAttributes?.[name]?.format;option.value=name;option.textContent=`${name}${format===undefined?'':` · format 0x${Number(format).toString(16).toUpperCase()}`}`;selector.appendChild(option)}
+panel.appendChild(selector);
+const canvas=document.createElement('canvas');canvas.width=360;canvas.height=203;canvas.setAttribute('role','img');canvas.setAttribute('aria-label','Raw BFRES UV triangle layout; V increases upward');panel.appendChild(canvas);
+const rowsPanel=document.createElement('div');panel.appendChild(rowsPanel);
+const render=()=>{const name=selector.value,format=mesh.vertexAttributes?.[name]?.format,formatLabel=format===undefined?'':` · format 0x${Number(format).toString(16).toUpperCase()}`;title.textContent=`Raw BFRES ${name}${formatLabel} · untransformed`;rowsPanel.replaceChildren();const uvs=unpackArray(packedUvSets[name],Float32Array,4),stats=uvChartMetrics(uvs,indices);if(!stats){const empty=document.createElement('span');empty.className='inspector-row';empty.textContent='No UV coordinate pairs are available for this attribute.';rowsPanel.appendChild(empty);return}if(!stats.bounds){const empty=document.createElement('span');empty.className='inspector-row';empty.textContent='UV values are present but non-finite; no chart can be drawn.';rowsPanel.appendChild(empty);return}const drawn=drawUvChart(canvas,uvs,indices,stats),values=[`Bounds U ${stats.bounds[0].toFixed(3)}…${stats.bounds[2].toFixed(3)} · V ${stats.bounds[1].toFixed(3)}…${stats.bounds[3].toFixed(3)}`,`Out-of-range UV vertices: ${stats.outOfRangeCount.toLocaleString()} / ${stats.finiteUvCount.toLocaleString()}`,`Triangles: ${stats.validTriangleCount.toLocaleString()} valid · ${stats.invalidTriangleCount.toLocaleString()} invalid${drawn<stats.validTriangleCount?` · display sampled ${drawn.toLocaleString()}`:''}`];if(stats.bounds.some(value=>Math.abs(value)>1024))values.push('Chart clipped to ±1,024 UV units for readability.');for(const value of values){const row=document.createElement('span');row.className='inspector-row';row.textContent=value;rowsPanel.appendChild(row)}};
+selector.addEventListener('change',render);render();
+const note=document.createElement('span');note.className='inspector-row';note.textContent='Raw coordinates only: no texture SRT or sampler transform is applied; shader input names do not establish sampler usage.';panel.appendChild(note);selection.appendChild(panel)
 }catch(error){const warning=document.createElement('span');warning.className='inspector-row';warning.textContent='Could not build raw UV chart: '+(error?.message||String(error));selection.appendChild(warning)}
 }
 function selectMesh(mesh){
@@ -263,6 +267,32 @@ def build_document(scene: dict) -> str:
             if field == "indices":
                 shape["indexCount"] = len(shape[field])
             del shape[field]
+        uv_attributes = shape.pop("uvAttributes", None)
+        if uv_attributes is not None:
+            if not isinstance(uv_attributes, dict):
+                raise ValueError("UV attributes must be a name-to-coordinates mapping")
+            packed_uv_attributes = {}
+            for name, coordinates in uv_attributes.items():
+                if (not isinstance(name, str) or not name.startswith("_u") or
+                        not name[2:].isdecimal()):
+                    raise ValueError("Unsupported UV attribute name")
+                if name == "_u0" and "uvsPacked" in shape:
+                    continue
+                values = array("f")
+                for coordinate in coordinates:
+                    if not isinstance(coordinate, (list, tuple)) or len(coordinate) != 2:
+                        raise ValueError(f"UV attribute {name} must contain coordinate pairs")
+                    pair = tuple(float(value) for value in coordinate)
+                    if not all(math.isfinite(value) and abs(value) <= 1e5 for value in pair):
+                        raise ValueError(f"UV attribute {name} contains an invalid coordinate")
+                    values.extend(pair)
+                if values.itemsize != 4:
+                    raise ValueError("Platform array size is unsupported for UV attributes")
+                if sys.byteorder != "little":
+                    values.byteswap()
+                packed_uv_attributes[name] = base64.b64encode(values.tobytes()).decode("ascii")
+            if packed_uv_attributes:
+                shape["uvAttributesPacked"] = packed_uv_attributes
         compact_shapes.append(shape)
     compact_scene["shapes"] = compact_shapes
     payload = json.dumps(compact_scene, ensure_ascii=True, separators=(",", ":"))

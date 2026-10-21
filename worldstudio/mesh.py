@@ -80,19 +80,20 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
         for key, width in (('_p0', 12), ('_n0', 4)):
             if attrs[key][0] + width > stride or size < count * stride:
                 raise ValueError(f'{shape_name}: vertex attribute exceeds its allocation')
-        uv_attribute = attrs.get('_u0')
-        uv_width = _UV_ATTRIBUTE_BYTES.get(uv_attribute[1]) if uv_attribute else None
-        if uv_width is not None and (
-                uv_attribute[0] + uv_width > stride or size < count * stride):
-            raise ValueError(f'{shape_name}: texture-coordinate attribute exceeds its allocation')
+        uv_attributes = {
+            name: attribute for name, attribute in attrs.items()
+            if name.startswith('_u') and name[2:].isdecimal() and
+            attribute[1] in _UV_ATTRIBUTE_BYTES
+        }
+        for name, (offset, fmt) in uv_attributes.items():
+            if offset + _UV_ATTRIBUTE_BYTES[fmt] > stride or size < count * stride:
+                raise ValueError(f'{shape_name}: texture-coordinate attribute {name} exceeds its allocation')
         positions, normals = [], []
-        uvs = [] if uv_width is not None else None
+        uv_values = {name: [] for name in uv_attributes}
         for index in range(count):
             base = start + index * stride
             position = struct.unpack_from('>3f', data, base + attrs['_p0'][0])
             packed = struct.unpack_from('>I', data, base + attrs['_n0'][0])[0]
-            uv = _decode_uv_attribute(data, base + uv_attribute[0], uv_attribute[1]) \
-                if uvs is not None else None
             def signed10(value):
                 value &= 0x3ff
                 return value - 0x400 if value & 0x200 else value
@@ -100,12 +101,13 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
             norm = math.sqrt(sum(v*v for v in normal))
             if not all(math.isfinite(v) and abs(v) <= 1e7 for v in position) or norm < 1e-6:
                 raise ValueError(f'{shape_name}: invalid position or normal at vertex {index}')
-            if uv is not None and not all(math.isfinite(v) and abs(v) <= 1e5 for v in uv):
-                raise ValueError(f'{shape_name}: invalid texture coordinates at vertex {index}')
+            for name, (offset, fmt) in uv_attributes.items():
+                uv = _decode_uv_attribute(data, base + offset, fmt)
+                if not all(math.isfinite(v) and abs(v) <= 1e5 for v in uv):
+                    raise ValueError(f'{shape_name}: invalid texture coordinates in {name} at vertex {index}')
+                uv_values[name].append(uv)
             positions.append(position)
             normals.append(tuple(v / norm for v in normal))
-            if uv is not None:
-                uvs.append(uv)
         mesh = r.ptr(shape+36)
         r.bounds(mesh, 28)
         if r.u32(mesh) != 4 or r.u32(mesh+4) != 4 or r.u32(mesh+24):
@@ -147,8 +149,10 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
                 for name, (offset, fmt) in attrs.items()
             },
         }
-        if uvs is not None:
-            extracted['uvs'] = uvs
+        if uv_values:
+            extracted['uvAttributes'] = uv_values
+        if '_u0' in uv_values:
+            extracted['uvs'] = uv_values['_u0']
         result.append(extracted)
     if not result:
         raise ValueError(f'{model}: no supported shapes found')

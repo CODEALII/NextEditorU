@@ -8,13 +8,14 @@ This backlog follows verified project dependencies. “Done offline” means par
 2. **Validate terrain rendering against a controlled baseline.** Compare the main-grass export with stock in the isolated profile and determine whether baked-light UVs, alpha/culling, shape bounds or geometry cause the dark patches.
 3. **Broaden the preview data model safely.** Preserve per-shape mesh/submesh, vertex-buffer, material and bone references. Add attribute codecs and hierarchy transforms only for layouts found in local resources; continue rejecting unsupported formats with a precise diagnostic.
 
+Implemented offline subcase: static W1 extraction and the selected-mesh inspector now decode all supported named `_uN` coordinate attributes. The local W1 inventory contains `_u1` on 42 shapes and `_u2` on 13; a selector compares each raw chart without assigning sampler meaning. The static geometry parser still rejects multi-mesh, multi-buffer, skinned and other unsupported BFRES layouts.
+
 ## Next editing milestones
 
 4. Add selectable scene objects and editable transforms with a reversible undo/redo history.
 5. Add explicit world graph profiles for entry points, required levels and optional branches; keep gameplay unlock semantics separate until verified.
 6. Expand terrain import beyond one fixed-capacity grass shape only after mesh insertion or replacement has a demonstrated archive roundtrip.
-7. Extend texture inspection to the other W1 formats (BC3, BC4 and BC5), then add wireframe and normal overlays after the corresponding scene metadata is represented.
-8. Investigate animation formats and camera runtime behavior using concrete local files and targeted evidence.
+7. Investigate animation formats and camera runtime behavior using concrete local files and targeted evidence.
 
 ## Runtime acceptance gate
 

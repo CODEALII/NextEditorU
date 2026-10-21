@@ -890,3 +890,15 @@ camera behavior and a fully playable custom world remain open.
 - Tk editor smoke tests cover matching, clearing, unchanged source rows and
   hidden-selection cleanup. The full suite passed (**225 tests in 172.973
   seconds**), with `compileall` and `git diff --check`.
+
+## 2026-10-21 — Inspect all supported W1 UV attributes
+
+- Static BFRES extraction now decodes each named `_uN` attribute using the four
+  already-tested GX2 two-component formats. The raw UV inspector lets users
+  switch charts and shows each attribute's stored format.
+- The local W1 model confirms `_u1` on 42 shapes and `_u2` on 13. Tests cover
+  normalized decoding, local shape counts, viewer packing and selector changes.
+  The full suite passed (**226 tests in 174.904 seconds**), with `compileall`
+  and `git diff --check`.
+- This exposes stored coordinates for comparison; sampler association, SRT math
+  and game shader behavior remain unresolved, so the rendered material is unchanged.
