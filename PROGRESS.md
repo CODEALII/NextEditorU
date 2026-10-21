@@ -1148,6 +1148,9 @@ camera behavior and a fully playable custom world remain open.
 - The dialog says that it adds only a route CSV row. It does not create route
   geometry or edit point destinations/path chains; successful static export
   therefore does not establish that the game can traverse the segment.
+- In the W1 archive, ten of the thirteen available rows are already named in
+  point path fields. The dialog lists these first and reports whether the
+  selected ID is already linked, distinguishing repairs from unused drafts.
 - Added synthetic graph checks and a Tk smoke test for selection, row creation,
   and undo. The focused graph-validation and editor smoke suites pass (22 and
   21 tests). The final full suite passed: **275 tests in 249.642 seconds**;
@@ -1156,3 +1159,16 @@ camera behavior and a fully playable custom world remain open.
   baseline passed static validation; ten had unused BFRES route IDs and
   accepted one added table row, while W8a and W9a had no unused IDs. This does
   not verify route movement or point-chain behavior in game.
+
+## 2026-10-21 — Prioritize route IDs referenced by point paths
+
+- The editor now identifies valid route IDs in normal and secret point path
+  fields, sorts matching unused BFRES IDs first, and reports whether the
+  selected segment is already referenced before adding its CSV row.
+- Ten of W1's 13 candidates are already in point path fields. The updated
+  selection was checked across all 12 world archives: each baseline had zero
+  static validation issues, ten archives accepted one draft row, and W8a/W9a
+  had no unused BFRES IDs to offer. Actual in-game movement remains untested.
+- Graph-validation and editor smoke tests pass (23 and 21); the full suite
+  passed **276 tests in 248.861 seconds**. `compileall` and `git diff --check`
+  passed.

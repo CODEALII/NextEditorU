@@ -2,6 +2,7 @@ import unittest
 
 from worldstudio.graph_validation import (
     build_native_route_row,
+    native_point_path_route_ids,
     native_route_segment_choices,
     validate_native_world,
 )
@@ -18,9 +19,16 @@ class NativeRouteDraftTests(unittest.TestCase):
         self.assertEqual(
             native_route_segment_choices(
                 [["RW101W102", "road", ""]], references,
-                {"W101", "W102", "W103", "W104"}, world_prefix="W1"),
-            ["RW102W103", "RW103W104", "RW103W201"],
+                {"W101", "W102", "W103", "W104"}, world_prefix="W1",
+                point_rows=[point(0, "W102", paths="RW103W104")]),
+            ["RW103W104", "RW102W103", "RW103W201"],
         )
+
+    def test_point_path_route_inventory_reads_only_valid_normal_and_secret_ids(self):
+        rows = [point(0, "W101", paths="RW101W102, malformed", secret_paths="RW101W103"),
+                ["1", "W102"]]
+        self.assertEqual(native_point_path_route_ids(rows),
+                         ["RW101W102", "RW101W103"])
 
     def test_builds_row_from_an_available_existing_bfres_route_id(self):
         row = build_native_route_row(

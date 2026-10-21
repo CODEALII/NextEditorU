@@ -74,6 +74,8 @@ route table. Thirteen other identifiers have resolvable local endpoint bones
 of these unused BFRES-referenced IDs as a table row using an observed road type.
 An in-memory addition of `RF008W1C0` passes static project validation, but this
 does not wire a point destination/path chain or establish in-game traversal.
+Ten of the thirteen unused IDs already occur in native point path fields; the
+editor lists those first and identifies whether the selected ID is referenced.
 
 ## BFRES observations
 

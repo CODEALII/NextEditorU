@@ -18,6 +18,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from .gltf import read_glb
 from .graph_validation import (
     build_native_route_row,
+    native_point_path_route_ids,
     native_route_segment_choices,
 )
 from .mesh import MAX_FACE_CORNERS, transform_obj_geometry
@@ -1868,8 +1869,10 @@ class NativeStudio(WorldStudio):
         }
         world_match = re.search(r"pointW([1-9])", getattr(self.native, "point_name", ""))
         world_prefix = f"W{world_match[1]}" if world_match else None
+        point_paths = set(native_point_path_route_ids(self.native.points.rows))
         route_ids = native_route_segment_choices(
-            self.native.routes.rows, self.native.references, bones, world_prefix)
+            self.native.routes.rows, self.native.references, bones, world_prefix,
+            point_rows=self.native.points.rows)
         if not route_ids:
             messagebox.showerror(
                 "Cannot add route segment",
@@ -1914,8 +1917,8 @@ class NativeStudio(WorldStudio):
 
         ttk.Label(
             body,
-            text=("Only unused route IDs already present in this BFRES are listed. "
-                  "This adds a CSV row; point destinations and path chains are unchanged."),
+            text=("Unused IDs already named in point path chains appear first. "
+                  "Other BFRES IDs follow. This adds a CSV row only; point paths are unchanged."),
             wraplength=390,
         ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(5, 10))
 
@@ -1935,7 +1938,9 @@ class NativeStudio(WorldStudio):
                                 "Choose an unused BFRES route segment.")
                 create.state(["disabled"])
                 return
-            self.status.set(f"Ready to add existing BFRES route segment {row[0]}.")
+            path_state = ("already appears in a point path chain" if row[0] in point_paths
+                          else "is not currently linked from a point path")
+            self.status.set(f"Ready to add {row[0]}; it {path_state}.")
             create.state(["!disabled"])
 
         def submit():

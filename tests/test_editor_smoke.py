@@ -242,6 +242,7 @@ class EditorSmokeTests(unittest.TestCase):
 
     def test_add_route_dialog_builds_a_draft_from_an_existing_bfres_segment(self):
         before = [row[:] for row in self.native.routes.rows]
+        self.native.points.rows[1][4] = "RW102F001"
 
         def descendants(widget):
             for child in widget.winfo_children():
@@ -256,6 +257,8 @@ class EditorSmokeTests(unittest.TestCase):
             self.assertEqual(len(combos), 2)
             combos[0].set("RW102F001")
             combos[1].set("road")
+            self.assertIn("already appears in a point path chain",
+                          self.app.status.get())
             add_button = next(widget for widget in controls
                               if isinstance(widget, ttk.Button) and
                               widget.cget("text") == "Add segment")

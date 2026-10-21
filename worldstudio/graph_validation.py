@@ -12,8 +12,25 @@ _POINT_ID = re.compile(r"[WF][A-Za-z0-9]{3}\Z")
 _ROUTE_ID = re.compile(r"R[A-Za-z0-9]{8}\Z")
 
 
+def native_point_path_route_ids(point_rows):
+    """Return syntactically valid route IDs listed in native point path fields."""
+    route_ids = set()
+    for row in point_rows:
+        if not isinstance(row, (list, tuple)) or len(row) != 9:
+            continue
+        for column in (4, 7):
+            value = row[column]
+            if not isinstance(value, str):
+                continue
+            route_ids.update(
+                token.strip() for token in value.split(",")
+                if _ROUTE_ID.fullmatch(token.strip())
+            )
+    return sorted(route_ids)
+
+
 def native_route_segment_choices(route_rows, known_references, known_bones,
-                                 world_prefix=None):
+                                 world_prefix=None, point_rows=()):
     """Return unused BFRES route IDs whose local endpoint bones resolve."""
     references = set(known_references)
     bones = set(known_bones)
@@ -33,7 +50,8 @@ def native_route_segment_choices(route_rows, known_references, known_bones,
                  not endpoint.startswith(world_prefix))
                 for endpoint in endpoints):
             candidates.append(name)
-    return sorted(candidates)
+    point_paths = set(native_point_path_route_ids(point_rows))
+    return sorted(candidates, key=lambda name: (name not in point_paths, name))
 
 
 def build_native_route_row(route_id, road_type, available_route_ids,
