@@ -1430,3 +1430,16 @@ camera behavior and a fully playable custom world remain open.
   W102-to-W103 traversal, course entry, progression, persistence and terrain
   appearance remain unverified; Chain PID 19444 is still open for its separate
   test, so do not compare its save snapshot yet.
+- After the Direct Cemu process exited normally, `--compare-save-to` confirmed
+  both NSMBU save files match the Clean profile exactly: the 8-byte personal
+  save hashes to `5de5ecae3f91c13841ac5a16f0511b7af765ff63628cb95ce65bde721689c9df`
+  and the 45,364-byte common save hashes to
+  `7397c8582c406fe0a60b7e2d19fca5658093da4dbc30f92334ba035e6a0e931e` in both
+  profiles. This verifies no save change from this boot/map observation, not
+  clear-triggered unlocks or persistence after completing a course.
+- Chain PID 19444 is also closed. Its `WorldStudioChain` archive hash
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e` is
+  confirmed in the profile. A fresh preflight comparison shows its personal and
+  common save hashes exactly match Clean and Direct, including the earlier
+  uncontrolled map-state change. This includes no course completion or unlock
+  transition.

@@ -42,12 +42,21 @@
   map-load result, not a traversal or level-entry result. The Computer Use API
   only sends key presses, so this run could not reproduce the two-second held
   input from the earlier Clean/Chain comparison.
+- After closing Direct normally, `--compare-save-to` confirmed its personal
+  and common save files still match Clean byte-for-byte (8-byte personal file
+  and 45,364-byte common file). This only establishes that loading and leaving
+  this map did not change these saves; course-clear progression and persistence
+  remain untested.
+- The later Chain profile (archive SHA-256
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`) was
+  also closed and compared to Clean. Its personal and common save hashes match
+  Clean exactly, including the earlier uncontrolled map-state change. This does
+  not test a course-clear progression transition.
 - Before the latest Chain retest, Clean, Chain and Direct passed
   `tools/cemu_preflight.py` with current-run title/module and pack checks, and
-  `--compare-save-to` confirmed byte-identical save snapshots. The current Chain
-  run has since moved Mario on the map and was still open when Computer Use
-  detected user input; do not assume its save still matches until Cemu is closed
-  and the comparison is rerun. The clean run excludes World Studio Chain; each
+  `--compare-save-to` confirmed byte-identical save snapshots. The later Direct
+  and Chain processes have now both exited, and their save files still match
+  Clean. The clean run excludes World Studio Chain; each
   modified profile enables it and its packaged archive matches the test input
   exactly. No fresh-save progression or terrain-appearance result is established.
 
