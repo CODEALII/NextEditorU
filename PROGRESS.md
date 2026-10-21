@@ -497,3 +497,19 @@ camera behavior and a fully playable custom world remain open.
 - Full regression: **160 tests passed in 101.599 seconds**. `compileall`,
   `git diff --check`, progress SVG parsing, and W101 → W102/W103 reachability
   passed.
+
+## 2026-10-21 — read-only material texture SRT inspection
+
+- Added a bounded reader for supported W1 `texmtxN` Texture SRT records and
+  exposed the stored mode, scale, rotation and translation in a collapsed,
+  scrollable material-inspector panel. The preview does not apply the values
+  or claim which sampler consumes them.
+- Local W1 validation found 36 identity `texmtx1` entries and 11 non-identity
+  `texmtx0` values with negative V translation. Five parser tests passed,
+  including synthetic malformed records; all 27 preview safety tests passed.
+- Headless Chrome/SwiftShader loaded 42 shapes, opened the route material's SRT
+  details, showed translations `-3` and `0`, and reported no WebGL error.
+  The screenshot is ignored at
+  `local/evidence/preview-w1-texture-srt-controls.png`.
+- Full regression: **166 tests passed in 98.874 seconds**. `compileall`,
+  `git diff --check`, SVG parsing, and W101 → W102/W103 reachability passed.

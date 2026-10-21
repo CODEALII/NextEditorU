@@ -449,6 +449,30 @@ console.log(JSON.stringify({direction:Array.from(previewLightDirection),intensit
         subprocess.run([node, "--check", "-"], input=script, check=True,
                        capture_output=True, text=True)
 
+    def test_texture_srt_values_are_read_only_inspector_metadata(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise the texture SRT label")
+        srt = {"mode": 0, "scale": [1.0, 1.0], "rotation": 0.0,
+               "translation": [0.0, -3.0]}
+        scene = {"shapes": [{"name": "route", "material": "routeMat",
+                             "textureSrt": {"texmtx0": srt}, "positions": [],
+                             "normals": [], "indices": []}], "nodes": [], "routes": []}
+        page = build_document(scene)
+        packed = json.loads(re.search(r"const scene=(.*?);", page).group(1))
+        self.assertEqual(packed["shapes"][0]["textureSrt"], {"texmtx0": srt})
+        self.assertIn("mesh.textureSrt=textureSrtByShape.get(mesh.name)||{}", page)
+        self.assertIn("row.textContent=textureSrtLabel(name,srt)", page)
+        self.assertIn("Not applied in preview; sampler and shader mapping remain unverified.", page)
+        start = page.index("function textureSrtLabel(name,srt){")
+        end = page.index("\nfunction selectMesh", start)
+        helper = page[start:end]
+        result = subprocess.run(
+            [node, "-e", helper + "\nconsole.log(textureSrtLabel('texmtx0'," + json.dumps(srt) + "))"],
+            check=True, capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.stdout.strip(),
+                         "texmtx0 \u00b7 mode 0 \u00b7 scale (1.000, 1.000) \u00b7 rotation 0.000 \u00b7 translation (0.000, -3.000)")
+
     def test_viewer_packs_geometry_as_little_endian_typed_arrays(self):
         shape = {"name": "mesh", "material": "mat",
                  "positions": [(float(i), 1.25, -2.5) for i in range(100)],

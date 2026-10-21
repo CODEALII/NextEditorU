@@ -507,12 +507,15 @@ class WorldStudio(ttk.Frame):
                 from .mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model
                 from .preview_textures import (attach_base_color_textures,
                                                attach_sampler_diagnostic_textures,
-                                               attach_normal_map_textures)
+                                               attach_normal_map_textures,
+                                               attach_texture_srt_parameters)
                 shapes = extract_rigid_model(self.native.model)
                 textures = {}
                 normal_textures = {}
                 diagnostic_textures = {}
                 mask_textures = {}
+                texture_srt_failures = set()
+                texture_srt_parameters = 0
                 warned_materials = set()
                 warned_normal_materials = set()
                 warned_diagnostic_materials = set()
@@ -526,6 +529,10 @@ class WorldStudio(ttk.Frame):
                         slot_textures, _ = attach_sampler_diagnostic_textures(
                             self.native.model, shapes, sampler_slot=sampler_slot)
                         mask_textures.update(slot_textures)
+                    texture_srt_failures = attach_texture_srt_parameters(self.native.model, shapes)
+                    srt_by_material = {shape["material"]: shape["textureSrt"] for shape in shapes
+                                       if shape.get("textureSrt")}
+                    texture_srt_parameters = sum(len(values) for values in srt_by_material.values())
                 textured_shapes = sum(bool(shape.get("texture")) for shape in shapes)
                 normal_textured_shapes = sum(bool(shape.get("normalTexture")) for shape in shapes)
                 texture_notice = (
@@ -534,6 +541,11 @@ class WorldStudio(ttk.Frame):
                 )
                 if warned_materials:
                     texture_notice += f" {len(warned_materials)} material(s) use approximate colors."
+                if texture_srt_parameters:
+                    texture_notice += (f" {texture_srt_parameters} stored texmtx SRT parameter(s) are shown "
+                                       "read-only in the inspector; none are applied to the preview.")
+                if texture_srt_failures:
+                    texture_notice += f" {len(texture_srt_failures)} material(s) have unsupported texture SRT data."
                 normal_texture_notice = (
                     f"BC5 SNORM channel inspection: {len(normal_textures)} unique maps on "
                     f"{normal_textured_shapes} UV meshes. R/G are diagnostic channels only; no tangent-space "
@@ -592,6 +604,8 @@ class WorldStudio(ttk.Frame):
                     badges.append(f"BC5 UNorm `_o0` maps ×{len(diagnostic_textures)}")
                 if mask_textures:
                     badges.append(f"BC4 sampler diagnostics ×{len(mask_textures)}")
+                if texture_srt_parameters:
+                    badges.append(f"Texture SRT ×{texture_srt_parameters} · read-only")
             else:
                 from .mesh import _geometry
                 vertices, indices, normals, _ = _geometry(self.mesh[0], self.mesh[1])

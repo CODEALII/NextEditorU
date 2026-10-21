@@ -5,10 +5,32 @@ import base64
 
 from .bfres_texture import (extract_base_color_texture, extract_normal_map_texture,
                             extract_sampler_diagnostic_texture)
+from .bfres_material import extract_texture_srt_parameters
 from .texture_preview import (decode_bc1, decode_bc3, decode_bc4_unorm, decode_bc5_snorm,
                               decode_bc5_unorm, detile_bc1_thin1, detile_bc3_thin1,
                               detile_bc4_thin1, detile_bc5_snorm_thin1,
                               detile_bc5_unorm_thin1)
+
+
+def attach_texture_srt_parameters(model_data, shapes):
+    """Attach validated read-only ``texmtxN`` metadata to matching shapes."""
+    by_material = {}
+    failed_materials = set()
+    for shape in shapes:
+        shape.pop("textureSrt", None)
+        material = shape.get("material")
+        if not isinstance(material, str) or material in failed_materials:
+            continue
+        if material not in by_material:
+            try:
+                by_material[material] = extract_texture_srt_parameters(
+                    model_data, "CS_W1_World", material)
+            except (ValueError, KeyError, TypeError, OverflowError):
+                failed_materials.add(material)
+                continue
+        if by_material[material]:
+            shape["textureSrt"] = by_material[material]
+    return failed_materials
 
 
 def attach_base_color_textures(model_data, shapes, *, max_texture_pixels=4 * 1024 * 1024,

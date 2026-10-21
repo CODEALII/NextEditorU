@@ -33,9 +33,11 @@ is still needed before baseline/patch route QA.
 - Implemented: the camera panel exposes editable preview-target X/Y/Z coordinates in model units, updates after mesh focus and Fit view, and rejects non-finite or out-of-range values without changing the active target.
 - Implemented: selected-mesh texture cards report dimensions and supported stored formats for BC1/BC3 base maps, BC5 SNORM, and the observed `_o0` BC5 UNorm / `_o1` BC4 UNorm maps. Diagnostic sampler semantics remain unknown.
 - Implemented: local W1 BC4 UNorm sampler maps in `_b0`, `_o1`, `_s0`, and `_x2` can be chosen in a diagnostic selector. A 36-material/258-reference scan found no paired-table mismatches; four fixed BC4 sampler vectors now cover the added slots. All displayed channels remain semantic-unknown diagnostics.
+- Implemented: bounded, read-only extraction of type-31 `texmtxN` SRT fields for the tested W1 materials. The inspector displays stored mode, scale, rotation and translation without applying a UV matrix or assigning the parameter to a sampler.
 - Verified in headless Chrome/SwiftShader: the local W1 page rendered 42 shapes, Top became active, model-space target entry changed the focus, the selected route mesh showed `RouteW1_msk | 128x256 | BC4 UNorm`, and no WebGL error overlay appeared. The user's browser/GPU is still unverified.
 - Next: verify the controls on the user's browser/GPU. Keep all four observed BC4 slots diagnostic until material semantics are independently established.
 - Investigate UV transforms, transparent material modes, baked light maps, and additional GX2 tile layouts using local evidence and fixed regression vectors; do not infer shader meaning from a sampler name.
+- Determine the W1 shader's mapping and transform convention before applying any `texmtxN` value; the current values are inspection metadata only.
 - Broaden geometry parsing to multiple meshes, more vertex encodings, hierarchy transforms, skinning, and other BFRES variants. The current static geometry subset must reject unsupported layouts clearly.
 
 ## Terrain pipeline
