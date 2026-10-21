@@ -31,6 +31,7 @@ is still needed before baseline/patch route QA.
 - Implemented: `_o1` textures encoded as BC4 UNorm in the local W1 route materials can be decoded and toggled as grayscale channel diagnostics. `RouteW1_msk` attaches to seven UV meshes; sampler rendering semantics remain unknown.
 - Implemented: Front, Side and Top camera presets orient the viewer around its current focus point, expose their selected state accessibly, and clear that state when the user resumes orbiting.
 - Implemented: the camera panel exposes editable preview-target X/Y/Z coordinates in model units, updates after mesh focus and Fit view, and rejects non-finite or out-of-range values without changing the active target.
+- Implemented: selected-mesh texture cards report dimensions and supported stored formats for BC1/BC3 base maps, BC5 SNORM, and the observed `_o0` BC5 UNorm / `_o1` BC4 UNorm maps. Diagnostic sampler semantics remain unknown.
 - Next: verify the new viewer controls with the user's browser/GPU; add a richer material inspector.
 - Investigate other BC4 sampler slots, UV transforms, transparent material modes, baked light maps, and additional GX2 tile layouts before rendering them; require local slot evidence and fixed regression vectors.
 - Broaden geometry parsing to multiple meshes, more vertex encodings, hierarchy transforms, skinning, and other BFRES variants. The current static geometry subset must reject unsupported layouts clearly.

@@ -135,8 +135,7 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn('normalTextureName', page)
         self.assertIn('diagnosticTextureName', page)
         self.assertIn('maskTextureName', page)
-        self.assertIn('BC5 UNorm _o0 · diagnostic', page)
-        self.assertIn('BC4 UNorm _o1 · diagnostic', page)
+        self.assertIn('textureMapLabel(kind,payload)', page)
         self.assertIn('sampler channels are shown for inspection only; material meaning is unverified.', page)
         self.assertIn('R/G channels are shown as diagnostic colors only', page)
         self.assertNotIn('https://', page)
@@ -237,8 +236,33 @@ console.log('mesh selection inspector ok');
         page = build_document({"shapes": [], "nodes": [], "routes": []})
         self.assertIn("texturePreview:texturePayload,normalPreview:normalPayload", page)
         self.assertIn("textureThumbnail(payload,kind)", page)
-        self.assertIn("BC5 SNORM · diagnostic", page)
-        self.assertIn("Base color · ${payload.name}", page)
+        self.assertIn("Texture maps · stored format and dimensions", page)
+        self.assertIn("textureMapLabel(kind,payload)", page)
+
+    def test_material_texture_labels_show_dimensions_and_observed_formats(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise material inspector labels")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        start = page.index("function textureMapLabel(kind,payload){")
+        end = page.index("\nconst textureThumbnailCache", start)
+        helper = page[start:end]
+        probe = helper + r"""
+const maps={
+base:{name:'Albedo',width:256,height:128,format:0x33},
+bc5:{name:'Normal',width:64,height:32,format:0x235},
+diagnostic:{name:'Mask',width:4,height:8,format:0x35,samplerSlot:'_o0'},
+bc4:{name:'RouteW1_msk',width:128,height:256,format:0x34,samplerSlot:'_o1'}
+};
+console.log(JSON.stringify(Object.entries(maps).map(([kind,payload])=>textureMapLabel(kind,payload))));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        self.assertEqual(json.loads(result.stdout), [
+            "Base color | Albedo | 256x128 | BC3 UNorm",
+            "Normal map | Normal | 64x32 | BC5 SNORM",
+            "Sampler _o0 | Mask | 4x8 | BC5 UNorm",
+            "Sampler _o1 | RouteW1_msk | 128x256 | BC4 UNorm",
+        ])
 
     def test_viewport_pick_ids_and_hidpi_pixel_coordinates(self):
         node = shutil.which("node")

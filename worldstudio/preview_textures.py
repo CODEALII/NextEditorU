@@ -59,7 +59,7 @@ def attach_base_color_textures(model_data, shapes, *, max_texture_pixels=4 * 102
                         raise ValueError(f"{texture['name']}: unsupported preview format")
                     textures[texture["name"]] = {
                         "name": texture["name"], "width": texture["width"],
-                        "height": texture["height"],
+                        "height": texture["height"], "format": texture["format"],
                         "rgbaBase64": base64.b64encode(rgba).decode("ascii"),
                     }
                     decoded_pixels += pixels
@@ -111,7 +111,7 @@ def attach_normal_map_textures(model_data, shapes, *, max_texture_pixels=4 * 102
                     rgba = decode_bc5_snorm(compact, texture["width"], texture["height"])
                     textures[texture["name"]] = {
                         "name": texture["name"], "width": texture["width"],
-                        "height": texture["height"],
+                        "height": texture["height"], "format": texture["format"],
                         "rgbaBase64": base64.b64encode(rgba).decode("ascii"),
                     }
                     decoded_pixels += pixels

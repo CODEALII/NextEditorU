@@ -466,3 +466,12 @@ camera behavior and a fully playable custom world remain open.
 - Focused viewer tests: **24 passed**. Full regression: **156 tests passed in
   94.473 seconds**; `compileall`, `git diff --check`, and W101 → W102/W103
   reachability passed.
+
+## 2026-10-21 — material texture metadata in the inspector
+
+- Texture cards now show each supported map's decoded dimensions and stored
+  GX2 format. The texture catalogs retain the format values for BC1/BC3 base
+  maps and BC5 SNORM normal maps; sampler slots remain explicitly diagnostic.
+- Focused WebGL and BFRES texture checks: **38 passed**. Full regression is
+  **157 tests passed in 94.632 seconds**; `compileall`, `git diff --check`,
+  and W101 → W102/W103 reachability passed.

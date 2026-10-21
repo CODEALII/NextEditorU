@@ -104,6 +104,7 @@ class SyntheticTextureReferenceTests(unittest.TestCase):
         self.assertEqual(set(textures), {'Grass_alb'})
         self.assertEqual(shape['texture'], 'Grass_alb')
         self.assertFalse(failed)
+        self.assertEqual(textures['Grass_alb']['format'], 0x33)
         self.assertEqual(len(textures['Grass_alb']['rgbaBase64']), 88)
 
         unsupported = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
@@ -126,6 +127,7 @@ class SyntheticTextureReferenceTests(unittest.TestCase):
         self.assertEqual(set(textures), {'Grass_nml'})
         self.assertEqual(shape['normalTexture'], 'Grass_nml')
         self.assertFalse(failed)
+        self.assertEqual(textures['Grass_nml']['format'], 0x235)
         self.assertEqual(len(textures['Grass_nml']['rgbaBase64']), 88)
 
         limited = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
@@ -160,6 +162,7 @@ class SyntheticSamplerDiagnosticTests(unittest.TestCase):
         self.assertEqual(set(textures), {'Mask'})
         self.assertEqual(shape['diagnosticTexture'], 'Mask')
         self.assertFalse(failed)
+        self.assertEqual(textures['Mask']['format'], 0x35)
         self.assertEqual(len(textures['Mask']['rgbaBase64']), 88)
         limited = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
         textures, failed = attach_sampler_diagnostic_textures(
@@ -172,6 +175,7 @@ class SyntheticSamplerDiagnosticTests(unittest.TestCase):
         self.assertEqual(set(textures), {'RouteW1_msk'})
         self.assertEqual(shape['maskTexture'], 'RouteW1_msk')
         self.assertEqual(textures['RouteW1_msk']['samplerSlot'], '_o1')
+        self.assertEqual(textures['RouteW1_msk']['format'], 0x34)
         self.assertFalse(failed)
 
 
