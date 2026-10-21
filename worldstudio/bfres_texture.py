@@ -3,8 +3,9 @@
 The layouts are cross-checked against the repository's pinned MIT BfresLibrary
 Wii U Material, TextureRef and FTEX readers. This helper intentionally supports
 one non-array BC1/BC3 albedo, BC5 SNORM `_n0` map, or evidenced local W1 BC5
-UNorm `_o0` / BC4 UNorm `_o1` diagnostic map. It does not infer sampler
-semantics or interpret light maps, shader parameters or animation.
+UNorm `_o0` / BC4 UNorm `_o1` diagnostic map. It also exposes a read-only
+sampler catalog for observed W1 slots. It does not infer sampler semantics or
+interpret light maps, shader parameters or animation.
 """
 from .bfres import Skeletons
 
@@ -13,11 +14,14 @@ _BASE_COLOR_FORMATS = {0x31: "BC1 UNorm", 0x33: "BC3 UNorm"}
 _NORMAL_MAP_FORMATS = {0x235: "BC5 SNORM"}
 _BC4_DIAGNOSTIC_FORMATS = {0x34: "BC4 UNorm"}
 _BC5_DIAGNOSTIC_FORMATS = {0x35: "BC5 UNorm"}
+_BC3_SAMPLER_DIAGNOSTIC_FORMATS = {0x33: "BC3 UNorm"}
 _DIAGNOSTIC_SLOT_FORMATS = {"_o0": _BC5_DIAGNOSTIC_FORMATS,
                             "_o1": _BC4_DIAGNOSTIC_FORMATS,
                             "_b0": _BC4_DIAGNOSTIC_FORMATS,
                             "_s0": _BC4_DIAGNOSTIC_FORMATS,
-                            "_x2": _BC4_DIAGNOSTIC_FORMATS}
+                            "_x2": _BC4_DIAGNOSTIC_FORMATS,
+                            "_x0": _BC3_SAMPLER_DIAGNOSTIC_FORMATS,
+                            "_x1": _BC3_SAMPLER_DIAGNOSTIC_FORMATS}
 
 
 def _extract_material_texture(data, model_name, material_name, texture_name, *, suffix,
@@ -137,7 +141,8 @@ def extract_sampler_diagnostic_texture(data, model_name, material_name, sampler_
 
     Sampler and texture-reference order must correspond and the table sizes
     must agree. `_o0` accepts BC5 UNorm; the locally observed `_o1`, `_b0`,
-    `_s0`, and `_x2` slots accept BC4 UNorm for diagnostic display only.
+    `_s0`, and `_x2` slots accept BC4 UNorm, while `_x0` and `_x1` accept
+    BC3 UNorm. Sampler contents are returned for diagnostic display only.
     This identifies the stored format and slot only; it does not infer shader
     meaning. Those mappings are only evidenced for the supplied W1 file.
     """

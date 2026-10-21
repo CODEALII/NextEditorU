@@ -525,7 +525,7 @@ class WorldStudio(ttk.Frame):
                         self.native.model, shapes)
                     diagnostic_textures, warned_diagnostic_materials = attach_sampler_diagnostic_textures(
                         self.native.model, shapes)
-                    for sampler_slot in ("_o1", "_b0", "_s0", "_x2"):
+                    for sampler_slot in ("_o1", "_b0", "_s0", "_x2", "_x0", "_x1"):
                         slot_textures, _ = attach_sampler_diagnostic_textures(
                             self.native.model, shapes, sampler_slot=sampler_slot)
                         mask_textures.update(slot_textures)
@@ -565,12 +565,13 @@ class WorldStudio(ttk.Frame):
                     diagnostic_texture_notice += (
                         f" {len(warned_diagnostic_materials)} material(s) have no supported `_o0` BC5 UNorm map."
                     )
-                mask_textured_shapes = sum(bool(shape.get("bc4Samplers")) for shape in shapes)
+                mask_textured_shapes = sum(bool(shape.get("samplerTextures")) for shape in shapes)
                 mask_texture_notice = (
-                    f"BC4 UNorm sampler diagnostics: {len(mask_textures)} unique maps across "
-                    f"{mask_textured_shapes} UV meshes from `_o1`, `_b0`, `_s0`, and `_x2`. "
-                    "Grayscale shows stored channel values only; sampler meaning and game material behavior "
-                    "are not inferred. Only top-level texture images are previewed."
+                    f"Diagnostic sampler previews: {len(mask_textures)} unique maps across "
+                    f"{mask_textured_shapes} UV meshes from `_o1`, `_b0`, `_s0`, `_x2`, `_x0`, and `_x1`. "
+                    "BC4 channels can be viewed in grayscale on the mesh; BC3 `_x0`/`_x1` remain inspector thumbnails. "
+                    "Both show stored texels only; sampler meaning and game material behavior are unverified. "
+                    "Only top-level texture images are previewed."
                 )
                 if self.native.geometry is not None:
                     geometry = self.native.geometry
@@ -603,7 +604,7 @@ class WorldStudio(ttk.Frame):
                 if diagnostic_textures:
                     badges.append(f"BC5 UNorm `_o0` maps ×{len(diagnostic_textures)}")
                 if mask_textures:
-                    badges.append(f"BC4 sampler diagnostics ×{len(mask_textures)}")
+                    badges.append(f"Sampler diagnostics ×{len(mask_textures)}")
                 if texture_srt_parameters:
                     badges.append(f"Texture SRT ×{texture_srt_parameters} · read-only")
             else:

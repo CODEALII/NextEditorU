@@ -96,7 +96,10 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn('"RouteW1_alb":{"name":"RouteW1_alb"', page)
         self.assertIn("scene.textures?.[shape.texture]", page)
         self.assertIn("textureCache.set(key,texture)", page)
-        self.assertIn("mesh.normalTextureName+' '+mesh.diagnosticTextureName+' '+mesh.maskTextureName).concat(' ',bc4Search).toLowerCase()", page)
+        self.assertIn("mesh.normalTextureName+' '+mesh.diagnosticTextureName+' '+mesh.maskTextureName).concat(' ',bc4Search,' ',samplerSearch).toLowerCase()", page)
+        self.assertIn("shape.samplerTextures||{}", page)
+        self.assertIn("scene.maskTextures?.[key]", page)
+        self.assertIn("samplerPreviews[slot]=payload", page)
 
     def test_viewer_exposes_bc5_diagnostic_and_optional_approximate_lighting(self):
         page = build_document({
@@ -252,7 +255,8 @@ const maps={
 base:{name:'Albedo',width:256,height:128,format:0x33},
 bc5:{name:'Normal',width:64,height:32,format:0x235},
 diagnostic:{name:'Mask',width:4,height:8,format:0x35,samplerSlot:'_o0'},
-bc4:{name:'RouteW1_msk',width:128,height:256,format:0x34,samplerSlot:'_o1'}
+bc4:{name:'RouteW1_msk',width:128,height:256,format:0x34,samplerSlot:'_o1'},
+sampler:{name:'lmDifCSW1a',width:16,height:16,format:0x33,samplerSlot:'_x0'}
 };
 console.log(JSON.stringify(Object.entries(maps).map(([kind,payload])=>textureMapLabel(kind,payload))));
 """
@@ -262,6 +266,7 @@ console.log(JSON.stringify(Object.entries(maps).map(([kind,payload])=>textureMap
             "Normal map | Normal | 64x32 | BC5 SNORM",
             "Sampler _o0 | Mask | 4x8 | BC5 UNorm",
             "Sampler _o1 | RouteW1_msk | 128x256 | BC4 UNorm",
+            "Sampler _x0 | lmDifCSW1a | 16x16 | BC3 UNorm",
         ])
 
     def test_bc4_sampler_selector_orders_route_slot_and_lists_available_maps(self):

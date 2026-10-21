@@ -513,3 +513,22 @@ camera behavior and a fully playable custom world remain open.
   `local/evidence/preview-w1-texture-srt-controls.png`.
 - Full regression: **166 tests passed in 98.874 seconds**. `compileall`,
   `git diff --check`, SVG parsing, and W101 → W102/W103 reachability passed.
+
+## 2026-10-21 — W1 `_x0` and `_x1` sampler thumbnails
+
+- Added bounded BC3 UNorm (`0x33`) extraction and GX2 Thin1 decoding for the
+  observed `_x0` and `_x1` W1 sampler pairs. The inspector now shows their
+  decoded 16×16 texels beside each other with sampler, name, size and format;
+  it labels both as diagnostic data and does not use them for shading.
+- Local table checks mapped `lmDifCSW1a` and `lmSpcCSW1a` to 36 supported UV
+  meshes each. Regression tests cover raw, detiled and decoded RGBA hashes for
+  both images, synthetic malformed format pairings, and catalog attachment.
+- Headless Chrome/SwiftShader loaded all 42 shapes, selected a course-ring
+  material, displayed both sampler cards, and reported no JavaScript or WebGL
+  errors. Ignored capture: `local/evidence/preview-w1-x0-x1-inspector.png`.
+- Full regression: **168 tests passed in 102.949 seconds**. `compileall`,
+  `git diff --check`, progress SVG parsing, and W101 → W102/W103 reachability
+  passed. User-browser GPU behavior and in-game material behavior remain open.
+- After the final preview-notice wording update, the focused texture and
+  viewer-safety suites passed again (**17 + 27 tests**); compile and diff checks
+  also passed.

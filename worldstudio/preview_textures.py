@@ -152,10 +152,11 @@ def attach_sampler_diagnostic_textures(model_data, shapes, *, sampler_slot="_o0"
                                        max_scene_pixels=8 * 1024 * 1024):
     """Attach supported BC channel maps from an observed W1 sampler slot.
 
-    `_o0` supplies BC5 UNorm; the locally observed `_o1`, `_b0`, `_s0`, and
-    `_x2` references supply BC4 UNorm. Stored values remain diagnostic only.
+    `_o0` supplies BC5 UNorm, `_o1`/`_b0`/`_s0`/`_x2` supply BC4 UNorm, and
+    the locally observed `_x0`/`_x1` slots supply BC3 UNorm. Stored values
+    remain diagnostic only; material semantics are not inferred.
     """
-    if sampler_slot not in ("_o0", "_o1", "_b0", "_s0", "_x2"):
+    if sampler_slot not in ("_o0", "_o1", "_b0", "_s0", "_x2", "_x0", "_x1"):
         raise ValueError("Unsupported diagnostic sampler slot")
     shape_field = {"_o0": "diagnosticTexture", "_o1": "maskTexture"}.get(sampler_slot)
     if type(max_texture_pixels) is not int or max_texture_pixels <= 0:
@@ -197,6 +198,13 @@ def attach_sampler_diagnostic_textures(model_data, shapes, *, sampler_slot="_o0"
                             depth=texture["depth"], aa=0,
                         )
                         rgba = decode_bc4_unorm(compact, texture["width"], texture["height"])
+                    elif texture["format"] == 0x33 and sampler_slot in ("_x0", "_x1"):
+                        compact = detile_bc3_thin1(
+                            texture["data"], texture["width"], texture["height"], texture["pitch"],
+                            tile_mode=texture["tile_mode"], swizzle=texture["swizzle"],
+                            depth=texture["depth"], aa=0,
+                        )
+                        rgba = decode_bc3(compact, texture["width"], texture["height"])
                     else:
                         raise ValueError(f"{texture['name']}: unsupported diagnostic preview format")
                     textures[catalog_key] = {
@@ -215,6 +223,7 @@ def attach_sampler_diagnostic_textures(model_data, shapes, *, sampler_slot="_o0"
             payload = textures[texture_name]
             if shape_field:
                 shape[shape_field] = payload["name"]
+            shape.setdefault("samplerTextures", {})[sampler_slot] = texture_name
             if payload["format"] == 0x34:
                 shape.setdefault("bc4Samplers", {})[sampler_slot] = texture_name
     return textures, failed_materials
