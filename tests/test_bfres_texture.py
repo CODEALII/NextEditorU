@@ -265,8 +265,8 @@ class LocalTextureReferenceTests(unittest.TestCase):
         shapes = extract_rigid_model(model)
         textures, failed = attach_base_color_textures(model, shapes)
         self.assertEqual(len(shapes), 42)
-        self.assertEqual(sum(bool(shape.get('texture')) for shape in shapes), 36)
-        self.assertEqual(len(textures), 17)
+        self.assertEqual(sum(bool(shape.get('texture')) for shape in shapes), 42)
+        self.assertEqual(len(textures), 20)
         self.assertFalse(failed)
 
     def test_local_w1_normal_map_slots_are_bc5_snorm_and_decode(self):
@@ -300,7 +300,8 @@ class LocalTextureReferenceTests(unittest.TestCase):
                                      texture_name)
         textures, failed = attach_normal_map_textures(model, shapes)
         textured = [shape for shape in shapes if shape.get('normalTexture')]
-        self.assertEqual(len(textured), 22)
+        self.assertEqual(len(textured), 26)
+        self.assertEqual(len(textures), 8)
         self.assertTrue(textures)
         self.assertTrue(failed)
         route_texture = extract_normal_map_texture(model, 'CS_W1_World', 'mtRouteOpague')
@@ -338,7 +339,7 @@ class LocalTextureReferenceTests(unittest.TestCase):
         textures, failed = attach_sampler_diagnostic_textures(model, shapes)
         mapped = [shape for shape in shapes if shape.get('diagnosticTexture')]
         self.assertEqual(set(textures), {'Mask', 'MaskOpaque'})
-        self.assertEqual(len(mapped), 11)
+        self.assertEqual(len(mapped), 13)
         self.assertTrue(failed)
         route_map = extract_sampler_diagnostic_texture(
             model, 'CS_W1_World', 'mtRouteOpague', '_o0')
@@ -374,7 +375,7 @@ class LocalTextureReferenceTests(unittest.TestCase):
         textures, failed = attach_sampler_diagnostic_textures(model, shapes, sampler_slot='_o1')
         mapped = [shape for shape in shapes if shape.get('maskTexture')]
         self.assertEqual(set(textures), {'RouteW1_msk'})
-        self.assertEqual(len(mapped), 7)
+        self.assertEqual(len(mapped), 8)
         self.assertTrue(failed)
         route_map = extract_sampler_diagnostic_texture(
             model, 'CS_W1_World', 'mtRW101W102a', '_o1')
@@ -470,7 +471,7 @@ class LocalTextureReferenceTests(unittest.TestCase):
                 textures, failed = attach_sampler_diagnostic_textures(model, shapes, sampler_slot=slot)
                 mapped = [shape for shape in shapes if slot in shape.get('samplerTextures', {})]
                 self.assertEqual(len(textures), 1)
-                self.assertEqual(len(mapped), 36)
+                self.assertEqual(len(mapped), 42)
                 self.assertFalse(failed)
                 self.assertTrue(all(payload['format'] == 0x33 and payload['samplerSlot'] == slot
                                     for payload in textures.values()))
@@ -484,7 +485,7 @@ class LocalTextureReferenceTests(unittest.TestCase):
             self.skipTest('User-provided local W1 dump unavailable')
         model = Archive(source.read_bytes()).read('CS_W1.bfres')
         shapes = extract_rigid_model(model)
-        expected = {'_o1': (1, 7), '_b0': (1, 36), '_s0': (13, 35), '_x2': (1, 1)}
+        expected = {'_o1': (1, 8), '_b0': (1, 42), '_s0': (16, 41), '_x2': (1, 1)}
         for slot, (texture_count, shape_count) in expected.items():
             with self.subTest(slot=slot):
                 textures, _ = attach_sampler_diagnostic_textures(model, shapes, sampler_slot=slot)

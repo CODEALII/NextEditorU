@@ -577,3 +577,26 @@ camera behavior and a fully playable custom world remain open.
   passed (**179 tests in 127.269 seconds**). `compileall`, `git diff --check`,
   and W101 → W102/W103 reachability also passed. Cemu appearance, collision,
   route traversal, and level starts remain unverified.
+
+## 2026-10-21 — Decode all observed W1 UV formats
+
+- Extended static BFRES extraction to decode the four observed `_u0` formats:
+  float32x2 (`0x80D`), UNorm16x2 (`0x7`), SNorm16x2 (`0x207`), and UNorm8x2
+  (`0x4`). Synthetic tests cover normalized endpoints and stride-bound checks;
+  the local W1 inventory accounts for all 42 shapes (36 + 3 + 2 + 1).
+- With those coordinates, all **42** shapes resolve supported base-color maps
+  (20 unique), eight normal maps attach to 26 shapes, two `_o0` maps to 13,
+  and the BC4 selector exposes **19** maps across the four checked slots.
+  Sampler views remain diagnostic, and UV transforms/shader operations are not
+  inferred.
+- Focused texture/viewer tests passed (**45 tests**). The full suite passed
+  (**181 tests in 127.088 seconds**); `compileall`, `git diff --check`, and
+  W101 → W102/W103 reachability passed. The generated local W1 preview page is
+  22,034,943 bytes (21.01 MiB) with decoded maps embedded; this is not a load
+  performance benchmark. The page is ignored at
+  `local/evidence/preview-w1-uv-formats.html`.
+- Headless Chrome did not produce a current screenshot because the installed
+  command forwarded to the existing browser session. The updated viewer is
+  covered by generated-JavaScript and data tests, but this UV milestone has no
+  fresh browser screenshot. Cemu route movement and terrain appearance remain
+  unverified.

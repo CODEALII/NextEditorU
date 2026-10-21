@@ -15,6 +15,19 @@ from .bfres import Skeletons
 DEFAULT_MODEL = 'CS_W1_World'
 DEFAULT_SHAPE = 'polySurface1489__mtGrass'
 MAX_FACE_CORNERS = 1024
+_UV_ATTRIBUTE_BYTES = {0x80d: 8, 0x7: 4, 0x207: 4, 0x4: 2}
+
+
+def _decode_uv_attribute(data, offset, fmt):
+    if fmt == 0x80d:  # GX2 Format_32_32_Single
+        return struct.unpack_from('>2f', data, offset)
+    if fmt == 0x7:  # GX2 Format_16_16_UNorm
+        return tuple(value / 65535. for value in struct.unpack_from('>2H', data, offset))
+    if fmt == 0x207:  # GX2 Format_16_16_SNorm
+        return tuple(max(-1., value / 32767.) for value in struct.unpack_from('>2h', data, offset))
+    if fmt == 0x4:  # GX2 Format_8_8_UNorm
+        return tuple(value / 255. for value in struct.unpack_from('>2B', data, offset))
+    return None
 
 
 def extract_rigid_model(data, model=DEFAULT_MODEL):
@@ -68,16 +81,18 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
             if attrs[key][0] + width > stride or size < count * stride:
                 raise ValueError(f'{shape_name}: vertex attribute exceeds its allocation')
         uv_attribute = attrs.get('_u0')
-        if uv_attribute and uv_attribute[1] == 0x80d and (
-                uv_attribute[0] + 8 > stride or size < count * stride):
+        uv_width = _UV_ATTRIBUTE_BYTES.get(uv_attribute[1]) if uv_attribute else None
+        if uv_width is not None and (
+                uv_attribute[0] + uv_width > stride or size < count * stride):
             raise ValueError(f'{shape_name}: texture-coordinate attribute exceeds its allocation')
         positions, normals = [], []
-        uvs = [] if uv_attribute and uv_attribute[1] == 0x80d else None
+        uvs = [] if uv_width is not None else None
         for index in range(count):
             base = start + index * stride
             position = struct.unpack_from('>3f', data, base + attrs['_p0'][0])
             packed = struct.unpack_from('>I', data, base + attrs['_n0'][0])[0]
-            uv = struct.unpack_from('>2f', data, base + uv_attribute[0]) if uvs is not None else None
+            uv = _decode_uv_attribute(data, base + uv_attribute[0], uv_attribute[1]) \
+                if uvs is not None else None
             def signed10(value):
                 value &= 0x3ff
                 return value - 0x400 if value & 0x200 else value

@@ -116,6 +116,33 @@ class MeshTests(unittest.TestCase):
         self.assertEqual(shapes[0]['vertexAttributes']['_u1'],
                          {'format': 7, 'offset': 24})
 
+    def test_supported_gx2_uv_formats_decode_to_normalized_coordinates(self):
+        encodings = (
+            (0x80d, lambda data, at: struct.pack_into('>2f', data, at, .25, .75), (.25, .75)),
+            (0x7, lambda data, at: struct.pack_into('>2H', data, at, 32768, 16384),
+             (32768 / 65535, 16384 / 65535)),
+            (0x207, lambda data, at: struct.pack_into('>2h', data, at, -32768, 16384),
+             (-1., 16384 / 32767)),
+            (0x4, lambda data, at: struct.pack_into('>2B', data, at, 128, 64),
+             (128 / 255, 64 / 255)),
+        )
+        for fmt, encode, expected in encodings:
+            with self.subTest(format=hex(fmt)):
+                data = bytearray(fixture())
+                struct.pack_into('>I', data, 0x420, fmt)
+                encode(data, 0x610)
+                shape = extract_rigid_model(bytes(data))[0]
+                self.assertEqual(len(shape['uvs']), len(shape['positions']))
+                for actual, wanted in zip(shape['uvs'][0], expected):
+                    self.assertAlmostEqual(actual, wanted, places=6)
+
+    def test_supported_uv_format_must_fit_vertex_stride(self):
+        data = bytearray(fixture())
+        struct.pack_into('>H', data, 0x41e, 27)
+        struct.pack_into('>I', data, 0x420, 0x4)
+        with self.assertRaisesRegex(ValueError, 'texture-coordinate attribute exceeds'):
+            extract_rigid_model(bytes(data))
+
     def test_rejects_capacity_and_bad_input(self):
         with self.assertRaisesRegex(ValueError,'vertex capacity'):
             replace_rigid_mesh(fixture(),self.vertices*2,self.faces)
@@ -177,6 +204,12 @@ class LocalDumpMeshTests(unittest.TestCase):
         self.assertEqual(len(shapes),42)
         self.assertGreater(sum(len(shape['positions']) for shape in shapes),70000)
         self.assertGreater(sum(len(shape['indices']) for shape in shapes),300000)
+        from collections import Counter
+        self.assertEqual(Counter(shape['vertexAttributes']['_u0']['format'] for shape in shapes),
+                         {0x80d: 36, 0x7: 3, 0x207: 2, 0x4: 1})
+        self.assertTrue(all(len(shape['uvs']) == len(shape['positions']) for shape in shapes))
+        self.assertTrue(all(math.isfinite(value) for shape in shapes for uv in shape['uvs']
+                            for value in uv))
         grass=next(shape for shape in shapes if shape['name']=='polySurface1489__mtGrass')
         self.assertEqual(len(grass['uvs']),len(grass['positions']))
         self.assertTrue(all(all(math.isfinite(v) for v in uv) for uv in grass['uvs']))

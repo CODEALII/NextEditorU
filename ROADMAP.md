@@ -15,10 +15,11 @@ is still needed before baseline/patch route QA.
 
 ## Rendering fidelity
 
-- Implemented: 42 rigid static shapes, 70,193 vertices, 106,736 triangles, route overlays, shape filtering, visibility toggles, and 17 shared BC1/BC3 albedos on 36 UV meshes from the local W1 BFRES.
+- Implemented: 42 rigid static shapes, 70,193 vertices, 106,736 triangles, route overlays, shape filtering, visibility toggles, and 20 shared BC1/BC3 albedos on all 42 W1 shapes with decoded UV attributes.
+- Implemented: `_u0` vertex decoding for observed GX2 `0x80D` float32x2, `0x7` UNorm16x2, `0x207` SNorm16x2, and `0x4` UNorm8x2 formats. W1 inventory and synthetic normalization/bounds tests cover all four; shader UV transforms remain unknown.
 - Implemented: WebGL context, shader/program and mesh-initialization errors show a high-contrast overlay.
 - Implemented: perspective depth planes follow the model bounding radius and camera distance, with a safe near-plane floor while zoomed inside the scene bounds.
-- Implemented: a BC5 SNORM channel inspector for six local `_n0` maps, with fail-closed sampler-slot checks and signed block decoding; it is explicitly diagnostic and does not alter lighting.
+- Implemented: a BC5 SNORM channel inspector for eight local `_n0` maps across 26 shapes, with fail-closed sampler-slot checks and signed block decoding; it is explicitly diagnostic and does not alter lighting.
 - Implemented: an optional BC5 tangent-space lighting preview reconstructs Z and derives tangent frames from supported mesh geometry and UVs. It is disabled by default; channel orientation and game material settings remain unverified.
 - Implemented: an on/off wireframe mode built from deduplicated triangle edges for the viewer's supported static shapes.
 - Implemented: a sampled vertex-normal overlay capped at about 5,000 vectors across the scene, with normalized direction and model-scaled length.
@@ -27,12 +28,12 @@ is still needed before baseline/patch route QA.
 - Implemented: each supported shape has bounded local geometry framing, and the inspector's Focus mesh action centers the camera on that mesh and adjusts its distance using the mesh radius.
 - Implemented: clicking the viewport uses a depth-tested, texture-alpha-aware ID pass to select the visible shape under the pointer; high-DPI coordinate mapping and ID decoding have synthetic coverage, and a local W1 headless Chrome click selected the expected terrain mesh.
 - Implemented: the inspector shows cached 96-pixel previews of supported BC1/BC3 base-color and BC5 diagnostic textures, with separate labels; these remain inspectable samples and do not imply full material fidelity.
-- Implemented: `_o0` textures encoded as BC5 UNorm in the observed local W1 material tables can be decoded and toggled as stored R/G channel diagnostics. The local scan attaches `Mask` and `MaskOpaque` to 11 UV meshes; the assigned route program declares `_o0` as `cTexMapRouteMask`.
-- Implemented: `_o1` textures encoded as BC4 UNorm in the local W1 route materials can be decoded and toggled as grayscale channel diagnostics. `RouteW1_msk` attaches to seven UV meshes; the assigned route program declares `_o1` as `cTexMapEdgeMask`.
+- Implemented: `_o0` textures encoded as BC5 UNorm in the observed local W1 material tables can be decoded and toggled as stored R/G channel diagnostics. The local scan attaches `Mask` and `MaskOpaque` to 13 UV meshes; the assigned route program declares `_o0` as `cTexMapRouteMask`.
+- Implemented: `_o1` textures encoded as BC4 UNorm in the local W1 route materials can be decoded and toggled as grayscale channel diagnostics. `RouteW1_msk` attaches to eight UV meshes; the assigned route program declares `_o1` as `cTexMapEdgeMask`.
 - Implemented: Front, Side and Top camera presets orient the viewer around its current focus point, expose their selected state accessibly, and clear that state when the user resumes orbiting.
 - Implemented: the camera panel exposes editable preview-target X/Y/Z coordinates in model units, updates after mesh focus and Fit view, and rejects non-finite or out-of-range values without changing the active target.
 - Implemented: selected-mesh texture cards report dimensions, supported stored formats, and exact sampler-symbol names when the BFRES material resolves to a local SHARCFB program. These labels describe declared shader interfaces; they do not reproduce the material's shader calculations.
-- Implemented: local W1 BC4 UNorm sampler maps in `_b0`, `_o1`, `_s0`, and `_x2` can be chosen in a diagnostic selector. A 36-material/258-reference scan found no paired-table mismatches; four fixed BC4 sampler vectors now cover the added slots. The assigned shader declarations name `_b0`/`_b1` bake maps, `_s0` spec mask, and `_o1` edge mask; channel displays still show stored texels only.
+- Implemented: local W1 BC4 UNorm sampler maps in `_b0`, `_o1`, `_s0`, and `_x2` can be chosen in a diagnostic selector. The four slots expose 19 maps across 42 supported shapes. A 36-material/258-reference scan found no paired-table mismatches; four fixed BC4 sampler vectors cover the slots. The assigned shader declarations name `_b0`/`_b1` bake maps, `_s0` spec mask, and `_o1` edge mask; channel displays still show stored texels only.
 - Implemented: bounded, read-only extraction of type-31 `texmtxN` SRT fields for the tested W1 materials. The inspector displays stored mode, scale, rotation and translation without applying a UV matrix or assigning the parameter to a sampler.
 - Implemented: read-only BC3 UNorm thumbnails for the observed `_x0` and `_x1` sampler references. The preview preserves stored texels for inspection without applying them to material shading or assigning them shader meaning.
 - Implemented: a bounded SHARCFB v8 metadata reader and `inspect-shaders` CLI. The local W1 BFRES material assignment resolves to five programs in `nw4f_cs_shader.sharcfb`; the WebGL inspector now shows assigned program names, sampler symbols, declared `texmtx` uniforms, an AGL-style mixed-radix material-option candidate, and each shader-input-to-BFRES-attribute binding with the actual stored vertex format. The shape-specific skinning variation remains unresolved.
@@ -75,7 +76,7 @@ is still needed before baseline/patch route QA.
   engine-backed points remain blocked on native index/script-reference safety.
 - Add transform handles and route-edit controls with project-level regression tests.
 - Add recent projects, recoverable sessions, backup rotation, changed-file manifests, and export/reimport comparison.
-- Profile large models and projects before adding background parsing or more caching. Current local W1 preview data takes about 8.1 MB after typed-array packing.
+- Profile large models and projects before adding background parsing or more caching. A current local W1 page embedding decoded maps measured 21.01 MiB; this is payload size, not a browser performance benchmark.
 
 ## Central acceptance milestone
 
