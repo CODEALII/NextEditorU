@@ -4,13 +4,16 @@ import struct
 import unittest
 
 from worldstudio.archive import Archive
-from worldstudio.bfres_texture import extract_base_color_texture, extract_bc1_base_texture
-from worldstudio.preview_textures import attach_base_color_textures
-from worldstudio.texture_preview import decode_bc1, decode_bc3, detile_bc1_thin1, detile_bc3_thin1
+from worldstudio.bfres_texture import (extract_base_color_texture, extract_bc1_base_texture,
+                                       extract_normal_map_texture)
+from worldstudio.preview_textures import attach_base_color_textures, attach_normal_map_textures
+from worldstudio.texture_preview import (decode_bc1, decode_bc3, decode_bc5_snorm,
+                                         detile_bc1_thin1, detile_bc3_thin1,
+                                         detile_bc5_snorm_thin1)
 from tests.test_mesh import fixture as bfres_fixture
 
 
-def texture_fixture(surface_format):
+def texture_fixture(surface_format, texture_name='Grass_alb', sampler_name=None):
     """Small synthetic BFRES material and FTEX record, with no game data."""
     data = bytearray(0x3000)
     data[:len(bfres_fixture())] = bfres_fixture()
@@ -39,11 +42,15 @@ def texture_fixture(surface_format):
             pointer(node + 12, target)
 
     pointer(0x24, 0x880)
-    dictionary(0x880, [('Grass_alb', 0xA00)])
+    dictionary(0x880, [(texture_name, 0xA00)])
+    data[0x790] = 1 if sampler_name else 0
     data[0x791] = 1
     pointer(0x7A8, 0x820)
-    pointer(0x820, string('Grass_alb'))
+    pointer(0x820, string(texture_name))
     pointer(0x824, 0xA00)
+    if sampler_name:
+        pointer(0x7B0, 0x840)
+        dictionary(0x840, [(sampler_name, 0xA80)])
     data[0xA00:0xA04] = b'FTEX'
     for offset, value in ((8, 4), (12, 4), (16, 1), (20, 1), (24, surface_format),
                           (28, 0), (32, 1), (36, 4096 if surface_format == 0x31 else 8192),
@@ -67,6 +74,28 @@ class SyntheticTextureReferenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'supported base-color format'):
             extract_base_color_texture(texture_fixture(0x35), 'CS_W1_World', 'mtGrass')
 
+    def test_normal_extractor_requires_bc5_snorm_in_n0_sampler_slot(self):
+        texture = extract_normal_map_texture(
+            texture_fixture(0x235, 'Grass_nml', '_n0'), 'CS_W1_World', 'mtGrass')
+        self.assertEqual((texture['name'], texture['format'], texture['data_size']),
+                         ('Grass_nml', 0x235, 8192))
+        with self.assertRaisesRegex(ValueError, 'supported normal-map format'):
+            extract_normal_map_texture(
+                texture_fixture(0x35, 'Grass_nml', '_n0'), 'CS_W1_World', 'mtGrass')
+        with self.assertRaisesRegex(ValueError, r'expected exactly one \*_nml reference'):
+            extract_normal_map_texture(
+                texture_fixture(0x235, 'Grass_alb', '_n0'), 'CS_W1_World', 'mtGrass')
+        with self.assertRaisesRegex(ValueError, r'expected a \*_nml normal-map reference'):
+            extract_normal_map_texture(
+                texture_fixture(0x235, 'NamedTexture', '_n0'), 'CS_W1_World', 'mtGrass',
+                texture_name='NamedTexture')
+        with self.assertRaisesRegex(ValueError, 'sampler slot _o0, expected _n0'):
+            extract_normal_map_texture(
+                texture_fixture(0x235, 'Grass_nml', '_o0'), 'CS_W1_World', 'mtGrass')
+        with self.assertRaisesRegex(ValueError, 'texture-reference and sampler counts do not match'):
+            extract_normal_map_texture(
+                texture_fixture(0x235, 'Grass_nml'), 'CS_W1_World', 'mtGrass')
+
     def test_texture_catalog_handles_bc3_and_keeps_unsupported_material_visible(self):
         shape = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
         textures, failed = attach_base_color_textures(texture_fixture(0x33), [shape])
@@ -85,6 +114,20 @@ class SyntheticTextureReferenceTests(unittest.TestCase):
         shape = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
         textures, failed = attach_base_color_textures(
             texture_fixture(0x31), [shape], max_texture_pixels=15)
+        self.assertFalse(textures)
+        self.assertEqual(failed, {'mtGrass'})
+
+    def test_normal_texture_catalog_is_bounded_and_labeled(self):
+        fixture = texture_fixture(0x235, 'Grass_nml', '_n0')
+        shape = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
+        textures, failed = attach_normal_map_textures(fixture, [shape])
+        self.assertEqual(set(textures), {'Grass_nml'})
+        self.assertEqual(shape['normalTexture'], 'Grass_nml')
+        self.assertFalse(failed)
+        self.assertEqual(len(textures['Grass_nml']['rgbaBase64']), 88)
+
+        limited = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
+        textures, failed = attach_normal_map_textures(fixture, [limited], max_texture_pixels=15)
         self.assertFalse(textures)
         self.assertEqual(failed, {'mtGrass'})
 
@@ -148,6 +191,63 @@ class LocalTextureReferenceTests(unittest.TestCase):
         self.assertEqual(sum(bool(shape.get('texture')) for shape in shapes), 36)
         self.assertEqual(len(textures), 17)
         self.assertFalse(failed)
+
+    def test_local_w1_normal_map_slots_are_bc5_snorm_and_decode(self):
+        from worldstudio.bfres import Skeletons
+        from worldstudio.mesh import extract_rigid_model
+
+        root = Path(__file__).resolve().parents[1]
+        source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W1 dump unavailable')
+        model = Archive(source.read_bytes()).read('CS_W1.bfres')
+        shapes = extract_rigid_model(model)
+        reader = Skeletons(model)
+        world = dict(reader.dictionary(reader.ptr(0x20)))['CS_W1_World']
+        materials = dict(reader.dictionary(reader.ptr(world + 24)))
+        texture_dictionary = dict(reader.dictionary(reader.ptr(0x24)))
+        self.assertEqual(len(materials), 36)
+        for material_name, material in materials.items():
+            reference_count = model[material + 17]
+            sampler_count = model[material + 16]
+            self.assertEqual(reference_count, sampler_count, material_name)
+            refs = reader.ptr(material + 40)
+            samplers = reader.dictionary(reader.ptr(material + 48))
+            self.assertEqual(len(samplers), reference_count, material_name)
+            reader.bounds(refs, reference_count * 8)
+            for index in range(reference_count):
+                texture_name = reader.string(reader.ptr(refs + index * 8))
+                if texture_name.lower().endswith('_nml'):
+                    self.assertEqual(samplers[index][0], '_n0', material_name)
+                    self.assertEqual(reader.u32(texture_dictionary[texture_name] + 24), 0x235,
+                                     texture_name)
+        textures, failed = attach_normal_map_textures(model, shapes)
+        textured = [shape for shape in shapes if shape.get('normalTexture')]
+        self.assertEqual(len(textured), 22)
+        self.assertTrue(textures)
+        self.assertTrue(failed)
+        route_texture = extract_normal_map_texture(model, 'CS_W1_World', 'mtRouteOpague')
+        self.assertEqual((route_texture['name'], route_texture['width'], route_texture['height'],
+                          route_texture['format'], route_texture['pitch'], route_texture['mip_count']),
+                         ('RouteW1_nml', 128, 256, 0x235, 32, 9))
+        self.assertEqual(hashlib.sha256(route_texture['data']).hexdigest(),
+                         'c03491af2d4bc380b4df0147fe1cab318f36bbf66e2d004b32a04b9028def17e')
+        route_compact = detile_bc5_snorm_thin1(
+            route_texture['data'], route_texture['width'], route_texture['height'],
+            route_texture['pitch'], tile_mode=route_texture['tile_mode'],
+            swizzle=route_texture['swizzle'], depth=route_texture['depth'])
+        self.assertEqual(hashlib.sha256(route_compact).hexdigest(),
+                         '23b5fd8bde69c9b2fbb1f63741d6237558bb69b5e5f39cf9df29865dedd39418')
+        for shape in textured:
+            texture = extract_normal_map_texture(model, 'CS_W1_World', shape['material'])
+            self.assertEqual(texture['format'], 0x235)
+            compact = detile_bc5_snorm_thin1(
+                texture['data'], texture['width'], texture['height'], texture['pitch'],
+                tile_mode=texture['tile_mode'], swizzle=texture['swizzle'], depth=texture['depth'])
+            rgba = decode_bc5_snorm(compact, texture['width'], texture['height'])
+            self.assertEqual(len(rgba), texture['width'] * texture['height'] * 4)
+            self.assertEqual(set(rgba[2::4]), {128})
+            self.assertEqual(set(rgba[3::4]), {255})
 
 
 if __name__ == '__main__':

@@ -4,8 +4,10 @@ import unittest
 from worldstudio.texture_preview import (
     decode_bc1,
     decode_bc3,
+    decode_bc5_snorm,
     detile_bc1_thin1,
     detile_bc3_thin1,
+    detile_bc5_snorm_thin1,
 )
 
 
@@ -78,6 +80,11 @@ def tiled_bc3_from_linear(linear, width, height, pitch, swizzle):
     return bytes(tiled)
 
 
+def bc4_snorm_block(endpoint0, endpoint1, indices):
+    packed = sum((index & 7) << (3 * pixel) for pixel, index in enumerate(indices))
+    return bytes((endpoint0 & 255, endpoint1 & 255)) + packed.to_bytes(6, 'little')
+
+
 class Bc1DecodeTests(unittest.TestCase):
     def test_known_red_block_decodes_to_top_down_rgba(self):
         rgba = decode_bc1(solid_block(0xF800), 4, 4)
@@ -129,6 +136,36 @@ class Bc3DecodeTests(unittest.TestCase):
     def test_rejects_wrong_block_count(self):
         with self.assertRaisesRegex(ValueError, "exactly 16 bytes"):
             decode_bc3(bytes(17), 4, 4)
+
+
+class Bc5SNormDecodeTests(unittest.TestCase):
+    def test_signed_endpoints_interpolation_and_independent_channels(self):
+        red = bc4_snorm_block(127, -127, [0, 1, 2, 3, 4, 5, 6, 7] * 2)
+        green = bc4_snorm_block(-127, 127, [6, 7, 0, 1, 2, 3, 4, 5] * 2)
+        rgba = decode_bc5_snorm(red + green, 4, 4)
+        pixels = [tuple(rgba[i:i + 4]) for i in range(0, len(rgba), 4)]
+        self.assertEqual(pixels[0], (255, 0, 128, 255))
+        self.assertEqual(pixels[1], (0, 255, 128, 255))
+        self.assertEqual(pixels[2], (219, 0, 128, 255))
+
+    def test_negative_128_endpoint_clamps_to_snorm_minus_one(self):
+        block = bc4_snorm_block(-128, 127, [0] * 16)
+        rgba = decode_bc5_snorm(block + block, 4, 4)
+        self.assertEqual(rgba[:4], bytes((0, 0, 128, 255)))
+
+    def test_rejects_implementation_dependent_signed_endpoint_order(self):
+        ambiguous = bc4_snorm_block(-127, -128, [0] * 16)
+        with self.assertRaisesRegex(ValueError, 'implementation-dependent'):
+            decode_bc5_snorm(ambiguous + ambiguous, 4, 4)
+
+    def test_odd_dimensions_crop_and_wrong_block_count_rejected(self):
+        red = bc4_snorm_block(127, -127, [0] * 16)
+        green = bc4_snorm_block(-127, 127, [1] * 16)
+        rgba = decode_bc5_snorm((red + green) * 2, 5, 3)
+        self.assertEqual(len(rgba), 5 * 3 * 4)
+        self.assertEqual(rgba[:4], bytes((255, 255, 128, 255)))
+        with self.assertRaisesRegex(ValueError, 'exactly 32 bytes'):
+            decode_bc5_snorm(bytes(31), 5, 3)
 
 
 class Bc1Thin1Tests(unittest.TestCase):
@@ -209,6 +246,22 @@ class Bc3Thin1Tests(unittest.TestCase):
         linear = bytes((i * 19 + 7) & 0xFF for i in range(blocks_w * blocks_h * 16))
         tiled = tiled_bc3_from_linear(linear, width, height, pitch, swizzle)
         self.assertEqual(detile_bc3_thin1(tiled, width, height, pitch, swizzle=swizzle), linear)
+
+
+class Bc5SNormThin1Tests(unittest.TestCase):
+    def test_same_128_bpp_thin1_layout_roundtrips_bc5_blocks(self):
+        width, height, pitch, swizzle = 129, 65, 64, 0xD0300
+        blocks_w, blocks_h = (width + 3) // 4, (height + 3) // 4
+        linear = bytes((i * 29 + 17) & 255 for i in range(blocks_w * blocks_h * 16))
+        tiled = tiled_bc3_from_linear(linear, width, height, pitch, swizzle)
+        self.assertEqual(detile_bc5_snorm_thin1(tiled, width, height, pitch, swizzle=swizzle), linear)
+
+    def test_rejects_non_thin1_and_incorrect_padded_surface_size(self):
+        data = bytes(32 * 16 * 16)
+        with self.assertRaisesRegex(ValueError, 'tileMode 4'):
+            detile_bc5_snorm_thin1(data, 4, 4, 32, tile_mode=5)
+        with self.assertRaisesRegex(ValueError, 'exactly 8192 bytes'):
+            detile_bc5_snorm_thin1(data[:-16], 4, 4, 32)
 
 
 if __name__ == "__main__":

@@ -15,15 +15,16 @@ Progress details and dated findings: [PROGRESS.md](PROGRESS.md) · [Runtime test
 - Inspect supported BFRES skeletons and apply bounded bone-transform changes.
 - Export an experimental three-node progression patch using existing route data.
 - Import a bounded rigid OBJ mesh into a known grass shape while retaining its material and layout.
-- Open an offline WebGL viewer for 42 supported static shapes from the local World 1 BFRES (70,193 vertices and 106,736 triangles), with route overlays and per-shape visibility controls.
+- Open an offline WebGL viewer for 42 supported static shapes from the local World 1 BFRES (70,193 vertices and 106,736 triangles), with route overlays, per-shape visibility controls, and a deduplicated wireframe view.
 - Decode shared BC1/BC3 base-color textures for all 36 local W1 meshes with supported UVs, including alpha cutouts. Other texture formats and material effects remain approximations.
+- Inspect BC5 SNORM R/G channels for six shared `_n0` maps across 22 UV meshes; the viewer labels this as a diagnostic channel view, not normal-mapped lighting.
 - Pack scene geometry into compact typed buffers for the viewer; its generated page was about 8.1 MB for the supplied W1 model and decoded textures.
 - Validate directed reachability with `validate-graph`, and block project exports when a new local destination lacks a route chain or an edited route disconnects a destination that was connected in the baseline.
 - Read and edit discovered camera-offset tables; analyze and round-trip event data offline.
 - Use the standalone Tk editor to inspect the map, edit supported fields, save project files, and undo or redo up to 31 recent edits with Ctrl+Z / Ctrl+Y.
 - Run the local automated suite against synthetic fixtures and the user-provided local dump.
 
-The WebGL viewer supports BC1/BC3 base-color maps in the observed GX2 2D Thin1 layout. It does not evaluate material parameters, UV transforms, light maps, game shaders, animation, or arbitrary BFRES variants. The editor deliberately blocks unsupported node/index changes. Camera and event formats have offline tooling, but their in-game behavior and runtime integration are not verified. Read [Research and format findings](docs/RESEARCH.md), [Resource findings](docs/RESOURCE_FINDINGS.md), [Camera findings](docs/CAMERA_FINDINGS.md), and [Event findings](docs/EVENTS.md) for the evidence and limits of each feature.
+The WebGL viewer supports BC1/BC3 base-color maps and a diagnostic BC5 SNORM channel view in the observed GX2 2D Thin1 layout. BC5 channels are not reconstructed into tangent-space normals. The viewer does not evaluate material parameters, UV transforms, light maps, game shaders, animation, or arbitrary BFRES variants. The editor deliberately blocks unsupported node/index changes. Camera and event formats have offline tooling, but their in-game behavior and runtime integration are not verified. Read [Research and format findings](docs/RESEARCH.md), [Resource findings](docs/RESOURCE_FINDINGS.md), [Camera findings](docs/CAMERA_FINDINGS.md), and [Event findings](docs/EVENTS.md) for the evidence and limits of each feature.
 
 ## Current runtime status
 

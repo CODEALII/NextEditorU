@@ -1,12 +1,14 @@
-"""Small, strict decoders for BC1/BC3 textures and one verified GX2 layout.
+"""Small, strict decoders for BC1/BC3/BC5 textures and one verified GX2 layout.
 
 The Thin1 address calculation is based on the pinned source
 ``external/BfresLibrary/BfresLibrary/WiiU/Texture/GX2/GX2.cs`` at commit
 ``65c005275deed1e085069e72fea523247f955b87``. It ports the BCn block-grid
-handling in ``swizzleSurf``, BC1/BC3 block indexing in
+handling in ``swizzleSurf``, BC block indexing in
 ``computePixelIndexWithinMicroTile``, and the 2D macro-tiled address path in
 ``computeSurfaceAddrFromCoordMacroTiled``. This module supports only single
-sample, single-layer GX2 2D Thin1 (tileMode 4) BC1 and BC3 levels.
+sample, single-layer GX2 2D Thin1 (tileMode 4) BC1, BC3 and BC5 levels. BC5
+SNORM output is diagnostic; it is not used for lighting because tangent data
+and channel orientation are unverified.
 """
 from __future__ import annotations
 
@@ -137,6 +139,66 @@ def decode_bc3(data, width, height):
     return bytes(output)
 
 
+def _bc4_snorm_palette(block):
+    """Decode the signed endpoint table and packed indices of one BC4 block."""
+    endpoint0 = int.from_bytes(block[0:1], "little", signed=True)
+    endpoint1 = int.from_bytes(block[1:2], "little", signed=True)
+    if endpoint0 == -127 and endpoint1 == -128:
+        raise ValueError("BC4 SNORM endpoint order (-127, -128) is implementation-dependent")
+    red0 = -1.0 if endpoint0 == -128 else endpoint0 / 127.0
+    red1 = -1.0 if endpoint1 == -128 else endpoint1 / 127.0
+    palette = [red0, red1]
+    if endpoint0 > endpoint1:
+        palette.extend(((7 - index) * red0 + index * red1) / 7.0
+                       for index in range(1, 7))
+    else:
+        palette.extend(((5 - index) * red0 + index * red1) / 5.0
+                       for index in range(1, 5))
+        palette.extend((-1.0, 1.0))
+    return palette, int.from_bytes(block[2:8], "little")
+
+
+def decode_bc5_snorm(data, width, height):
+    """Decode BC5 SNORM to diagnostic RGBA8 channel visualization.
+
+    R and G contain the two signed BC4 channels remapped to [0, 255]. Blue is
+    neutral gray and alpha is opaque. This does not reconstruct Z or apply
+    tangent-space lighting; those interpretations need verified channel
+    orientation, vertex tangents and game material state.
+    """
+    width = _positive_int(width, "width")
+    height = _positive_int(height, "height")
+    source = _byte_view(data)
+    blocks_w = (width + 3) // 4
+    blocks_h = (height + 3) // 4
+    expected = blocks_w * blocks_h * 16
+    if len(source) != expected:
+        raise ValueError(f"BC5 SNORM data must be exactly {expected} bytes for {width}x{height}; got {len(source)}")
+
+    output = bytearray(width * height * 4)
+    for by in range(blocks_h):
+        for bx in range(blocks_w):
+            offset = (by * blocks_w + bx) * 16
+            red_palette, red_indices = _bc4_snorm_palette(source[offset:offset + 8])
+            green_palette, green_indices = _bc4_snorm_palette(source[offset + 8:offset + 16])
+            for py in range(_TEXELS_PER_BLOCK):
+                y = by * _TEXELS_PER_BLOCK + py
+                if y >= height:
+                    break
+                for px in range(_TEXELS_PER_BLOCK):
+                    x = bx * _TEXELS_PER_BLOCK + px
+                    if x >= width:
+                        break
+                    pixel = py * _TEXELS_PER_BLOCK + px
+                    red = red_palette[(red_indices >> (3 * pixel)) & 7]
+                    green = green_palette[(green_indices >> (3 * pixel)) & 7]
+                    r8 = max(0, min(255, int((red + 1.0) * 127.5 + 0.5)))
+                    g8 = max(0, min(255, int((green + 1.0) * 127.5 + 0.5)))
+                    target = (y * width + x) * 4
+                    output[target:target + 4] = bytes((r8, g8, 128, 255))
+    return bytes(output)
+
+
 def _bc1_thin1_block_offset(x, y, pitch, swizzle):
     """Port the pinned GX2 macro-tile address for one compressed BC1 block."""
     # 64 bpp here means one 8-byte BC1 block on the block grid. GX2's
@@ -166,7 +228,7 @@ def _bc1_thin1_block_offset(x, y, pitch, swizzle):
 
 
 def _bc3_thin1_block_offset(x, y, pitch, swizzle):
-    """Return the GX2 Thin1 address for one 128-bpp BC3 block."""
+    """Return the shared 128-bpp GX2 Thin1 address used by BC3 and BC5."""
     # GX2's explicit 128-bpp branch orders y0, x0, x1, x2, y1, y2.
     pixel_index = ((y & 1) | ((x & 1) << 1) | (((x & 2) >> 1) << 2) |
                    (((x & 4) >> 2) << 3) | (((y & 2) >> 1) << 4) |
@@ -229,6 +291,23 @@ def detile_bc3_thin1(
     aa=0,
 ):
     """Return compact row-major BC3 data from GX2 2D Thin1 storage."""
+    return _detile_bc_thin1(data, width, height, pitch, 16, tile_mode=tile_mode,
+                            swizzle=swizzle, dimension=dimension, depth=depth, aa=aa)
+
+
+def detile_bc5_snorm_thin1(
+    data,
+    width,
+    height,
+    pitch,
+    *,
+    tile_mode=4,
+    swizzle=0,
+    dimension=1,
+    depth=1,
+    aa=0,
+):
+    """Return compact row-major BC5 SNORM data from GX2 2D Thin1 storage."""
     return _detile_bc_thin1(data, width, height, pitch, 16, tile_mode=tile_mode,
                             swizzle=swizzle, dimension=dimension, depth=depth, aa=aa)
 

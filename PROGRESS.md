@@ -259,3 +259,27 @@ camera behavior and a fully playable custom world remain open.
 - Final local regression for these changes: **108 tests passed in 93.883
   seconds**. `compileall`, the W1 `validate-graph` command and `git diff --check`
   passed. Cemu rendering and user-browser GPU behavior remain unverified.
+
+## 2026-10-21 - BC5 SNORM channel inspection
+
+- Added bounded extraction for material-referenced BC5 SNORM `_nml` textures.
+  It verifies the local W1 sampler dictionary has the matching `_n0` slot and
+  rejects unsupported formats or reference/sampler count mismatches.
+- Added signed BC4 channel decoding and reused the tested 128-bpp GX2 Thin1
+  block address path. Interpolation uses normalized endpoints, and the
+  implementation-dependent `(-127, -128)` endpoint order is rejected. The
+  viewer now has an opt-in “BC5 channels” mode that shows R/G diagnostic colors
+  on six unique maps across 22 UV meshes. It does not reconstruct Z, infer
+  tangent-space orientation, or change lighting.
+- Added a wireframe mode with deduplicated triangle edges. A Node regression
+  verifies its edge output while the generated page syntax test covers both
+  controls.
+- Local W1 `RouteW1_nml` fixture: 128x256, format `0x235`, pitch 32, nine mips
+  reported, 32,768-byte top-level image. Raw and detiled hashes are recorded in
+  `docs/RESEARCH.md`; synthetic and local tests cover signed endpoints, crops,
+  malformed sizes, slot validation and shared GX2 addressing.
+- Focused texture, extractor, viewer and security tests: **41 passed**. The
+  full offline suite then passed **120 tests in 96.490 seconds**; `compileall`,
+  `git diff --check`, and the local W1 route-validation command passed. The
+  WebGL controls are automated-test-covered; their visible appearance in the
+  user's browser and Cemu is still unverified.
