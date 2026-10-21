@@ -134,15 +134,16 @@ comparison, not a fresh-save progression test.
 
 ## Still required before declaring the prototype playable
 
-1. First establish a supported start input for the clean baseline's visible
-   `Press 2!` prompt. Confirm the active input profile and whether the game
-   expects a GamePad or a Wii Remote button; the current GamePad profile does
-   not expose a separate Wii Remote `2` binding. Reach the map, then confirm
-   W/A/S/D address the left stick and hold D at W101 to confirm movement. Test
-   the patched archive with the same controller profile and input. Record the
-   exact window, profile, start, and destination.
-   A valid baseline movement followed by patched immobility isolates a
-   route/patch issue; failure in both leaves input unresolved.
+1. At the `Press 2!` prompt, the user has instructed us to left-click inside
+   the Cemu game window to continue. This is the next interaction to verify;
+   earlier Enter/Z attempts did not confirm the prompt behavior. Launch each
+   prepared profile with the WASD GamePad keyboard mapping, wait for the map,
+   record Mario's start node, then hold D at W101 and observe whether he reaches
+   W102. Repeat with the chain and direct-route profiles from the same saved
+   starting state and comparable hold duration. Record the exact Cemu window,
+   profile, start, input duration and destination shown. A clean-profile pass
+   followed by patched immobility isolates a route/patch issue; failure in all
+   three profiles leaves the input path unresolved.
 2. Confirm the displayed destination is Acorn Plains 3 and launch that level.
 3. On a fresh save, clear 1-1 then 1-2. Confirm the intended new unlocks and
    restrictions without relying on already-cleared tower flags.

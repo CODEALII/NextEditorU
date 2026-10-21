@@ -1339,3 +1339,7 @@ camera behavior and a fully playable custom world remain open.
   for the point-only chain. It shares the same two hash-verified save files with
   clean and direct-route profiles. The three static preflights pass; no profile
   has been launched and no game movement is verified.
+- The user supplied the next start-screen action: left-click inside the Cemu
+  game window at `Press 2!`, wait for the map, then use WASD. Updated the
+  integration protocol accordingly. This interaction has not yet been observed
+  in the game because Computer Use still reports no native window handles.
