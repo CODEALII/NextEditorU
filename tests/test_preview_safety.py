@@ -48,6 +48,9 @@ class PreviewSafetyTests(unittest.TestCase):
         page = build_document({"shapes": [], "nodes": [], "routes": []})
         self.assertIn("textureWarning:shape.textureWarning||''", page)
         self.assertIn("row.className='inspector-row texture-warning';row.textContent='Texture fallback: '+mesh.textureWarning", page)
+        self.assertIn("warning.className='shape-warning';warning.textContent='!'", page)
+        self.assertIn("warning.title='Texture fallback: '+mesh.textureWarning", page)
+        self.assertIn("+(mesh.textureWarning||'')", page)
 
     def test_webgl_startup_failures_show_an_obvious_viewer_fallback(self):
         page = build_document({"shapes": [], "nodes": [], "routes": []})
@@ -102,7 +105,7 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn('"RouteW1_alb":{"name":"RouteW1_alb"', page)
         self.assertIn("scene.textures?.[shape.texture]", page)
         self.assertIn("textureCache.set(key,texture)", page)
-        self.assertIn("mesh.normalTextureName+' '+mesh.diagnosticTextureName+' '+mesh.maskTextureName).concat(' ',bc4Search,' ',samplerSearch).toLowerCase()", page)
+        self.assertIn("mesh.normalTextureName+' '+mesh.diagnosticTextureName+' '+mesh.maskTextureName+' '+(mesh.textureWarning||'')).concat(' ',bc4Search,' ',samplerSearch).toLowerCase()", page)
         self.assertIn("shape.samplerTextures||{}", page)
         self.assertIn("scene.maskTextures?.[key]", page)
         self.assertIn("samplerPreviews[slot]=payload", page)

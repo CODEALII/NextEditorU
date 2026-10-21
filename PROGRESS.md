@@ -1014,3 +1014,12 @@ camera behavior and a fully playable custom world remain open.
 - Full suite: **245 tests passed in 248.333 seconds**; `compileall` passed and
   `git diff --check` reported no whitespace errors. This is offline viewer
   validation only.
+
+## 2026-10-21 — Surface fallback meshes in the viewer list
+
+- Shapes using approximate color now show an accessible warning badge directly
+  in the mesh list. The list filter also searches the bounded fallback reason,
+  and selecting the shape reveals the same explanation in the inspector.
+- Full suite: **245 tests passed in 245.891 seconds**; `compileall` passed and
+  `git diff --check` reported no whitespace errors. This is offline viewer
+  validation only.
