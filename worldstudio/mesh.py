@@ -47,8 +47,9 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
 
     This reader intentionally supports the tested world-model subset only:
     big-endian float32x3 or observed half-float4 (W=1) positions, packed
-    10:10:10:2 normals, and contiguous u16 triangle lists. Textures, animations,
-    skinning and non-identity root transforms are not evaluated.
+    10:10:10:2 normals, contiguous u16 triangle lists, and a translation-only
+    root transform. Textures, animations, skinning and rotated/scaled roots are
+    not evaluated.
     """
     r = Skeletons(data)
     if r.version != 0x03000001:
@@ -58,9 +59,10 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
         raise ValueError(f'Missing BFRES model: {model}')
     model_offset = models[model]
     roots = [bone for bone in r.models.get(model, ()) if bone.parent == -1]
-    if len(roots) != 1 or roots[0].index != 0 or roots[0].position != (0., 0., 0.) or \
-            roots[0].scale != (1., 1., 1.) or roots[0].rotation != (0., 0., 0., 1.):
-        raise ValueError('3D preview requires one identity root bone')
+    if len(roots) != 1 or roots[0].index != 0 or roots[0].scale != (1., 1., 1.) or \
+            roots[0].rotation != (0., 0., 0., 1.):
+        raise ValueError('3D preview requires one translation-only root bone')
+    root_translation = roots[0].position
     materials = r.dictionary(r.ptr(model_offset + 24))
     result = []
     for shape_name, shape in r.dictionary(r.ptr(model_offset + 20)):
@@ -122,7 +124,7 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
                 if not all(math.isfinite(v) and abs(v) <= 1e5 for v in uv):
                     raise ValueError(f'{shape_name}: invalid texture coordinates in {name} at vertex {index}')
                 uv_values[name].append(uv)
-            positions.append(position)
+            positions.append(tuple(position[axis] + root_translation[axis] for axis in range(3)))
             normals.append(tuple(v / norm for v in normal))
         mesh = r.ptr(shape+36)
         r.bounds(mesh, 28)

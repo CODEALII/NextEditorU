@@ -17,7 +17,7 @@ the game reaches the map and keyboard-to-left-stick input can be checked.
 ## Rendering fidelity
 
 - Implemented: 42 rigid static shapes, 70,193 vertices, 106,736 triangles, route overlays, shape filtering, visibility toggles, and 20 shared BC1/BC3 albedos on all 42 W1 shapes with decoded UV attributes.
-- Implemented: native 3D preview selects the source archive's matching `<archive>_World` model when present. The tested local W1, W3, W4, W7, W9a and W9b models decode 42/40/53/34/3/20 static shapes. W7 and W9a also decode 19/2 supported base-color maps; other worlds and unsupported BFRES layouts remain explicit parser errors.
+- Implemented: native 3D preview selects the source archive's matching `<archive>_World` model when present. The tested local W1/W2a/W3/W4/W5b/W6a/W7/W8a/W9a/W9b models decode 42/58/40/53/27/61/34/18/3/20 static shapes. It supports observed float16x4 positions with W=1 and translation-only root bones; rotated/scaled roots and non-root shape bindings remain unsupported.
 - Implemented: `_u0` vertex decoding for observed GX2 `0x80D` float32x2, `0x7` UNorm16x2, `0x207` SNorm16x2, and `0x4` UNorm8x2 formats. W1 inventory and synthetic normalization/bounds tests cover all four; shader UV transforms remain unknown.
 - Implemented: WebGL context, shader/program and mesh-initialization errors show a high-contrast overlay.
 - Implemented: perspective depth planes follow the model bounding radius and camera distance, with a safe near-plane floor while zoomed inside the scene bounds.

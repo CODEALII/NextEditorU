@@ -140,6 +140,25 @@ class MeshTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'homogeneous W of 1'):
             extract_rigid_model(bytes(data))
 
+    def test_translation_only_root_is_applied_to_static_mesh_positions(self):
+        data = bytearray(fixture())
+        struct.pack_into('>3f', data, 0x1f0, 100.0, 200.0, -50.0)
+
+        shapes = extract_rigid_model(bytes(data))
+
+        self.assertEqual(shapes[0]['positions'][:3],
+                         [(100.0, 200.0, -50.0), (100.0, 200.0, -48.0),
+                          (102.0, 200.0, -50.0)])
+
+    def test_rotated_or_scaled_root_remains_unsupported(self):
+        for transform_offset, transform in ((0x1d4, (2.0, 1.0, 1.0)),
+                                            (0x1e0, (0.0, 0.0, 0.70710678, 0.70710678))):
+            with self.subTest(transform_offset=transform_offset):
+                data = bytearray(fixture())
+                struct.pack_into('>' + 'f' * len(transform), data, transform_offset, *transform)
+                with self.assertRaisesRegex(ValueError, 'translation-only root'):
+                    extract_rigid_model(bytes(data))
+
     def test_supported_gx2_uv_formats_decode_to_normalized_coordinates(self):
         encodings = (
             (0x80d, lambda data, at: struct.pack_into('>2f', data, at, .25, .75), (.25, .75)),
@@ -303,9 +322,10 @@ class LocalDumpMeshTests(unittest.TestCase):
         self.assertFalse(failed)
         self.assertEqual({texture['format'] for texture in textures.values()}, {0x31})
 
-    def test_local_w3_w4_and_w9b_world_static_meshes(self):
+    def test_local_translation_root_and_half_float_world_static_meshes(self):
         root = Path(__file__).resolve().parents[1]
-        expected_shapes = {'W3': 40, 'W4': 53, 'W9b': 20}
+        expected_shapes = {'W2a': 58, 'W3': 40, 'W4': 53, 'W5b': 27,
+                           'W6a': 61, 'W8a': 18, 'W9b': 20}
         for world, expected_count in expected_shapes.items():
             with self.subTest(world=world):
                 source = root / 'NSMBU Modding Project/content/Common/course_select' / f'CS_{world}.szs'

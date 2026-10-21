@@ -10,7 +10,7 @@ This backlog follows verified project dependencies. “Done offline” means par
 
 Implemented offline subcase: static W1 extraction and the selected-mesh inspector now decode all supported named `_uN` coordinate attributes. The local W1 inventory contains `_u1` on 42 shapes and `_u2` on 13; a selector compares each raw chart without assigning sampler meaning. The static geometry parser still rejects multi-mesh, multi-buffer, skinned and other unsupported BFRES layouts.
 
-Implemented offline subcase: the native preview chooses the `<archive>_World` model matching the opened course-select archive. The local W1/W3/W4/W7/W9a/W9b models produce 42/40/53/34/3/20 static shapes. W7 produces 19 decoded BC1 base-color maps and W9a produces 2; their 3D geometry and graph nodes share the tested W7 coordinate bounds. A read-only survey found remaining blockers including non-identity roots, non-root shape bindings and other vertex encodings.
+Implemented offline subcase: the native preview chooses the `<archive>_World` model matching the opened course-select archive. The local W1/W2a/W3/W4/W5b/W6a/W7/W8a/W9a/W9b models produce 42/58/40/53/27/61/34/18/3/20 static shapes. The decoder supports observed float16x4 positions with W=1 and translation-only roots. W7 produces 19 decoded BC1 base-color maps and W9a produces 2; their 3D geometry and graph nodes share the tested W7 coordinate bounds. Remaining blockers include non-root shape bindings, rotated/scaled roots and other vertex encodings.
 
 ## Next editing milestones
 

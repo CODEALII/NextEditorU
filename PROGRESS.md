@@ -937,3 +937,15 @@ camera behavior and a fully playable custom world remain open.
   at a SpotPass information screen. The misleading `cemu-island-baseline`
   profile has World Studio Chain enabled. No stock movement or terrain pass
   was observed; in-game route behavior remains unverified.
+
+## 2026-10-21 — Apply translation-only BFRES root bones
+
+- The static preview now applies the root bone's translation to rigid shape
+  positions when the root scale and rotation are identity. This matches the
+  documented direct shape-to-bone attachment field. Rotated/scaled roots remain
+  explicitly unsupported.
+- Local W2a, W5b, W6a and W8a models now parse 58, 27, 61 and 18 static shapes.
+  Combined with W1/W3/W4/W7/W9a/W9b, ten of the twelve supplied world archives
+  pass the tested static subset; W5a/W8b still contain non-root shape bindings.
+- Full suite: **233 tests passed in 193.021 seconds**; compileall and
+  `git diff --check` passed. No in-game geometry or camera result is inferred.
