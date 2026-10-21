@@ -165,6 +165,60 @@ class LocalIntegrationTests(unittest.TestCase):
             self.assertEqual(s.unique('W101').index, p.skeletons.unique('W101').index)
         self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
 
+    def test_terrain_project_roundtrip_export_and_reopen(self):
+        from worldstudio.editor import read_obj
+        from worldstudio.mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model
+
+        p = WorldProject.open(DEFAULT_SOURCE)
+        root = Path(__file__).resolve().parents[1]
+        terrain = root / 'examples' / 'island-game.obj'
+        vertices, faces, uvs, normals = read_obj(terrain, include_attributes=True)
+        p.geometry = {
+            'vertices': [list(vertex) for vertex in vertices],
+            'faces': [list(face) for face in faces],
+            'uvs': [list(uv) if uv is not None else None for uv in uvs],
+            'normals': [list(normal) if normal is not None else None for normal in normals],
+        }
+        p.terrain = str(terrain.resolve())
+        source_entries = {name: p.archive.read(name) for name in p.archive.entries}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            project_path = folder / 'terrain-project.nws.json'
+            output = folder / 'CS_W1-terrain.szs'
+            p.save(project_path)
+            restored = WorldProject.load(project_path)
+            self.assertEqual(restored.geometry, p.geometry)
+            self.assertEqual(Path(restored.terrain), terrain.resolve())
+
+            manifest = restored.export(output)
+            self.assertTrue(manifest['terrain_exported'])
+            self.assertEqual(manifest['geometry']['shape'], DEFAULT_SHAPE)
+            self.assertEqual(manifest['geometry']['vertices'], len(vertices))
+            self.assertEqual(manifest['geometry']['triangles'], len(_geometry(
+                vertices, faces, uvs, normals)[1]) // 3)
+            self.assertEqual(manifest['changed_entries'], [restored.model_name])
+            self.assertFalse(manifest['game_tested'])
+
+            exported = Archive(output.read_bytes())
+            self.assertEqual(set(exported.entries), set(source_entries))
+            for name, original in source_entries.items():
+                if name != restored.model_name:
+                    self.assertEqual(exported.read(name), original, name)
+
+            target = next(shape for shape in extract_rigid_model(
+                exported.read(restored.model_name)) if shape['name'] == DEFAULT_SHAPE)
+            triangulated_vertices, triangulated_indices, _, _ = _geometry(
+                vertices, faces, uvs, normals)
+            self.assertGreaterEqual(len(target['positions']), len(triangulated_vertices))
+            for actual, expected in zip(target['positions'], triangulated_vertices):
+                for actual_axis, expected_axis in zip(actual, expected):
+                    self.assertAlmostEqual(actual_axis, expected_axis, places=4)
+            self.assertEqual(target['indices'][:len(triangulated_indices)], triangulated_indices)
+            self.assertTrue(all(index == 0 for index in target['indices'][len(triangulated_indices):]))
+
+        self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
+
 
 class ProjectGraphValidationTests(unittest.TestCase):
     def test_route_only_disconnect_blocks_project_export(self):

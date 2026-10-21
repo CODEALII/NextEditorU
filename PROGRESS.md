@@ -566,3 +566,14 @@ camera behavior and a fully playable custom world remain open.
 - After the final preview-notice wording update, the focused texture and
   viewer-safety suites passed again (**17 + 27 tests**); compile and diff checks
   also passed.
+
+## 2026-10-21 — End-to-end terrain export regression
+
+- Added a local-dump integration test covering OBJ import, project save/load,
+  SZS export, archive reopen, and re-extraction of the replaced grass shape.
+  It checks the imported vertex and triangle payload, unchanged unrelated
+  archive entries, and that the source dump remains byte-identical.
+- The focused integration test passed (**1 test**), and the full regression
+  passed (**179 tests in 127.269 seconds**). `compileall`, `git diff --check`,
+  and W101 → W102/W103 reachability also passed. Cemu appearance, collision,
+  route traversal, and level starts remain unverified.
