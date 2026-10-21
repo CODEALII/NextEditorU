@@ -19,6 +19,7 @@ is still needed before baseline/patch route QA.
 - Implemented: WebGL context, shader/program and mesh-initialization errors show a high-contrast overlay.
 - Implemented: perspective depth planes follow the model bounding radius and camera distance, with a safe near-plane floor while zoomed inside the scene bounds.
 - Implemented: a BC5 SNORM channel inspector for six local `_n0` maps, with fail-closed sampler-slot checks and signed block decoding; it is explicitly diagnostic and does not alter lighting.
+- Implemented: an optional BC5 tangent-space lighting preview reconstructs Z and derives tangent frames from supported mesh geometry and UVs. It is disabled by default; channel orientation and game material settings remain unverified.
 - Implemented: an on/off wireframe mode built from deduplicated triangle edges for the viewer's supported static shapes.
 - Implemented: a sampled vertex-normal overlay capped at about 5,000 vectors across the scene, with normalized direction and model-scaled length.
 - Implemented: accessible shape-name buttons select a mesh row and populate a safe-text inspector with material, vertex/triangle counts, UV availability, and supported base/BC5 texture references.

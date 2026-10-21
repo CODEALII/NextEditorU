@@ -374,3 +374,20 @@ camera behavior and a fully playable custom world remain open.
   after implementation: **15 tests passed**. Full post-change suite:
   **135 tests passed in 91.155 seconds**; `compileall`, `git diff --check`,
   and the W101 → W102/W103 validator also passed.
+
+## 2026-10-21 — optional BC5 tangent-space preview
+
+- Added an opt-in BC5 lighting mode, separate from the diagnostic channel
+  display and disabled unless a mapped mesh has usable UV-derived tangents.
+  Tangents are accumulated from indexed triangles, orthogonalized against the
+  vertex normals, and retain mirrored-UV handedness. The shader reconstructs
+  positive Z from signed R/G and applies the preview TBN frame.
+- Node tests cover regular and mirrored UV bases and reject fully degenerate
+  UV triangles. Headless Chrome/SwiftShader loaded the actual local W1 scene:
+  all **22 of 22** mapped UV meshes received tangent buffers; the mode toggled
+  on with no page or WebGL initialization errors. Screenshot:
+  `local/evidence/preview-w1-bc5-lighting-on.png` (ignored local evidence).
+- This demonstrates the optional renderer path only. BC5 channel orientation,
+  green-channel convention and NSMBU material settings remain unverified.
+  Full regression: **136 tests passed in 91.231 seconds**; `compileall`,
+  `git diff --check`, and the W101 → W102/W103 graph validator also passed.

@@ -462,7 +462,9 @@ class WorldStudio(ttk.Frame):
                 normal_texture_notice = (
                     f"BC5 SNORM channel inspection: {len(normal_textures)} unique maps on "
                     f"{normal_textured_shapes} UV meshes. R/G are diagnostic channels only; no tangent-space "
-                    "normal reconstruction or game lighting is applied. Only top-level texture images are previewed."
+                    "lighting is applied in this view. The optional reconstructed-normal preview is approximate; "
+                    "channel orientation and game material lighting are unverified. Only top-level texture images "
+                    "are previewed."
                 )
                 if warned_normal_materials:
                     normal_texture_notice += f" {len(warned_normal_materials)} material(s) have no supported _n0 map."

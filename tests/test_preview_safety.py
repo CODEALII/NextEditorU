@@ -98,7 +98,7 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("textureCache.set(key,texture)", page)
         self.assertIn("mesh.normalTextureName).toLowerCase()", page)
 
-    def test_viewer_exposes_bc5_channel_inspector_without_claiming_normal_lighting(self):
+    def test_viewer_exposes_bc5_diagnostic_and_optional_approximate_lighting(self):
         page = build_document({
             "normalTextures": {"RouteW1_nml": {"name": "RouteW1_nml", "width": 1,
                                                 "height": 1, "rgbaBase64": "AAAAAA=="}},
@@ -108,17 +108,42 @@ class PreviewSafetyTests(unittest.TestCase):
                         "normals": [[0, 1, 0]], "indices": [0]}],
             "nodes": [], "routes": []})
         self.assertIn('<button id="bc5-view" disabled>BC5 channels off</button>', page)
+        self.assertIn('<button id="normal-map" disabled>BC5 lighting off</button>', page)
         self.assertIn('scene.normalTextures?.[shape.normalTexture]', page)
         self.assertIn('uniform float uShowNormalTexture', page)
+        self.assertIn('uniform float uUseNormalMap', page)
+        self.assertIn('attribute vec4 aTangent', page)
+        self.assertIn('sqrt(max(0.0,1.0-dot(xy,xy)))', page)
+        self.assertIn('Approximate BC5 tangent-space lighting is active', page)
         self.assertIn('BC5 SNORM channels are diagnostic only.', page)
         self.assertIn('normalTextureName', page)
         self.assertIn('R/G channels are shown as diagnostic colors only', page)
-        self.assertNotIn('normalMap', page)
         self.assertNotIn('https://', page)
         self.assertIn('<button id="wireframe">Wireframe off</button>', page)
         self.assertIn('gl.drawElements(showWireframe?gl.LINES:gl.TRIANGLES', page)
         self.assertIn('<button id="normals">Normals off</button>', page)
         self.assertIn('if(m.visible)drawOverlay(m.normalOverlay', page)
+
+    def test_tangent_generation_builds_an_orthonormal_uv_basis(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise viewer tangent generation")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        start = page.index("function makeTangents(")
+        end = page.index("\nlet meshes=[];", start)
+        helper = page[start:end]
+        probe = helper + r"""
+const p=[0,0,0,1,0,0,0,1,0],n=[0,0,1,0,0,1,0,0,1],uv=[0,0,1,0,0,1];
+const regular=makeTangents(p,n,uv,new Uint16Array([0,1,2]));
+const mirrored=makeTangents(p,n,[0,0,0,1,1,0],new Uint16Array([0,1,2]));
+const degenerate=makeTangents(p,n,[0,0,0,0,0,0],new Uint16Array([0,1,2]));
+console.log(JSON.stringify({regular:Array.from(regular),mirrored:Array.from(mirrored),degenerate}));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        values = json.loads(result.stdout)
+        self.assertEqual(values["regular"], [1, 0, 0, 1] * 3)
+        self.assertEqual(values["mirrored"][3::4], [-1, -1, -1])
+        self.assertIsNone(values["degenerate"])
 
     def test_mesh_selection_inspector_shows_geometry_uv_and_texture_references(self):
         node = shutil.which("node")
@@ -139,7 +164,7 @@ const b={name:'Rock',material:'mtRock',color:[.3,.3,.3],textureName:'',normalTex
 addShapeRow(a);addShapeRow(b);a.row.children[2].listeners.click();
 if(!a.row.classList.contains('selected'))throw Error('selected row is not marked');
 const first=registry.selection.children.map(x=>x.textContent).join('\n');
-if(!first.includes('Grass <test>')||!first.includes('12 vertices / 8 triangles')||!first.includes('Grass_alb')||!first.includes('Grass_nml (BC5 diagnostic only)'))throw Error(first);
+if(!first.includes('Grass <test>')||!first.includes('12 vertices / 8 triangles')||!first.includes('Grass_alb')||!first.includes('Grass_nml (BC5 SNORM map)'))throw Error(first);
 registry.selection.children.at(-1).listeners.click();if(focusedMesh!==a)throw Error('focus action is not linked to selection');
 b.row.children[2].listeners.click();
 if(a.row.classList.contains('selected')||!b.row.classList.contains('selected'))throw Error('selection did not move');
