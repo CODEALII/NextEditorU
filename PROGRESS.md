@@ -298,3 +298,16 @@ camera behavior and a fully playable custom world remain open.
   42 shapes, 17 albedos, six BC5 maps and valid inline JavaScript. The WebGL
   controls are automated-test-covered; their visible appearance in the user's
   browser and Cemu is still unverified.
+
+## 2026-10-21 — preview lighting controls
+
+- Added azimuth, elevation, and intensity sliders to the WebGL viewer. They
+  control only the illustrative preview shader; the default direction preserves
+  the existing approximate light and no game data is changed.
+- A Node-backed control test dispatches a slider input and checks the shader
+  direction, intensity, and accessible value labels. Browser visual inspection
+  passed in headless Chrome with SwiftShader. The render of the 42-shape local
+  W1 model shows the inspector and all three lighting sliders at 1440×900;
+  screenshot is in ignored `local/evidence/preview-w1-lighting.png`. User-browser
+  GPU behavior remains unverified. The full suite passed **123 tests in 99.609
+  seconds**; `compileall`, `git diff --check`, and local route validation passed.

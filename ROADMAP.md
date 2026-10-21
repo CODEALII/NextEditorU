@@ -20,7 +20,8 @@ the title prompt. A working game input source is still needed before route QA.
 - Implemented: an on/off wireframe mode built from deduplicated triangle edges for the viewer's supported static shapes.
 - Implemented: a sampled vertex-normal overlay capped at about 5,000 vectors across the scene, with normalized direction and model-scaled length.
 - Implemented: accessible shape-name buttons select a mesh row and populate a safe-text inspector with material, vertex/triangle counts, UV availability, and supported base/BC5 texture references.
-- Next: verify the new viewer controls in a normal browser; add viewport picking, material controls, and adjustable camera/light settings.
+- Implemented: adjustable preview-light azimuth, elevation, and intensity controls feed normalized shader lighting while retaining the original default direction; these controls do not modify game data or claim game shader fidelity.
+- Next: verify the new viewer controls with the user's browser/GPU; add viewport picking, material controls, and camera presets/target controls.
 - Investigate BC5 UNORM masks and BC4 slots with material-slot evidence before rendering them. Add UV transforms, transparent material modes, baked light maps, and additional GX2 tile layouts only with local references and fixed regression vectors.
 - Broaden geometry parsing to multiple meshes, more vertex encodings, hierarchy transforms, skinning, and other BFRES variants. The current static geometry subset must reject unsupported layouts clearly.
 

@@ -1,5 +1,6 @@
 import base64
 import json
+import math
 import re
 import shutil
 import struct
@@ -147,6 +148,37 @@ console.log('mesh selection inspector ok');
         result = subprocess.run([node, "-e", probe], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "mesh selection inspector ok")
+
+    def test_preview_light_controls_feed_a_normalized_shader_direction(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise preview lighting controls")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        for control in ("light-azimuth", "light-elevation", "light-intensity"):
+            self.assertIn(f'id="{control}" type="range"', page)
+        self.assertIn("uLightDirection", page)
+        self.assertIn("uLightIntensity", page)
+        self.assertIn("control.addEventListener('input',syncPreviewLight)", page)
+        start = page.index("function lightDirection(")
+        end = page.index("\nlet showWireframe=", start)
+        helper = page[start:end]
+        probe = r"""
+const elements={};
+for(const id of ['light-azimuth','light-elevation','light-intensity','light-azimuth-value','light-elevation-value','light-intensity-value'])elements[id]={value:id==='light-azimuth'?'-49.4':id==='light-elevation'?'56':'100',listeners:{},addEventListener(name,fn){this.listeners[name]=fn}};
+const document={getElementById:id=>elements[id]};
+""" + helper + r"""
+elements['light-azimuth'].value='0';elements['light-elevation'].value='0';elements['light-intensity'].value='150';
+elements['light-intensity'].listeners.input();
+console.log(JSON.stringify({direction:Array.from(previewLightDirection),intensity:previewLightIntensity,labels:[elements['light-azimuth-value'].value.charCodeAt(1),elements['light-elevation-value'].value.charCodeAt(1),elements['light-intensity-value'].value]}));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        output = json.loads(result.stdout)
+        direction = output["direction"]
+        self.assertAlmostEqual(math.sqrt(sum(component * component for component in direction)), 1.0)
+        for actual, expected in zip(direction, (0.0, 0.0, 1.0)):
+            self.assertAlmostEqual(actual, expected, delta=0.01)
+        self.assertAlmostEqual(output["intensity"], 1.5)
+        self.assertEqual(output["labels"], [176, 176, "150%"])
 
     def test_wireframe_edge_builder_deduplicates_triangle_edges(self):
         node = shutil.which("node")
