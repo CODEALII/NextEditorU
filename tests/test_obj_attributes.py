@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from worldstudio.editor import obj_geometry_summary, read_obj
+from worldstudio.mesh import transform_obj_geometry
 
 
 class ObjAttributeTests(unittest.TestCase):
@@ -134,6 +135,44 @@ f 1 2 3
         self.assertTrue(all(len(face) == 3 for face in faces))
         self.assertEqual(len(uvs), len(normals))
         self.assertEqual(sum(max(0, len(face) - 2) for face in faces), 54)
+
+    def test_z_up_conversion_applies_scale_rotation_offset_and_preserves_attributes(self):
+        vertices = [(0., 0., 0.), (1., 0., 0.), (0., 0., 1.)]
+        faces = [(0, 1, 2)]
+        uvs = [(0., 0.), (1., 0.), (0., 1.)]
+        normals = [(0., 0., 1.)] * 3
+        transformed = transform_obj_geometry(
+            vertices, faces, uvs, normals, scale=(2., 2., 2.),
+            rotation_degrees=(-90., 0., 0.), translation=(1., 2., 3.))
+        out_vertices, out_faces, out_uvs, out_normals = transformed
+        for actual, expected in zip(out_vertices, [(1., 2., 3.), (3., 2., 3.), (1., 4., 3.)]):
+            for value, target in zip(actual, expected):
+                self.assertAlmostEqual(value, target)
+        self.assertEqual(out_faces, faces)
+        self.assertEqual(out_uvs, uvs)
+        for actual in out_normals:
+            self.assertAlmostEqual(actual[0], 0.)
+            self.assertAlmostEqual(actual[1], 1.)
+            self.assertAlmostEqual(actual[2], 0.)
+
+    def test_obj_transform_uses_inverse_transpose_for_scaled_normals(self):
+        _, _, _, normals = transform_obj_geometry(
+            [(0., 0., 0.), (1., 0., 0.), (0., 1., 0.)], [(0, 1, 2)], None,
+            [(1., 1., 0.)] * 3, scale=(2., 1., 1.))
+        self.assertAlmostEqual(normals[0][0], 1 / (5 ** .5))
+        self.assertAlmostEqual(normals[0][1], 2 / (5 ** .5))
+        self.assertEqual(normals[0][2], 0.)
+
+    def test_mirrored_obj_transform_reverses_winding_and_invalid_scale_is_rejected(self):
+        vertices, faces, _, normals = transform_obj_geometry(
+            [(0., 0., 0.), (1., 0., 0.), (0., 1., 0.)], [(0, 1, 2)],
+            normals=[(0., 0., 1.)] * 3, scale=(-1., 1., 1.))
+        self.assertEqual(faces, [(2, 1, 0)])
+        self.assertEqual(vertices[1], (-1., 0., 0.))
+        self.assertEqual(normals, [(0., 0., 1.)] * 3)
+        with self.assertRaisesRegex(ValueError, 'scale components must be nonzero'):
+            transform_obj_geometry([(0., 0., 0.), (1., 0., 0.), (0., 1., 0.)],
+                                   [(0, 1, 2)], scale=(1., 0., 1.))
 
 
 if __name__=='__main__':

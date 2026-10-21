@@ -304,6 +304,80 @@ def _triangulate_face(vertices, face):
     return triangles
 
 
+def transform_obj_geometry(vertices, faces, uvs=None, normals=None, *,
+                           scale=(1., 1., 1.), rotation_degrees=(0., 0., 0.),
+                           translation=(0., 0., 0.)):
+    """Apply scale, X/Y/Z rotation, then translation to imported OBJ geometry.
+
+    Normals use the inverse-transpose of the scale/rotation matrix. A mirrored
+    transform reverses face winding so the transformed normals stay consistent.
+    """
+    def finite_vector(values, label, limit):
+        if len(values) != 3:
+            raise ValueError(f"OBJ {label} must contain three values")
+        vector = tuple(float(value) for value in values)
+        if not all(math.isfinite(value) and abs(value) <= limit for value in vector):
+            raise ValueError(f"OBJ {label} must be finite and within ±{limit:g}")
+        return vector
+
+    if not vertices or not faces:
+        raise ValueError("OBJ transform needs vertices and polygon faces")
+    scale = finite_vector(scale, "scale", 1e4)
+    rotation = finite_vector(rotation_degrees, "rotation", 36000.)
+    translation = finite_vector(translation, "translation", 1e5)
+    if any(abs(value) < 1e-12 for value in scale):
+        raise ValueError("OBJ scale components must be nonzero")
+    for face in faces:
+        if len(face) < 3 or any(type(index) is not int or not 0 <= index < len(vertices)
+                                 for index in face):
+            raise ValueError("OBJ transform found an invalid polygon face")
+    if uvs is not None:
+        if len(uvs) != len(vertices) or any(
+                uv is not None and (len(uv) != 2 or not all(math.isfinite(float(value)) and
+                                                               abs(float(value)) <= 1e5 for value in uv))
+                for uv in uvs):
+            raise ValueError("OBJ texture coordinates must have one finite value per vertex")
+    if normals is not None and len(normals) != len(vertices):
+        raise ValueError("OBJ normals must have one value per vertex")
+
+    rx, ry, rz = (math.radians(value % 360.) for value in rotation)
+    sx, sy, sz = math.sin(rx), math.sin(ry), math.sin(rz)
+    cx, cy, cz = math.cos(rx), math.cos(ry), math.cos(rz)
+
+    def rotate(vector):
+        x, y, z = vector
+        x, y, z = x, y * cx - z * sx, y * sx + z * cx
+        x, y, z = x * cy + z * sy, y, -x * sy + z * cy
+        return x * cz - y * sz, x * sz + y * cz, z
+
+    transformed_vertices = []
+    for vertex in vertices:
+        point = finite_vector(vertex, "vertex", 1e5)
+        rotated = rotate(tuple(point[axis] * scale[axis] for axis in range(3)))
+        translated = tuple(rotated[axis] + translation[axis] for axis in range(3))
+        if not all(math.isfinite(value) and abs(value) <= 1e5 for value in translated):
+            raise ValueError("Transformed OBJ coordinates exceed ±100,000 units")
+        transformed_vertices.append(translated)
+
+    transformed_normals = None
+    if normals is not None:
+        transformed_normals = []
+        for normal in normals:
+            if normal is None:
+                transformed_normals.append(None)
+                continue
+            vector = finite_vector(normal, "normal", 1e7)
+            rotated = rotate(tuple(vector[axis] / scale[axis] for axis in range(3)))
+            length = math.sqrt(sum(value * value for value in rotated))
+            if not math.isfinite(length) or length < 1e-12:
+                raise ValueError("OBJ normals must be nonzero after transformation")
+            transformed_normals.append(tuple(value / length for value in rotated))
+
+    transformed_faces = [tuple(reversed(face)) if scale[0] * scale[1] * scale[2] < 0 else tuple(face)
+                         for face in faces]
+    return transformed_vertices, transformed_faces, list(uvs) if uvs is not None else None, transformed_normals
+
+
 def _geometry(vertices, faces, uvs=None, imported_normals=None):
     if not vertices or not faces or len(vertices) > 65535:
         raise ValueError('Mesh needs 1..65535 vertices and polygon faces')

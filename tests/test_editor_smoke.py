@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import tkinter as tk
 import unittest
 
-from worldstudio.editor import NativeStudio
+from worldstudio.editor import NativeStudio, ObjTransformDialog
 
 
 class NativeFixture:
@@ -121,6 +121,21 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertEqual(self.native.positions["W101"], original)
         self.app.redo()
         self.assertEqual(self.native.positions["W101"], moved)
+
+    def test_obj_transform_dialog_z_up_preset_returns_y_up_rotation(self):
+        def apply_preset_when_open():
+            dialog = next((child for child in self.root.winfo_children()
+                           if isinstance(child, ObjTransformDialog)), None)
+            if dialog is None:
+                self.root.after(5, apply_preset_when_open)
+                return
+            dialog.set_z_up_preset()
+            dialog.apply()
+
+        self.root.after(5, apply_preset_when_open)
+        dialog = ObjTransformDialog(self.root)
+        self.assertEqual(dialog.result["rotation_degrees"], (-90., 0., 0.))
+        self.assertEqual(dialog.result["scale"], (1., 1., 1.))
 
 
 if __name__ == "__main__":

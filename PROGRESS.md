@@ -405,3 +405,15 @@ camera behavior and a fully playable custom world remain open.
   (29 vertices, 54 triangle faces).
 - Full suite: **141 tests passed in 91.322 seconds**; `compileall`,
   `git diff --check`, and the W101 → W102/W103 graph validator passed.
+
+## 2026-10-21 — OBJ coordinate and scale conversion
+
+- Added an import dialog for non-destructive per-axis scale, XYZ rotation and
+  translation before preview or experimental terrain replacement. A Z-up to
+  Y-up preset rotates -90 degrees around X; status reports the applied values.
+- Conversion preserves UVs, applies inverse-transpose scaling to normals and
+  reverses face winding for mirrored scales. It refuses zero scale and results
+  outside the tested model-unit range. Tests verify axis conversion, nonuniform
+  normal transforms, mirrored faces and invalid scales.
+- Full regression: **145 tests passed in 91.962 seconds**. `compileall`,
+  `git diff --check`, and the W101 → W102/W103 graph validator passed.

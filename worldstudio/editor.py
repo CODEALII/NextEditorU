@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
-from .mesh import MAX_FACE_CORNERS
+from .mesh import MAX_FACE_CORNERS, transform_obj_geometry
 
 
 MAX_OBJ_FILE_BYTES = 64 * 1024 * 1024
@@ -145,6 +145,22 @@ def obj_geometry_summary(vertices, faces):
     """Describe OBJ source counts without implying native export support."""
     label = "face" if len(faces) == 1 else "faces"
     return f"{len(vertices):,} vertices · {len(faces):,} polygon {label}"
+
+
+def apply_obj_transform(geometry, settings):
+    vertices, faces, uvs, normals = geometry
+    return transform_obj_geometry(vertices, faces, uvs, normals, **settings)
+
+
+def obj_transform_summary(settings):
+    identity = {"scale": (1., 1., 1.), "rotation_degrees": (0., 0., 0.),
+                "translation": (0., 0., 0.)}
+    if settings == identity:
+        return "source coordinates"
+    scale = ", ".join(f"{value:g}" for value in settings["scale"])
+    rotation = ", ".join(f"{value:g}°" for value in settings["rotation_degrees"])
+    translation = ", ".join(f"{value:g}" for value in settings["translation"])
+    return f"scale ({scale}), rotation ({rotation}), offset ({translation})"
 
 
 def demo_project():
@@ -901,11 +917,16 @@ class WorldStudio(ttk.Frame):
         if path:
             try:
                 mesh = read_obj(path)
+                transform = ObjTransformDialog(self.winfo_toplevel())
+                if transform.result is None:
+                    return
+                mesh = apply_obj_transform((*mesh, None, None), transform.result)[:2]
                 self.project["terrain"], self.mesh = str(Path(path).resolve()), mesh
                 self.dirty = True
                 self._record_edit()
                 self.fit()
-                self.status.set(f"OBJ preview imported · {obj_geometry_summary(*mesh)}. BFRES export is not implemented.")
+                self.status.set(f"OBJ preview imported · {obj_geometry_summary(*mesh)} · "
+                                f"{obj_transform_summary(transform.result)}. BFRES export is not implemented.")
             except (OSError, ValueError) as error:
                 messagebox.showerror("Cannot import OBJ", str(error), parent=self)
 
@@ -1369,6 +1390,10 @@ class NativeStudio(WorldStudio):
         if path:
             try:
                 mesh = read_obj(path)
+                transform = ObjTransformDialog(self.winfo_toplevel())
+                if transform.result is None:
+                    return
+                mesh = apply_obj_transform((*mesh, None, None), transform.result)[:2]
                 self.native.terrain = str(Path(path).resolve())
                 self.native.geometry = None
                 self.mesh = mesh
@@ -1376,7 +1401,8 @@ class NativeStudio(WorldStudio):
                 self._record_edit()
                 self.refresh()
                 self.fit()
-                self.status.set(f"OBJ preview imported · {obj_geometry_summary(*mesh)}; native mesh replacement is disabled.")
+                self.status.set(f"OBJ preview imported · {obj_geometry_summary(*mesh)} · "
+                                f"{obj_transform_summary(transform.result)}; native mesh replacement is disabled.")
             except (OSError, ValueError) as error:
                 messagebox.showerror("Cannot import OBJ", str(error), parent=self)
 
@@ -1423,6 +1449,11 @@ class NativeStudio(WorldStudio):
         if path:
             try:
                 vertices, faces, uvs, normals = read_obj(path, include_attributes=True)
+                transform = ObjTransformDialog(self.winfo_toplevel())
+                if transform.result is None:
+                    return
+                vertices, faces, uvs, normals = transform_obj_geometry(
+                    vertices, faces, uvs, normals, **transform.result)
                 self.native.geometry = {"vertices": vertices, "faces": faces,
                                         "uvs": uvs, "normals": normals}
                 self.native.terrain = str(Path(path).resolve())
@@ -1431,8 +1462,9 @@ class NativeStudio(WorldStudio):
                 self._record_edit()
                 self.refresh()
                 self.fit()
-                self.status.set(f"Experimental OBJ candidate · {obj_geometry_summary(vertices, faces)}. "
-                                "Replaces one existing grass mesh; capacity and layout checks run during export.")
+                self.status.set(f"Experimental OBJ candidate · {obj_geometry_summary(vertices, faces)} · "
+                                f"{obj_transform_summary(transform.result)}. Replaces one existing grass mesh; "
+                                "capacity and layout checks run during export.")
             except (OSError, ValueError) as error:
                 messagebox.showerror("Cannot use OBJ mesh", str(error), parent=self)
 
@@ -1495,6 +1527,91 @@ class NativeStudio(WorldStudio):
                     self.export_results.put((False, str(error)))
             threading.Thread(target=worker, name="worldstudio-export", daemon=True).start()
             self.after(60, self.poll_export)
+
+
+class ObjTransformDialog(tk.Toplevel):
+    """Choose import-space conversion without modifying the OBJ source file."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.result = None
+        self.title("OBJ coordinates and scale")
+        self.resizable(False, False)
+        self.transient(parent.winfo_toplevel())
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        ttk.Label(self, text="Convert OBJ into the world-map model space",
+                  font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=16, pady=(14, 5))
+        ttk.Label(self, text="Scale is applied first, then rotation X → Y → Z, then translation. "
+                  "Coordinates are local model units; the source OBJ remains unchanged.",
+                  wraplength=560).pack(anchor="w", padx=16, pady=(0, 10))
+
+        self.values = {key: tk.StringVar(value=value) for key, value in {
+            "scale_x": "1", "scale_y": "1", "scale_z": "1",
+            "rotation_x": "0", "rotation_y": "0", "rotation_z": "0",
+            "translation_x": "0", "translation_y": "0", "translation_z": "0",
+        }.items()}
+        table = ttk.Frame(self, padding=(16, 0))
+        table.pack(fill="x")
+        ttk.Label(table, text="Axis", font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w", pady=4)
+        for column, caption in enumerate(("X", "Y", "Z"), 1):
+            ttk.Label(table, text=caption, font=("Segoe UI", 9, "bold"), anchor="center").grid(
+                row=0, column=column, sticky="ew", padx=4, pady=4)
+        for row, (label, prefix) in enumerate((("Scale", "scale"), ("Rotation (degrees)", "rotation"),
+                                                ("Translation (units)", "translation")), 1):
+            ttk.Label(table, text=label).grid(row=row, column=0, sticky="w", pady=4)
+            for column, axis in enumerate("xyz", 1):
+                ttk.Entry(table, textvariable=self.values[f"{prefix}_{axis}"], width=12,
+                          justify="center").grid(row=row, column=column, sticky="ew", padx=4, pady=4)
+        for column in range(1, 4):
+            table.columnconfigure(column, weight=1)
+
+        controls = ttk.Frame(self, padding=(16, 8, 16, 14))
+        controls.pack(fill="x")
+        ttk.Button(controls, text="Z-up → Y-up", command=self.set_z_up_preset).pack(side="left", padx=(0, 6))
+        ttk.Button(controls, text="Reset", command=self.reset).pack(side="left")
+        ttk.Button(controls, text="Use unchanged", command=self.use_unchanged).pack(side="right", padx=(6, 0))
+        ttk.Button(controls, text="Apply conversion", command=self.apply).pack(side="right")
+        self.bind("<Return>", lambda event: self.apply())
+        self.bind("<Escape>", lambda event: self.destroy())
+        self.grab_set()
+        self.wait_window()
+
+    def reset(self):
+        for key, value in (("scale_x", "1"), ("scale_y", "1"), ("scale_z", "1"),
+                           ("rotation_x", "0"), ("rotation_y", "0"), ("rotation_z", "0"),
+                           ("translation_x", "0"), ("translation_y", "0"), ("translation_z", "0")):
+            self.values[key].set(value)
+
+    def set_z_up_preset(self):
+        self.reset()
+        self.values["rotation_x"].set("-90")
+
+    def use_unchanged(self):
+        self.result = {"scale": (1., 1., 1.), "rotation_degrees": (0., 0., 0.),
+                       "translation": (0., 0., 0.)}
+        self.destroy()
+
+    def apply(self):
+        try:
+            def vector(prefix):
+                return tuple(float(self.values[f"{prefix}_{axis}"].get()) for axis in "xyz")
+            settings = {"scale": vector("scale"), "rotation_degrees": vector("rotation"),
+                        "translation": vector("translation")}
+            if not all(math.isfinite(value) for values in settings.values() for value in values):
+                raise ValueError("Scale, rotation, and translation must be finite numbers")
+            if any(abs(value) < 1e-12 for value in settings["scale"]):
+                raise ValueError("Scale components must be nonzero")
+            if any(abs(value) > 1e4 for value in settings["scale"]):
+                raise ValueError("Scale components must be within ±10,000")
+            if any(abs(value) > 36000 for value in settings["rotation_degrees"]):
+                raise ValueError("Rotation components must be within ±36,000 degrees")
+            if any(abs(value) > 1e5 for value in settings["translation"]):
+                raise ValueError("Translation must be within ±100,000 model units")
+        except ValueError as error:
+            messagebox.showerror("Invalid OBJ transform", str(error), parent=self)
+            return
+        self.result = settings
+        self.destroy()
 
 
 class CameraDataWindow(tk.Toplevel):
