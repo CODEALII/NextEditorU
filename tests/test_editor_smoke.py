@@ -10,8 +10,9 @@ import unittest
 import json
 from unittest.mock import patch
 
-from worldstudio.editor import (NativeStudio, ObjTransformDialog, WorldStudio,
-                                demo_project, fit_preview_scale, project_preview_point)
+from worldstudio.editor import (NativeStudio, ObjTransformDialog, PathChainDialog,
+                                WorldStudio, demo_project, fit_preview_scale,
+                                project_preview_point)
 from worldstudio.recent_projects import RecentProjects
 from worldstudio.project import WorldProject, resolve_project_path
 from worldstudio.session_recovery import SessionRecovery
@@ -275,6 +276,71 @@ class EditorSmokeTests(unittest.TestCase):
                       self.app.status.get())
         self.app.undo()
         self.assertEqual(self.native.routes.rows, before)
+
+    def test_path_chain_dialog_adds_and_reorders_bfres_ids_preserving_unknown_ids(self):
+        def edit_chain():
+            dialog = next(child for child in self.root.winfo_children()
+                          if isinstance(child, PathChainDialog))
+            dialog.choice.set("RW102F001")
+            dialog.add_selected()
+            dialog.items.selection_clear(0, "end")
+            dialog.items.selection_set(2)
+            dialog.move_selected(-1)
+            dialog.apply()
+
+        dialog = PathChainDialog(
+            self.root, "RWbad,RW101W102", ["RW101W102", "RW102F001"])
+        self.root.after(0, edit_chain)
+        self.root.wait_window(dialog)
+
+        self.assertEqual(dialog.result, "RWbad,RW102F001,RW101W102")
+
+    def test_path_chain_dialog_returns_exact_original_when_untouched(self):
+        original = " RWbad , RW101W102 , "
+
+        def apply_unchanged():
+            dialog = next(child for child in self.root.winfo_children()
+                          if isinstance(child, PathChainDialog))
+            dialog.apply()
+
+        dialog = PathChainDialog(self.root, original, ["RW101W102"])
+        self.root.after(0, apply_unchanged)
+        self.root.wait_window(dialog)
+
+        self.assertEqual(dialog.result, original)
+
+    def test_point_path_picker_updates_the_selected_row_and_undo_restores_it(self):
+        before = self.native.points.rows[0][4]
+        self.app.tree.selection_set("point:0")
+        self.app.select_tree()
+        self.root.update()
+        path_variable = self.app.properties[4]
+        opened = []
+
+        def finish_dialog():
+            dialog = next(child for child in self.root.winfo_children()
+                          if isinstance(child, PathChainDialog))
+            opened.append(dialog)
+            dialog.choice.set("RW102F001")
+            dialog.add_selected()
+            dialog.apply()
+
+        edit_button = next(
+            widget for widget in self.app.form.winfo_children()
+            if isinstance(widget, ttk.Button) and widget.cget("text") == "Edit order")
+        self.assertTrue(edit_button.instate(("!disabled",)))
+        self.root.after(0, finish_dialog)
+        edit_button.invoke()
+
+        self.assertEqual(len(opened), 1)
+        self.assertEqual(opened[0].result, "RW101W102,RW102F001")
+        self.assertEqual(path_variable.get(), "RW101W102,RW102F001")
+        self.assertIs(self.app.properties[4], path_variable)
+        self.assertEqual(self.native.points.rows[0][4], before)
+        self.app.apply()
+        self.assertEqual(self.native.points.rows[0][4], "RW101W102,RW102F001")
+        self.app.undo()
+        self.assertEqual(self.native.points.rows[0][4], before)
 
     def test_native_tree_filter_clears_properties_when_selected_item_is_hidden(self):
         self.app.tree.selection_set("bone:K001")

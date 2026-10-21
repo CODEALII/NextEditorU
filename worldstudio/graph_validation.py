@@ -54,6 +54,24 @@ def native_route_segment_choices(route_rows, known_references, known_bones,
     return sorted(candidates, key=lambda name: (name not in point_paths, name))
 
 
+def native_macro_path_choices(known_references, known_bones, world_prefix=None):
+    """Return BFRES path IDs whose local endpoint bones resolve."""
+    references = set(known_references)
+    bones = set(known_bones)
+    candidates = []
+    for name in references:
+        if not isinstance(name, str) or not _ROUTE_ID.fullmatch(name):
+            continue
+        endpoints = (name[1:5], name[5:9])
+        if all(
+                endpoint in bones or
+                (world_prefix and endpoint.startswith("W") and
+                 not endpoint.startswith(world_prefix))
+                for endpoint in endpoints):
+            candidates.append(name)
+    return sorted(candidates)
+
+
 def build_native_route_row(route_id, road_type, available_route_ids,
                            existing_route_rows=()):
     """Build a route CSV row from an unused, existing BFRES route ID.

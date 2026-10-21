@@ -1182,3 +1182,19 @@ camera behavior and a fully playable custom world remain open.
 - A fresh `list_windows()` re-selection reproduced the same mismatch. No key
   was sent, and this attempt produced no evidence about the clean title prompt
   or route movement. Stop further UI input until exact window targeting works.
+
+## 2026-10-21 — Ordered native point path editor
+
+- Added `Edit order` controls to the normal and secret point path-chain fields.
+  The dialog can add BFRES path IDs, remove entries, and move entries up or
+  down. New choices require a matching BFRES reference and locally resolvable
+  endpoint bones; remote-world endpoints are allowed as unresolved references.
+- Existing values absent from the BFRES remain visible and are preserved unless
+  removed. Applying an untouched dialog returns the exact original field text,
+  including whitespace. A changed list is serialized as comma-separated IDs.
+- The editor only changes the selected path-chain CSV field. It does not create
+  route-table rows, edit destination lists, or verify game traversal.
+- Verification: graph-validation and editor smoke suites passed **49 tests**,
+  including endpoint filtering, exact unchanged-field preservation, add/reorder,
+  editor apply, and undo. The full suite passed **281 tests in 256.964 seconds**.
+  Compile and whitespace checks are recorded after the final documentation pass.

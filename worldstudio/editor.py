@@ -18,6 +18,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from .gltf import read_glb
 from .graph_validation import (
     build_native_route_row,
+    native_macro_path_choices,
     native_point_path_route_ids,
     native_route_segment_choices,
 )
@@ -1790,6 +1791,11 @@ class NativeStudio(WorldStudio):
             self.properties[i] = var
             entry = ttk.Entry(self.form, textvariable=var)
             entry.grid(row=i, column=1, sticky="ew", padx=(5, 0), pady=3)
+            if kind == "point" and i in (4, 7):
+                ttk.Button(
+                    self.form, text="Edit order", width=9,
+                    command=lambda field=var: self.edit_path_chain(field),
+                ).grid(row=i, column=2, padx=(5, 0), pady=3)
             if ((kind == "point" and i in (0, 1)) or
                     (kind == "segment" and i == 0)):
                 entry.configure(state="readonly")
@@ -1797,6 +1803,23 @@ class NativeStudio(WorldStudio):
             self.show_native_position(row[1], len(row))
         self.form.columnconfigure(1, weight=1)
         self.draw()
+
+    def edit_path_chain(self, variable):
+        if self.exporting:
+            return
+        references = set(self.native.references)
+        bones = {
+            bone.name
+            for model_bones in self.native.skeletons.models.values()
+            for bone in model_bones
+        }
+        world_match = re.search(r"pointW([1-9])", getattr(self.native, "point_name", ""))
+        world_prefix = f"W{world_match[1]}" if world_match else None
+        route_ids = native_macro_path_choices(references, bones, world_prefix)
+        dialog = PathChainDialog(self.winfo_toplevel(), variable.get(), route_ids)
+        self.wait_window(dialog)
+        if dialog.result is not None:
+            variable.set(dialog.result)
 
     def show_native_position(self, name, start):
         actual = name in self.native.positions
@@ -2233,6 +2256,153 @@ class NativeStudio(WorldStudio):
                     self.export_results.put((False, str(error)))
             threading.Thread(target=worker, name="worldstudio-export", daemon=True).start()
             self.after(60, self.poll_export)
+
+
+class PathChainDialog(tk.Toplevel):
+    """Edit the order of BFRES route IDs in one native point path field."""
+
+    def __init__(self, parent, current_value, route_ids):
+        super().__init__(parent)
+        self.original = current_value
+        self.route_ids = tuple(sorted(set(route_ids)))
+        self.changed = False
+        self.result = None
+        self.title("Edit point path order")
+        self.resizable(False, False)
+        self.transient(parent.winfo_toplevel())
+        self.protocol("WM_DELETE_WINDOW", self.cancel)
+
+        ttk.Label(self, text="Ordered BFRES path IDs",
+                  font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=14, pady=(12, 4))
+        ttk.Label(
+            self,
+            text=("Existing values remain in place, including unresolved IDs. "
+                  "Choosing a BFRES ID does not confirm its game behavior."),
+            wraplength=480,
+        ).pack(anchor="w", padx=14, pady=(0, 8))
+
+        content = ttk.Frame(self, padding=(14, 0))
+        content.pack(fill="both", expand=True)
+        list_frame = ttk.Frame(content)
+        list_frame.pack(fill="both", expand=True)
+        self.items = tk.Listbox(
+            list_frame, height=9, width=45, selectmode="browse",
+            exportselection=False, background="#121e29", foreground="#dce7f0",
+            selectbackground="#1e5860", selectforeground="#ffffff",
+            highlightbackground="#34495c", relief="flat",
+        )
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.items.yview)
+        self.items.configure(yscrollcommand=scrollbar.set)
+        self.items.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        for token in self.original.split(","):
+            token = token.strip()
+            if token:
+                self.items.insert("end", token)
+
+        unresolved = [token for token in self._tokens() if token not in self.route_ids]
+        if unresolved:
+            ttk.Label(
+                content,
+                text="Not found in current BFRES; preserved unless removed: " +
+                     ", ".join(unresolved[:6]),
+                wraplength=480,
+                foreground="#ffd18a",
+            ).pack(anchor="w", pady=(5, 0))
+
+        add_row = ttk.Frame(self, padding=(14, 8, 14, 4))
+        add_row.pack(fill="x")
+        ttk.Label(add_row, text="BFRES ID").pack(side="left", padx=(0, 8))
+        self.route_choice = tk.StringVar(value="")
+        self.choice = ttk.Combobox(
+            add_row, textvariable=self.route_choice, values=self.route_ids,
+            state="readonly", width=25,
+        )
+        self.choice.pack(side="left", fill="x", expand=True)
+        self.add_button = ttk.Button(add_row, text="Add", command=self.add_selected)
+        self.add_button.pack(side="left", padx=(8, 0))
+
+        actions = ttk.Frame(self, padding=(14, 2, 14, 12))
+        actions.pack(fill="x")
+        self.remove_button = ttk.Button(actions, text="Remove", command=self.remove_selected)
+        self.remove_button.pack(side="left")
+        self.up_button = ttk.Button(actions, text="Move up", command=lambda: self.move_selected(-1))
+        self.up_button.pack(side="left", padx=(8, 0))
+        self.down_button = ttk.Button(actions, text="Move down", command=lambda: self.move_selected(1))
+        self.down_button.pack(side="left", padx=(8, 0))
+        ttk.Button(actions, text="Cancel", command=self.cancel).pack(side="right", padx=(8, 0))
+        ttk.Button(actions, text="Apply chain", command=self.apply).pack(side="right")
+
+        self.items.bind("<<ListboxSelect>>", self.update_actions)
+        self.route_choice.trace_add("write", self.update_actions)
+        self.bind("<Escape>", lambda _event: self.cancel())
+        self.update_actions()
+        self.grab_set()
+
+    def _tokens(self):
+        return list(self.items.get(0, "end"))
+
+    def update_actions(self, *_):
+        tokens = self._tokens()
+        selection = self.items.curselection()
+        selected = selection[0] if selection else None
+        candidate = self.route_choice.get()
+        self.add_button.state([
+            "!disabled" if candidate in self.route_ids and candidate not in tokens
+            else "disabled"
+        ])
+        self.remove_button.state(["!disabled"] if selected is not None else ["disabled"])
+        self.up_button.state(["!disabled"] if selected is not None and selected > 0 else ["disabled"])
+        self.down_button.state([
+            "!disabled" if selected is not None and selected + 1 < len(tokens)
+            else "disabled"
+        ])
+
+    def add_selected(self):
+        candidate = self.route_choice.get()
+        if candidate not in self.route_ids or candidate in self._tokens():
+            return
+        index = self.items.size()
+        self.items.insert("end", candidate)
+        self.items.selection_clear(0, "end")
+        self.items.selection_set(index)
+        self.items.see(index)
+        self.changed = True
+        self.update_actions()
+
+    def remove_selected(self):
+        selection = self.items.curselection()
+        if not selection:
+            return
+        self.items.delete(selection[0])
+        self.changed = True
+        self.update_actions()
+
+    def move_selected(self, delta):
+        selection = self.items.curselection()
+        if not selection:
+            return
+        current = selection[0]
+        target = current + delta
+        tokens = self._tokens()
+        if target < 0 or target >= len(tokens):
+            return
+        tokens[current], tokens[target] = tokens[target], tokens[current]
+        self.items.delete(0, "end")
+        for token in tokens:
+            self.items.insert("end", token)
+        self.items.selection_set(target)
+        self.items.see(target)
+        self.changed = True
+        self.update_actions()
+
+    def cancel(self):
+        self.result = None
+        self.destroy()
+
+    def apply(self):
+        self.result = ",".join(self._tokens()) if self.changed else self.original
+        self.destroy()
 
 
 class ObjTransformDialog(tk.Toplevel):

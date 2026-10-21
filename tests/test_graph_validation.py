@@ -2,6 +2,7 @@ import unittest
 
 from worldstudio.graph_validation import (
     build_native_route_row,
+    native_macro_path_choices,
     native_point_path_route_ids,
     native_route_segment_choices,
     validate_native_world,
@@ -23,6 +24,22 @@ class NativeRouteDraftTests(unittest.TestCase):
                 point_rows=[point(0, "W102", paths="RW103W104")]),
             ["RW103W104", "RW102W103", "RW103W201"],
         )
+
+    def test_macro_path_choices_require_resolvable_local_endpoints(self):
+        choices = native_macro_path_choices(
+            {"RW101W102", "RW102W999", "RK999W102", "not-a-route"},
+            {"W101", "W102"},
+            world_prefix="W1",
+        )
+        self.assertEqual(choices, ["RW101W102", "RW102W999"])
+
+    def test_macro_path_choices_allow_remote_world_endpoints(self):
+        choices = native_macro_path_choices(
+            {"RW101W201", "RW201W202", "RW101W102"},
+            {"W101", "W102"},
+            world_prefix="W1",
+        )
+        self.assertEqual(choices, ["RW101W102", "RW101W201", "RW201W202"])
 
     def test_point_path_route_inventory_reads_only_valid_normal_and_secret_ids(self):
         rows = [point(0, "W101", paths="RW101W102, malformed", secret_paths="RW101W103"),
