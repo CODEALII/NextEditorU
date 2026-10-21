@@ -23,6 +23,8 @@ The WebGL page is generated locally from parsed scene data. For the supplied W1 
 
 The native editor has bounded undo/redo (`Ctrl+Z`, `Ctrl+Y`, or the toolbar). It covers point and route rows, BFRES local-position drafts, camera offset vectors, and terrain imports. Loading or reloading a project clears the history. Undo marks the project dirty; save and export still run their normal validation.
 
+In the native graph, drag a point to move it on the camera-facing plane and drag empty space to orbit; the wheel still zooms. Supported points convert the dragged model-space position back into local bone XYZ through the known rest-pose parent rotation. Points whose hierarchy is unsupported move only in the labeled preview layout. One completed drag creates one undo step. Transform tests verify rotated-parent world/local conversion, unsupported branches, and camera-plane mapping; the Tk smoke test exercises drag, undo, and redo. These checks do not validate route traversal in game.
+
 ## Cemu integration checks
 
 Follow [INTEGRATION.md](INTEGRATION.md) to prepare an isolated profile and preserve the original game tree and saves. Use the normal game resources as a baseline before enabling a generated graphic pack. Record the active pack, input profile, starting node, exact direction tested, destination shown, level result and save/reload result.

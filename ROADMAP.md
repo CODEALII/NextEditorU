@@ -52,9 +52,13 @@ is still needed before baseline/patch route QA.
   contrast backing plates; checked in a fresh local editor window.
 - Implemented: bounded Ctrl+Z/Ctrl+Y history covers native point/route rows,
   BFRES position drafts, camera vectors and terrain imports; project switches
-  reset the history and undo marks the project dirty. Add drag-to-move and route
-  drawing after native index/reference safety is established.
-- Add reliable selection and transform controls with project-level regression tests.
+  reset the history and undo marks the project dirty.
+- Implemented: native point dragging moves supported rest-pose points in the
+  camera-facing plane, converts world targets back through the parent rest
+  rotation, stores unsupported transforms only in the labeled editor layout,
+  and records one undo step on release. Route drawing and placement of new
+  engine-backed points remain blocked on native index/script-reference safety.
+- Add transform handles and route-edit controls with project-level regression tests.
 - Add recent projects, recoverable sessions, backup rotation, changed-file manifests, and export/reimport comparison.
 - Profile large models and projects before adding background parsing or more caching. Current local W1 preview data takes about 8.1 MB after typed-array packing.
 

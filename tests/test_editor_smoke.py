@@ -105,6 +105,23 @@ class EditorSmokeTests(unittest.TestCase):
         self.app.redo()
         self.assertEqual(self.native.routes.rows[0][1], "revised-road")
 
+    def test_dragging_a_native_root_point_is_one_undoable_edit(self):
+        original = list(self.native.positions["W101"])
+        x, y, _ = next(hit for hit in self.app.hit_points if hit[2] == "W101")
+        start = SimpleNamespace(x=round(x), y=round(y))
+        self.app.press(start)
+        self.app.orbit(SimpleNamespace(x=start.x + 24, y=start.y - 10))
+        self.app.release(SimpleNamespace(x=start.x + 24, y=start.y - 10))
+
+        moved = list(self.native.positions["W101"])
+        self.assertNotEqual(moved, original)
+        self.assertEqual(self.app.tree.selection(), ("point:0",))
+        self.assertTrue(self.app.history.can_undo)
+        self.app.undo()
+        self.assertEqual(self.native.positions["W101"], original)
+        self.app.redo()
+        self.assertEqual(self.native.positions["W101"], moved)
+
 
 if __name__ == "__main__":
     unittest.main()

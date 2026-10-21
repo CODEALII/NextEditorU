@@ -15,6 +15,24 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 
+def camera_plane_world_delta(dx, dy, yaw, pitch, projection_scale):
+    """Map pointer movement onto the camera-facing plane in model coordinates."""
+    try:
+        dx, dy, yaw, pitch, projection_scale = map(float, (dx, dy, yaw, pitch, projection_scale))
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError("Drag movement must be finite and projection scale positive") from error
+    values = (dx, dy, yaw, pitch, projection_scale)
+    if not all(math.isfinite(value) for value in values) or projection_scale <= 0:
+        raise ValueError("Drag movement must be finite and projection scale positive")
+    camera_x, camera_y = dx / projection_scale, -dy / projection_scale
+    rotated_z = -math.sin(pitch) * camera_y
+    return (
+        math.cos(yaw) * camera_x + math.sin(yaw) * rotated_z,
+        math.cos(pitch) * camera_y,
+        -math.sin(yaw) * camera_x + math.cos(yaw) * rotated_z,
+    )
+
+
 def read_obj(path, include_attributes=False):
     """Read Wavefront geometry and, on request, split OBJ corner attributes."""
     vertices, texcoords, source_normals, raw_faces = [], [], [], []
@@ -912,7 +930,7 @@ class NativeStudio(WorldStudio):
 
     def _build(self):
         super()._build()
-        self.viewport_hint.configure(text="Graph editor: drag to orbit · wheel to zoom · click a point to edit. Open 3D model preview for depth-tested BFRES geometry.")
+        self.viewport_hint.configure(text="Graph editor: drag a point to move it in the camera plane · drag empty space to orbit · wheel to zoom · click a point to edit. Open 3D model preview for depth-tested BFRES geometry.")
         self.description.configure(text="Native point/segment fields are saved to CSV and exported in the SZS archive. "
             "Known bone XYZ edits modify BFRES; model names and engine indices remain protected. "
             "Camera controls affect this viewport only. Import OBJ previews terrain. Use OBJ mesh replaces one existing grass mesh experimentally; other terrain remains.")
@@ -956,6 +974,125 @@ class NativeStudio(WorldStudio):
     def toggle_auxiliary(self):
         self.refresh()
         self.fit()
+
+    def press(self, event):
+        if self.exporting:
+            self.drag = None
+            return
+        point_indices = {row[1]: index for index, row in enumerate(self.native.points.rows)
+                         if len(row) > 1}
+        candidates = [(x, y, name) for x, y, name in self.hit_points if name in point_indices]
+        hit = min(candidates, key=lambda item: (event.x - item[0]) ** 2 + (event.y - item[1]) ** 2,
+                  default=None)
+        if hit is None or (event.x - hit[0]) ** 2 + (event.y - hit[1]) ** 2 >= 225:
+            super().press(event)
+            return
+
+        _, _, name = hit
+        index = point_indices[name]
+        iid = f"point:{index}"
+        if not self.tree.exists(iid):
+            super().press(event)
+            return
+        self.tree.selection_set(iid)
+        self.tree.see(iid)
+        self.select_tree()
+        node = next((item for item in self.project["nodes"] if item["id"] == name), None)
+        if node is None:
+            super().press(event)
+            return
+        preview_only = bool(node.get("fallback") or name not in self.native.positions)
+        position = ([node[key] for key in ("x", "y", "z")] if preview_only else
+                    self.native.world_positions.get(name))
+        if position is None:
+            preview_only = True
+            position = [node[key] for key in ("x", "y", "z")]
+        self.drag = {"kind": "point", "name": name, "index": index,
+                     "start": (event.x, event.y), "last": (event.x, event.y),
+                     "position": [float(value) for value in position],
+                     "preview_only": preview_only, "moved": False}
+
+    def orbit(self, event):
+        if not isinstance(self.drag, dict):
+            super().orbit(event)
+            return
+        if self.exporting:
+            return
+        drag = self.drag
+        start_x, start_y = drag["start"]
+        if not drag["moved"] and math.hypot(event.x - start_x, event.y - start_y) <= 2:
+            drag["last"] = event.x, event.y
+            return
+        last_x, last_y = drag["last"]
+        dx, dy = event.x - last_x, event.y - last_y
+        drag["last"] = event.x, event.y
+        if not dx and not dy:
+            return
+
+        camera = self.project.setdefault("camera", {})
+        yaw, pitch = camera.get("yaw", -0.55), camera.get("pitch", 0.65)
+        view_scale = float(camera.get("scale", 1))
+        depth = self.project_point(drag["position"])[2]
+        projection_scale = view_scale * 900 / max(100, 900 + depth * view_scale)
+        try:
+            delta = camera_plane_world_delta(dx, dy, yaw, pitch, projection_scale)
+            target = [value + change for value, change in zip(drag["position"], delta)]
+            if not all(math.isfinite(value) and abs(value) <= 1e7 for value in target):
+                raise ValueError("Dragged coordinates exceed the supported range")
+            if drag["preview_only"]:
+                self.native.layout[drag["name"]] = target
+            else:
+                converter = getattr(self.native.skeletons, "local_position_for_world", None)
+                if converter is not None:
+                    local = converter(self.native.path_model, drag["name"], target,
+                                      overrides=self.native.positions)
+                else:
+                    bone = next((item for item in self.native.skeletons.models[self.native.path_model]
+                                 if item.name == drag["name"]), None)
+                    if bone is None or bone.parent != -1:
+                        raise ValueError("This point's hierarchy transform cannot be inverted safely")
+                    local = target
+                if not all(math.isfinite(float(value)) and abs(float(value)) <= 1e7 for value in local):
+                    raise ValueError("Dragged local coordinates exceed the supported range")
+                self.native.positions[drag["name"]] = [float(value) for value in local]
+            drag["position"] = target
+            drag["moved"] = True
+            self.dirty = True
+            self.project = self.view_project()
+            self.draw()
+            mode = "preview layout only" if drag["preview_only"] else "BFRES rest-pose point"
+            self.status.set(f"Moving {drag['name']} in the camera plane · {mode}; release to finish")
+        except (ValueError, KeyError, TypeError, OverflowError) as error:
+            self.status.set(f"Cannot move {drag['name']}: {error}")
+            self.drag = None
+
+    def release(self, event):
+        if isinstance(self.drag, dict):
+            drag = self.drag
+            self.drag = None
+            if drag["moved"]:
+                self._record_edit()
+                self.refresh()
+                iid = f"point:{drag['index']}"
+                if self.tree.exists(iid):
+                    self.tree.selection_set(iid)
+                    self.tree.see(iid)
+                    self.select_tree()
+                mode = "preview layout only" if drag["preview_only"] else "BFRES local XYZ"
+                self.status.set(f"Moved {drag['name']} in the camera plane · {mode}; undo is available")
+            return
+        if self.drag and not self.drag[2]:
+            for x, y, name in self.hit_points:
+                if (event.x - x) ** 2 + (event.y - y) ** 2 < 225:
+                    index = next((i for i, row in enumerate(self.native.points.rows) if len(row) > 1 and row[1] == name), None)
+                    item = f"point:{index}" if index is not None else f"bone:{name}"
+                    if not self.tree.exists(item):
+                        break
+                    self.tree.selection_set(item)
+                    self.tree.see(item)
+                    self.select_tree()
+                    break
+        self.drag = None
 
     def draw(self):
         super().draw()
@@ -1103,20 +1240,6 @@ class NativeStudio(WorldStudio):
         for child in self.form.winfo_children():
             child.destroy()
         self.status.set("Draft deletion. Point index changes block export until engine/script remapping exists.")
-
-    def release(self, event):
-        if self.drag and not self.drag[2]:
-            for x, y, name in self.hit_points:
-                if (event.x - x) ** 2 + (event.y - y) ** 2 < 225:
-                    index = next((i for i, row in enumerate(self.native.points.rows) if len(row) > 1 and row[1] == name), None)
-                    item = f"point:{index}" if index is not None else f"bone:{name}"
-                    if not self.tree.exists(item):
-                        break
-                    self.tree.selection_set(item)
-                    self.tree.see(item)
-                    self.select_tree()
-                    break
-        self.drag = None
 
     def validate(self):
         issues = self.native.validate()

@@ -357,3 +357,20 @@ camera behavior and a fully playable custom world remain open.
   `local/evidence/preview-w1-texture-inspector-bc5.png` (ignored evidence).
   Full regression: **129 tests passed in 88.426 seconds**; `compileall`,
   `git diff --check`, and local W1 graph validation passed.
+
+## 2026-10-21 — native graph point dragging
+
+- Native graph points can now be dragged in the camera-facing plane; dragging
+  empty space continues to orbit. Supported BFRES points convert the target
+  model-space rest position through the inverse parent rotation before their
+  local XYZ is changed. Unsupported transforms stay in the labeled editor
+  layout and never become guessed game coordinates.
+- A completed drag is one undo/redo edit. Tests cover camera-plane basis math,
+  rotated-parent world/local roundtrips, unsupported parents, and a Tk editor
+  drag with undo and redo. The local W1 points were also checked: **66 supported
+  points round-trip with zero local-coordinate error**. Cemu behavior is
+  unchanged and still unverified.
+- Baseline full suite: **129 tests passed in 88.915 seconds**. Focused checks
+  after implementation: **15 tests passed**. Full post-change suite:
+  **135 tests passed in 91.155 seconds**; `compileall`, `git diff --check`,
+  and the W101 → W102/W103 validator also passed.

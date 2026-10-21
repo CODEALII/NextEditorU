@@ -1,7 +1,7 @@
 """Regression checks for the bounded editor undo/redo cursor."""
 import unittest
 
-from worldstudio.editor import EditHistory
+from worldstudio.editor import EditHistory, camera_plane_world_delta
 
 
 class EditHistoryTests(unittest.TestCase):
@@ -35,6 +35,17 @@ class EditHistoryTests(unittest.TestCase):
         self.assertFalse(history.can_undo)
         self.assertFalse(history.can_redo)
         self.assertEqual(history.redo(), None)
+
+    def test_camera_plane_pointer_delta_respects_camera_orientation(self):
+        self.assertEqual(camera_plane_world_delta(10, 0, 0, 0, 2), (5, 0, 0))
+        delta = camera_plane_world_delta(0, -10, 0, 1.5707963267948966, 2)
+        self.assertAlmostEqual(delta[0], 0)
+        self.assertAlmostEqual(delta[1], 0)
+        self.assertAlmostEqual(delta[2], -5)
+
+    def test_camera_plane_delta_rejects_invalid_projection(self):
+        with self.assertRaisesRegex(ValueError, "projection scale positive"):
+            camera_plane_world_delta(1, 2, 0, 0, 0)
 
 
 if __name__ == "__main__":

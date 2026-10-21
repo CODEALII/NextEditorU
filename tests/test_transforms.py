@@ -1,6 +1,8 @@
 import math
+from pathlib import Path
 import unittest
 from worldstudio.bfres import Bone, Skeletons
+from worldstudio.project import WorldProject
 
 
 def bone(name, index, parent, xyz, rotation=(0., 0., 0., 1.), flags=1 << 12, scale=(1., 1., 1.)):
@@ -32,6 +34,25 @@ class TransformTests(unittest.TestCase):
         for actual, expected in zip(s.world_positions('test')['child'], (2., 0., -3.)):
             self.assertAlmostEqual(actual, expected)
 
+    def test_world_target_converts_back_to_local_under_rotated_parent(self):
+        s = self.skeleton([bone('root', 0, -1, (10., 20., 30.),
+                                (0., math.pi / 2, 0., 1.)),
+                           bone('child', 1, 0, (3., 4., 2.))])
+        target = (70., 55., -14.)
+        local = s.local_position_for_world('test', 'child', target)
+
+        actual = s.world_positions('test', {'child': local})['child']
+        for value, expected in zip(actual, target):
+            self.assertAlmostEqual(value, expected)
+
+    def test_world_target_rejects_non_finite_coordinates_and_unsupported_parent(self):
+        scaled = self.skeleton([bone('root', 0, -1, (0., 0., 0.), scale=(2., 1., 1.)),
+                                bone('child', 1, 0, (1., 2., 3.))])
+        with self.assertRaisesRegex(ValueError, 'invalid world position'):
+            scaled.local_position_for_world('test', 'child', (0., float('nan'), 0.))
+        with self.assertRaisesRegex(ValueError, 'parent rest transform is unsupported'):
+            scaled.local_position_for_world('test', 'child', (1., 2., 3.))
+
     def test_scaled_branch_omitted_not_reported_as_world_position(self):
         s = self.skeleton([bone('root', 0, -1, (0., 0., 0.)),
                            bone('scaled', 1, 0, (1., 2., 3.), scale=(2., 1., 1.)),
@@ -44,6 +65,28 @@ class TransformTests(unittest.TestCase):
                       [bone('a', 0, 10, (0., 0., 0.))]):
             with self.subTest(bones=bones), self.assertRaises(ValueError):
                 self.skeleton(bones).world_positions('test')
+
+
+class LocalWorldTransformTests(unittest.TestCase):
+    def test_w1_point_positions_roundtrip_through_drag_conversion(self):
+        source = Path(__file__).resolve().parents[1] / 'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W1 dump unavailable')
+        native = WorldProject.open(source)
+        world = native.world_positions
+        checked = 0
+        for row in native.points.rows:
+            if len(row) < 2:
+                continue
+            name = row[1]
+            if name not in native.positions or name not in world:
+                continue
+            local = native.skeletons.local_position_for_world(
+                native.path_model, name, world[name], overrides=native.positions)
+            for actual, expected in zip(local, native.positions[name]):
+                self.assertAlmostEqual(actual, expected, delta=0.01, msg=name)
+            checked += 1
+        self.assertGreater(checked, 10)
 
 
 if __name__ == '__main__':

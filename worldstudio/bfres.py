@@ -101,6 +101,14 @@ class Skeletons:
     def world_positions(self, model, overrides=None):
         """Rest-pose positions within one model, with hierarchy/rotation applied.
 
+        ``overrides`` contains local translation edits, keyed by bone name.
+        """
+        return {name: transform[1] for name, transform in
+                self.world_transforms(model, overrides).items()}
+
+    def world_transforms(self, model, overrides=None):
+        """Return supported rest-pose ``(rotation, position)`` per bone.
+
         This does not evaluate animations, world-to-world placement or cameras.
         Map path bones in the inspected resources have unit scale; reject other
         scale modes rather than silently mishandling segment scale compensation.
@@ -164,10 +172,38 @@ class Skeletons:
         result = {}
         for b in bones:
             try:
-                result[b.name] = evaluate(b)[1]
+                result[b.name] = evaluate(b)
             except UnsupportedScale:
                 continue
         return result
+
+    def local_position_for_world(self, model, name, world_position, overrides=None):
+        """Convert one desired model-space rest position to a bone translation.
+
+        Parent transforms are applied in the same unscaled rest-pose subset as
+        ``world_positions``. This intentionally rejects unsupported branches
+        instead of writing a guessed local position.
+        """
+        bones = [bone for bone in self.models[model] if bone.name == name]
+        if len(bones) != 1:
+            raise ValueError(f'{name}: expected one bone in model {model}, found {len(bones)}')
+        if len(world_position) != 3 or not all(math.isfinite(float(v)) for v in world_position):
+            raise ValueError(f'{name}: invalid world position')
+        bone = bones[0]
+        target = [float(v) for v in world_position]
+        if bone.parent == -1:
+            return target
+
+        transforms = self.world_transforms(model, overrides)
+        by_index = {item.index: item for item in self.models[model]}
+        parent = by_index.get(bone.parent)
+        if parent is None or parent.name not in transforms:
+            raise ValueError(f'{name}: parent rest transform is unsupported')
+        rotation, parent_position = transforms[parent.name]
+        relative = [target[i] - parent_position[i] for i in range(3)]
+        # The supported rotation matrices are orthonormal, so their inverse is
+        # the transpose. Scaled branches were excluded by world_transforms.
+        return [sum(rotation[j][i] * relative[j] for j in range(3)) for i in range(3)]
 
     def patch_positions(self, changes):
         out = bytearray(self.data)
