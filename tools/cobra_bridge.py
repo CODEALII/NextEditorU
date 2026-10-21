@@ -4,9 +4,11 @@ All output goes into a new directory outside source directories and the game
 dump. The bridge never installs a script loader or deploys WMSC to the game.
 """
 import argparse
+from collections import Counter
 import hashlib
 import json
 from pathlib import Path
+import re
 import struct
 import subprocess
 import sys
@@ -14,6 +16,12 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 DEFAULT_COBRA=ROOT/'external/Cobra'
+MAX_CATALOG_TEXT_BYTES=16*1024*1024
+MAX_CATALOG_VERSION_BYTES=64*1024
+MAX_CATALOG_LINE_CHARS=64*1024
+MAX_CATALOG_COMMANDS=1_000_000
+SCRIPT_HEADER=re.compile(r'^(null|scr_(\d+)) \[priority=(\d+)\]:$')
+SCRIPT_COMMAND=re.compile(r'cmd_(\d+)\Z')
 
 
 def sha256(path):
@@ -104,6 +112,180 @@ def command_ids_for_version(cobra_root, version_info):
     except (OSError, ValueError, TypeError):
         return None
     return variant_command_ids(variants, variant_name)
+
+
+def catalog_exported_scripts(script_text, version_info, known_command_ids=None):
+    """Inventory Cobra text-export structure without assigning command meaning."""
+    if not isinstance(script_text,str):
+        raise ValueError('Cobra script export must be UTF-8 text')
+    if not isinstance(version_info,dict) or version_info.get('game')!='nsmbu':
+        raise ValueError('Expected NSMBU Cobra version metadata')
+    variant=version_info.get('game_variant')
+    table_length=version_info.get('table_length')
+    terminator=version_info.get('terminator_command')
+    if (not isinstance(variant,str) or not variant or type(table_length) is not int or
+            not 1<=table_length<=65535 or type(terminator) is not int or
+            not 0<=terminator<=0xFFFFFFFF):
+        raise ValueError('Invalid NSMBU Cobra version metadata')
+
+    scripts=[]
+    current=None
+    seen_ids=set()
+    command_occurrences=Counter()
+    total_command_count=0
+
+    def finish_script():
+        if current is None:
+            return
+        if not current['terminated']:
+            raise ValueError(
+                f"Script {current['label']} must end with command {terminator}")
+        scripts.append({
+            'id':current['id'],
+            'label':current['label'],
+            'priority':current['priority'],
+            'command_count':current['command_count'],
+            'command_ids':sorted(current['command_ids']),
+        })
+
+    for line_number,line in enumerate(script_text.splitlines(),1):
+        if len(line)>MAX_CATALOG_LINE_CHARS:
+            raise ValueError(f'Line {line_number}: exceeds {MAX_CATALOG_LINE_CHARS} characters')
+        if not line.strip():
+            continue
+        header=SCRIPT_HEADER.fullmatch(line)
+        if header:
+            finish_script()
+            label=header.group(1)
+            script_id=0 if label=='null' else int(header.group(2))
+            priority=int(header.group(3))
+            if script_id>0xFFFFFFFF or priority>0xFFFFFFFF:
+                raise ValueError(f'Line {line_number}: script ID or priority is out of range')
+            if script_id in seen_ids:
+                raise ValueError(f'Line {line_number}: duplicate script ID {script_id}')
+            seen_ids.add(script_id)
+            current={'id':script_id,'label':label,'priority':priority,
+                     'command_count':0,'command_ids':set(),'terminated':False}
+            continue
+        if current is None:
+            raise ValueError(f'Line {line_number}: command appears before a script header')
+        if not line.startswith('    '):
+            raise ValueError(f'Line {line_number}: malformed script command indentation')
+        parts=line[4:].split()
+        if len(parts) not in (1,2):
+            raise ValueError(f'Line {line_number}: expected a command and optional numeric argument')
+        command=parts[0]
+        if command=='wait':
+            command_id=7
+        else:
+            match=SCRIPT_COMMAND.fullmatch(command)
+            if not match:
+                raise ValueError(f'Line {line_number}: unsupported Cobra command token {command!r}')
+            command_id=int(match.group(1))
+        if command_id>0xFFFFFFFF:
+            raise ValueError(f'Line {line_number}: command ID is out of range')
+        if current['terminated']:
+            raise ValueError(f"Script {current['label']} contains an early terminator")
+        if len(parts)==2:
+            try:
+                argument=int(parts[1],0)
+            except ValueError:
+                if re.fullmatch(r'[0-9]+',parts[1]):
+                    argument=int(parts[1],10)
+                else:
+                    raise ValueError(f'Line {line_number}: command argument is not an integer')
+            if not 0<=argument<=0xFFFFFFFF:
+                raise ValueError(f'Line {line_number}: command argument is out of range')
+        current['command_count']+=1
+        current['command_ids'].add(command_id)
+        if command_id==terminator:
+            current['terminated']=True
+        command_occurrences[command_id]+=1
+        total_command_count+=1
+        if total_command_count>MAX_CATALOG_COMMANDS:
+            raise ValueError(f'Cobra script export exceeds {MAX_CATALOG_COMMANDS} commands')
+    finish_script()
+
+    if len(scripts)!=table_length:
+        raise ValueError(
+            f'Cobra export has {len(scripts)} scripts; version metadata declares {table_length}')
+    scripts.sort(key=lambda item:item['id'])
+    command_script_counts=Counter()
+    priority_counts=Counter()
+    for script in scripts:
+        priority_counts[script['priority']]+=1
+        for command_id in script['command_ids']:
+            command_script_counts[command_id]+=1
+    distinct_ids=sorted(command_occurrences)
+    unrecognized=(sorted(set(distinct_ids)-known_command_ids)
+                  if known_command_ids is not None else None)
+    return {
+        'format':'nsmbu-cobra-event-catalog-v1',
+        'game':version_info['game'],
+        'game_variant':variant,
+        'declared_script_count':table_length,
+        'script_count':len(scripts),
+        'total_command_count':total_command_count,
+        'distinct_command_id_count':len(distinct_ids),
+        'priority_script_counts':[
+            {'priority':priority,'script_count':count}
+            for priority,count in sorted(priority_counts.items())],
+        'command_id_usage':[
+            {'command_id':command_id,
+             'occurrences':command_occurrences[command_id],
+             'scripts':command_script_counts[command_id]}
+            for command_id in distinct_ids],
+        'command_registry_checked':known_command_ids is not None,
+        'unrecognized_command_ids':unrecognized,
+        'scripts':scripts,
+        'interpretation':(
+            'Offline Cobra export inventory only. Numeric command IDs, priorities, and counts '
+            'are listed without assigning command behavior or mapping scripts to world points, '
+            'unlock conditions, or in-game execution.'),
+        'game_verified':False,
+        'deployed':False,
+    }
+
+
+def _read_bounded(path,limit,label):
+    with Path(path).open('rb') as stream:
+        data=stream.read(limit+1)
+    if len(data)>limit:
+        raise ValueError(f'{label} exceeds {limit} bytes')
+    return data
+
+
+def _catalog_command(inputs,cobra_root,output):
+    if len(inputs)!=2:
+        raise ValueError('catalog requires scripts.txt and version.json')
+    paths=[Path(path).resolve(strict=True) for path in inputs]
+    if any(not path.is_file() for path in paths):
+        raise ValueError('catalog inputs must be files')
+    script_data=_read_bounded(paths[0],MAX_CATALOG_TEXT_BYTES,'Cobra script export')
+    version_data=_read_bounded(paths[1],MAX_CATALOG_VERSION_BYTES,'Cobra version metadata')
+    try:
+        script_text=script_data.decode('utf-8')
+        version_info=json.loads(version_data.decode('utf-8'))
+    except (UnicodeDecodeError,json.JSONDecodeError) as error:
+        raise ValueError('catalog inputs must be valid UTF-8 text and JSON') from error
+    report=catalog_exported_scripts(
+        script_text,version_info,command_ids_for_version(cobra_root,version_info))
+    report['inputs']=[{'path':str(path),'size':len(data),
+                       'sha256':hashlib.sha256(data).hexdigest()}
+                      for path,data in zip(paths,(script_data,version_data))]
+    if output is not None:
+        output=Path(output).resolve()
+        protected=(ROOT/'NSMBU Modding Project').resolve()
+        cobra_root=Path(cobra_root).resolve()
+        if (output.exists() or output.is_relative_to(protected) or
+                output.is_relative_to(cobra_root) or
+                any(output.is_relative_to(path.parent) for path in paths)):
+            raise ValueError('Catalog output must be a new file outside input, game dump, and Cobra directories')
+        output.parent.mkdir(parents=True,exist_ok=True)
+        with output.open('x',encoding='utf-8') as stream:
+            json.dump(report,stream,indent=2)
+            stream.write('\n')
+    return report
 
 
 def validate_wmsc(data, known_command_ids=None):
@@ -226,12 +408,17 @@ def run_bridge(operation,inputs,output,cobra_root=DEFAULT_COBRA,timeout=120):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation',choices=['analyze','export','encode'])
+    parser.add_argument('operation',choices=['analyze','export','encode','catalog'])
     parser.add_argument('inputs',nargs='+',type=Path)
-    parser.add_argument('--output',required=True,type=Path,help='New output directory; existing directories are refused')
+    parser.add_argument('--output',type=Path,help='New output directory/file; existing paths are refused')
     parser.add_argument('--cobra-root',type=Path,default=DEFAULT_COBRA)
     args=parser.parse_args()
-    result=run_bridge(args.operation,args.inputs,args.output,args.cobra_root)
+    if args.operation=='catalog':
+        result=_catalog_command(args.inputs,args.cobra_root,args.output)
+    else:
+        if args.output is None:
+            parser.error('--output is required for analyze, export, and encode')
+        result=run_bridge(args.operation,args.inputs,args.output,args.cobra_root)
     print(json.dumps(result,indent=2))
 
 

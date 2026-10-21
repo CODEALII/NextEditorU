@@ -1267,6 +1267,24 @@ camera behavior and a fully playable custom world remain open.
 - Verification: **292 tests passed in 277.138 seconds**; the focused graph
   suite passed 28 tests, the checked-in profile passed against the local W1
   archive, and `compileall` plus `git diff --check` passed.
-- Next: continue identifying evidence-backed event/progression references;
-  keep runtime route movement and level launches marked unverified until the
-  game reaches the map and accepts input.
+- Follow-up: the source audit found no safe static mapping from RPX scripts to
+  map points or unlock conditions. A separate numeric script inventory is the
+  next completed milestone; runtime route movement remains unverified.
+
+## 2026-10-21 — Offline Cobra script catalog
+
+- Added `tools/cobra_bridge.py catalog <scripts.txt> <version.json>` to report
+  script IDs, priorities, command counts, numeric command-ID frequencies,
+  source hashes, and optional membership in the local Cobra variant registry.
+  The parser enforces the exported terminators and bounds input bytes, line
+  length and total command count; it does not print arguments or claim command
+  semantics.
+- Cataloged the ignored local export: **121 scripts**, **993 commands including
+  terminators**, **276 distinct command IDs**, and no IDs missing from the local
+  `1.3.0_NSLU` registry. This is offline format inventory, not event or unlock
+  behavior evidence.
+- Added synthetic malformed-input and CLI coverage plus a regression against
+  the local RPX export. Verification: **295 tests passed in 276.390 seconds**; the
+  local catalog reports 121 scripts, 993 commands and 276 recognized IDs, and
+  `compileall` plus `git diff --check` passed.
+- Next: prioritize Cemu integration testing. The clean profile loads the world map, while the modified-chain profile also loads; route movement and game launches remain unverified. The current Computer Use window API lost foreground process identity, so resume with a stable input path before claiming movement.

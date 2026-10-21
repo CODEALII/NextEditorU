@@ -2,11 +2,13 @@ import json
 from pathlib import Path
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from tools.cobra_bridge import ROOT,command_ids_for_version,run_bridge,validate_wmsc,variant_command_ids
+from tools.cobra_bridge import (ROOT,catalog_exported_scripts,command_ids_for_version,
+                                run_bridge,validate_wmsc,variant_command_ids)
 
 
 def wmsc_commands(commands):
@@ -20,6 +22,78 @@ def wmsc():
 
 
 class BridgeTests(unittest.TestCase):
+    def test_catalog_counts_numeric_commands_without_assigning_meaning(self):
+        text=(
+            'null [priority=255]:\n'
+            '    cmd_344\n\n'
+            'scr_001 [priority=128]:\n'
+            '    wait        30\n'
+            '    cmd_007 0x10\n'
+            '    cmd_344\n')
+        report=catalog_exported_scripts(text,{
+            'game':'nsmbu','game_variant':'1.3.0_NSLU',
+            'table_length':2,'terminator_command':344,
+        },{7,344})
+        self.assertEqual(report['script_count'],2)
+        self.assertEqual(report['total_command_count'],4)
+        self.assertEqual(report['distinct_command_id_count'],2)
+        self.assertEqual(report['command_id_usage'],[
+            {'command_id':7,'occurrences':2,'scripts':1},
+            {'command_id':344,'occurrences':2,'scripts':2},
+        ])
+        self.assertEqual(report['unrecognized_command_ids'],[])
+        self.assertFalse(report['game_verified'])
+        self.assertFalse(report['deployed'])
+        self.assertIn('without assigning command behavior',report['interpretation'])
+
+    def test_catalog_rejects_malformed_or_unverifiable_exports(self):
+        version={'game':'nsmbu','game_variant':'1.3.0_NSLU',
+                 'table_length':1,'terminator_command':344}
+        for text,message in (
+                ('    cmd_344\n','before a script header'),
+                ('null [priority=1]:\n    cmd_344\n'
+                 'scr_000 [priority=1]:\n    cmd_344\n','duplicate script ID'),
+                ('null [priority=1]:\n    cmd_344\n    cmd_001\n','early terminator'),
+                ('null [priority=1]:\n    cmd_001\n','must end with command'),
+                ('null [priority=1]:\n    cmd_344\n','declares 2'),
+                ('null [priority=1]:\n    cmd_001 hello\n    cmd_344\n','not an integer'),
+                ('null [priority=1]:\n    '+'x'*(64*1024+1),'exceeds 65536 characters'),
+        ):
+            declared={**version,'table_length':2 if message=='declares 2' else 1}
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ValueError,message):
+                    catalog_exported_scripts(text,declared)
+
+    def test_catalog_cli_writes_new_hashed_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);inputs=root/'inputs';inputs.mkdir()
+            scripts=inputs/'scripts.txt'
+            scripts.write_text('null [priority=255]:\n    cmd_344\n',encoding='utf-8')
+            version=inputs/'version.json'
+            version.write_text(json.dumps({
+                'game':'nsmbu','game_variant':'1.3.0_NSLU',
+                'table_length':1,'terminator_command':344,
+            }),encoding='utf-8')
+            output=root/'catalog.json'
+            result=subprocess.run([
+                sys.executable,str(ROOT/'tools/cobra_bridge.py'),'catalog',
+                str(scripts),str(version),'--cobra-root',str(root/'missing-cobra'),
+                '--output',str(output),
+            ],cwd=ROOT,capture_output=True,text=True,encoding='utf-8')
+            self.assertEqual(result.returncode,0,result.stderr)
+            report=json.loads(output.read_text(encoding='utf-8'))
+            self.assertEqual(report['script_count'],1)
+            self.assertEqual(report['inputs'][0]['size'],scripts.stat().st_size)
+            self.assertFalse(report['command_registry_checked'])
+            previous=output.read_bytes()
+            repeated=subprocess.run([
+                sys.executable,str(ROOT/'tools/cobra_bridge.py'),'catalog',
+                str(scripts),str(version),'--cobra-root',str(root/'missing-cobra'),
+                '--output',str(output),
+            ],cwd=ROOT,capture_output=True,text=True,encoding='utf-8')
+            self.assertNotEqual(repeated.returncode,0)
+            self.assertEqual(output.read_bytes(),previous)
+
     def test_argument_list_cwd_paths_and_provenance(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);cobra=root/'Cobra checkout';cobra.mkdir()
@@ -145,6 +219,15 @@ class LocalCobraTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base=Path(tmp)
             exported=run_bridge('export',[source],base/'events')
+            catalog=catalog_exported_scripts(
+                (base/'events/scripts.txt').read_text(encoding='utf-8'),
+                json.loads((base/'events/version.json').read_text(encoding='utf-8')),
+                command_ids_for_version(ROOT/'external/Cobra',
+                    json.loads((base/'events/version.json').read_text(encoding='utf-8'))))
+            self.assertEqual(catalog['script_count'],121)
+            self.assertEqual(catalog['total_command_count'],993)
+            self.assertTrue(catalog['command_registry_checked'])
+            self.assertEqual(catalog['unrecognized_command_ids'],[])
             encoded=run_bridge('encode',[base/'events/scripts.txt',base/'events/version.json'],base/'encoded')
             summary=encoded['wmsc']
             self.assertEqual(summary['script_ids'],list(range(121)))

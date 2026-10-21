@@ -29,6 +29,12 @@ The post-encode report now also resolves command IDs from Cobra's local NSMBU va
 
 This proves a local **RPX → event text → structurally validated WMSC** workflow. It is not an RPX byte roundtrip or an in-game event test. Exported original scripts and WMSC remain ignored local data; do not redistribute them as original tooling.
 
+## Offline script inventory
+
+For the exported text and version metadata, `python tools/cobra_bridge.py catalog <scripts.txt> <version.json>` prints a JSON inventory. Add `--output <new-report.json>` to save that report; an existing report is never overwritten, and the output must be outside the source folders, game dump and Cobra checkout. Input text, version JSON, line length and total command count are bounded. The report records script IDs, priorities, per-script command counts, numeric command-ID occurrence/script counts, source hashes, and whether the local Cobra variant registry recognizes each ID. It does not include command arguments or infer command names, point links, unlock effects or runtime behavior.
+
+Running the catalog on the current ignored local export reports **121 scripts**, **993 commands including terminators**, and **276 distinct command IDs**. All are present in the local Cobra `1.3.0_NSLU` registry. This corroborates the encoder's structural inventory; the registry check establishes only that the numeric IDs exist in Cobra's variant table. This does not identify what any command does or which scripts affect the world map.
+
 ## Two reproducible upstream encoding defects and the local correction
 
 The inspected Cobra commit is `0b8d3927a4466e5061367dbb69c03fcd3eeaec3b`. Its unmodified encoder fails on this exact export:
@@ -58,6 +64,7 @@ Run from the World Studio project root. The output directory names below must no
 ```powershell
 python tools/cobra_bridge.py analyze 'NSMBU Modding Project/code/red-pro2.rpx' --output local/my-analysis
 python tools/cobra_bridge.py export 'NSMBU Modding Project/code/red-pro2.rpx' --output local/my-events
+python tools/cobra_bridge.py catalog local/my-events/scripts.txt local/my-events/version.json --output local/my-event-catalog.json
 python tools/cobra_bridge.py encode local/my-events/scripts.txt local/my-events/version.json --output local/my-encoded-events
 python -m unittest tests.test_cobra_bridge -v
 ```
