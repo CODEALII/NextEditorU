@@ -1,5 +1,18 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Bind Cemu preflight to graph-profile provenance
+
+- Cemu preflight can now opt into checking the loaded pack's sidecar export
+  manifest against a selected W1 graph profile and the exact packaged SZS hash.
+  This catches stale or mismatched static-gate evidence before launching the
+  process-bound input runner. Synthetic tests reject missing manifests, wrong
+  archive hashes and profiles for a different world.
+- Re-exported the saved Chain project with the W1 profile gate. Its archive
+  hash is unchanged from the prior Cemu package, and `verify-export --profile`
+  passes. Prepared a fresh isolated Cemu profile with the same controller
+  mapping and byte-identical saves; preflight returns `ready:true`. Cemu was
+  not launched, so this confirms setup only.
+
 ## 2026-10-22 — Gate CLI export with an explicit graph profile
 
 - The graph-profile CLI could report reachability, but a later normal export

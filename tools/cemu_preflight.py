@@ -1,14 +1,19 @@
 """Check that an isolated Cemu profile is ready for a controlled NSMBU test.
 
-This validates config and boot-log evidence only. It cannot observe controller
-input, the rendered map, traversal, level launch, progression, or save behavior.
+This validates config, optional export provenance and boot-log evidence only.
+It cannot observe controller input, the rendered map, traversal, level launch,
+progression, or save behavior.
 """
 import argparse
 import hashlib
 import json
 from pathlib import Path
 import re
+import sys
 import xml.etree.ElementTree as ET
+
+if __package__ in (None, ''):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 LEFT_STICK_KEYS_CEMU_126 = {18: 87, 19: 83, 20: 65, 21: 68}
@@ -87,7 +92,7 @@ def _save_inventory(profile):
 def inspect_profile(profile, *, expected_pack=None, archive=None,
                     forbidden_pack=None, require_keyboard=False, require_gamepad_a=False,
                     require_run=False,
-                    compare_save_to=None):
+                    compare_save_to=None, graph_profile=None):
     profile = Path(profile).resolve(strict=True)
     if not profile.is_dir():
         raise ValueError('Cemu profile must be a directory')
@@ -181,6 +186,57 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
                 if archive_hash != packaged_hash:
                     issues.append('Expected archive hash does not match the profile pack copy')
 
+    graph_validation_report = None
+    if graph_profile is not None:
+        from worldstudio.graph_validation import graph_profile_record, load_native_graph_profile
+
+        graph_validation_report = {'matches': False, 'manifest': None}
+        if selected is None:
+            issues.append('Graph-profile provenance requires --expect-pack to identify the loaded archive')
+        else:
+            packaged_archive = profile / Path(selected['path']).parent / \
+                'content/Common/course_select/CS_W1.szs'
+            manifest_path = packaged_archive.with_suffix(
+                packaged_archive.suffix + '.manifest.json')
+            graph_validation_report['manifest'] = str(manifest_path)
+            try:
+                manifest_bytes = manifest_path.read_bytes()
+                if len(manifest_bytes) > 1024 * 1024:
+                    raise ValueError('Export manifest exceeds 1 MiB')
+                manifest = json.loads(manifest_bytes.decode('utf-8'))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+                issues.append(f'Cannot verify graph-profile export manifest: {error}')
+                manifest = None
+            try:
+                expected_profile = graph_profile_record(
+                    load_native_graph_profile(graph_profile, 'W1'))
+            except (OSError, ValueError) as error:
+                issues.append(f'Cannot load graph profile for Cemu preflight: {error}')
+                expected_profile = None
+            if isinstance(manifest, dict):
+                try:
+                    packaged_hash = hashlib.sha256(packaged_archive.read_bytes()).hexdigest()
+                except OSError as error:
+                    issues.append(f'Packaged CS_W1.szs is missing or unreadable: {error}')
+                else:
+                    if manifest.get('output_sha256') != packaged_hash:
+                        issues.append('Export manifest hash does not match the packaged CS_W1.szs')
+                stored_profile = manifest.get('graph_validation')
+                if expected_profile is None:
+                    pass
+                elif (not isinstance(stored_profile, dict) or
+                      any(stored_profile.get(key) != value
+                          for key, value in expected_profile.items()) or
+                      stored_profile.get('passed') is not True):
+                    issues.append('Export manifest does not record a passing check for the selected graph profile')
+                else:
+                    graph_validation_report.update({
+                        'matches': True,
+                        'profile_sha256': expected_profile['profile_sha256'],
+                        'entry_points': expected_profile['entry_points'],
+                        'required_locations': expected_profile['required_locations'],
+                    })
+
     log_text = log_path.read_text(encoding='utf-8', errors='replace') if log_path.is_file() else ''
     latest_title_start = log_text.rfind('------- Loaded title -------')
     current_run_log = log_text[latest_title_start:] if latest_title_start >= 0 else ''
@@ -244,6 +300,7 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
         'forbidden_pack_active_in_log': forbidden_active,
         'run_log_present': bool(current_run_log),
         'archive': archive_report,
+        'graph_validation': graph_validation_report,
         'save_comparison': save_comparison,
         'gameplay_verified': False,
         'issues': issues,
@@ -260,6 +317,8 @@ def main(argv=None):
     parser.add_argument('--forbid-pack', help='Pack directory or rules text that must be absent')
     parser.add_argument('--archive', type=Path,
                         help='Expected CS_W1.szs; hash-checked against the profile copy')
+    parser.add_argument('--graph-profile', type=Path,
+                        help='Require the packaged archive manifest to prove this static graph profile')
     parser.add_argument('--require-keyboard', action='store_true',
                         help='Require WASD to map to the GamePad left stick')
     parser.add_argument('--require-gamepad-a', action='store_true',
@@ -276,7 +335,8 @@ def main(argv=None):
                                  require_keyboard=args.require_keyboard,
                                  require_gamepad_a=args.require_gamepad_a,
                                  require_run=args.require_run,
-                                 compare_save_to=args.compare_save_to)
+                                 compare_save_to=args.compare_save_to,
+                                 graph_profile=args.graph_profile)
     except (OSError, ValueError) as error:
         parser.exit(2, f'Preflight failed: {error}\n')
     print(json.dumps(report, indent=2))

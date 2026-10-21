@@ -531,7 +531,7 @@ the user, so no new emulator instance was started for this change.
   ```powershell
   $rpx = '.\NSMBU Modding Project\code\red-pro2.rpx'
   python tools/cemu_input_test.py --profile build/cemu-clean-gamepad-input-v3-20261021 --rpx $rpx --case clean-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --pack-name WorldStudioChain
-  python tools/cemu_input_test.py --profile build/cemu-chain-gamepad-input-v3-20261021 --rpx $rpx --case chain-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --pack-name WorldStudioChain
+  python tools/cemu_input_test.py --profile build/cemu-chain-profile-gated-20261022 --rpx $rpx --case chain-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --pack-name WorldStudioChain --pack-file build/profile-gated-chain-patch/content/Common/course_select/CS_W1.szs
   ```
 
   Each run refuses another active Cemu process, waits for the exact game window
@@ -540,3 +540,25 @@ the user, so no new emulator instance was started for this change.
   expected W102 node in both runs, stop and record that difference instead of
   interpreting the following `D` result as a W102-to-W103 traversal. The
   command sequence is a ready protocol, not a new gameplay result.
+
+## Profile-provenance Cemu package — 2026-10-22
+
+- Re-exported the saved Chain project through the current profile-gated
+  exporter. The output SHA-256 is exactly
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`, the
+  same archive already used in the prior Chain attempts. `verify-export` with
+  `profiles/w1-core-progression.json` passes and records profile hash
+  `08990ee33aed7627c479ebe79b18200a30a6ccb8e5aeef13839547f0ef55820b` for
+  W101→W102/W103. The export still says `game_tested:false`.
+- Created a new isolated profile at
+  `build/cemu-chain-profile-gated-20261022` from that export, using a copied
+  save tree that preflight confirms byte-identical to Clean. Its Cemu 1.26
+  keyboard profile has WASD on left-stick IDs 18–21 and Z on GamePad A. The
+  profile is configured and hash-checked; it has not been launched, so it has
+  no current-run log yet.
+- `tools/cemu_preflight.py --graph-profile <profile.json>` now checks the
+  selected profile against the packaged `CS_W1.szs.manifest.json`, verifies
+  the manifest's archive hash against the bytes Cemu will load, and requires a
+  passing profile for World 1. This gate is opt-in for old profiles. For this
+  new profile, preflight returned `ready:true`, with matching saves, pack and
+  graph profile. That is test setup evidence, not gameplay evidence.

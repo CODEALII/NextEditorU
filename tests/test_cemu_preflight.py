@@ -1,7 +1,10 @@
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
+from worldstudio.graph_validation import graph_profile_record, load_native_graph_profile
 from tools.cemu_preflight import inspect_profile
 
 
@@ -113,6 +116,82 @@ class CemuPreflightTests(unittest.TestCase):
         self.assertFalse(report['ready'])
         self.assertIn('Expected archive hash does not match the profile pack copy',
                       report['issues'])
+
+    def test_graph_profile_gate_checks_packaged_manifest_and_archive_hash(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = self.make_profile(root / 'cemu')
+            graph_path = root / 'graph-profile.json'
+            graph_data = {
+                'format': 'nsmbu-world-graph-profile-v1',
+                'world_prefix': 'W1',
+                'entry_points': ['W101'],
+                'required_locations': ['W102', 'W103'],
+            }
+            graph_path.write_text(json.dumps(graph_data), encoding='utf-8')
+            packaged = (profile / 'graphicPacks/WorldStudioChain/content/Common/course_select/CS_W1.szs')
+            record = graph_profile_record(load_native_graph_profile(graph_path))
+            record.update(passed=True, scope='native point/route table reachability')
+            manifest = {
+                'output_sha256': hashlib.sha256(packaged.read_bytes()).hexdigest(),
+                'graph_validation': record,
+            }
+            packaged.with_suffix('.szs.manifest.json').write_text(
+                json.dumps(manifest), encoding='utf-8')
+
+            report = inspect_profile(profile, expected_pack='WorldStudioChain',
+                                      graph_profile=graph_path)
+
+        self.assertTrue(report['ready'], report['issues'])
+        self.assertTrue(report['graph_validation']['matches'])
+        self.assertEqual(report['graph_validation']['required_locations'], ['W102', 'W103'])
+
+    def test_graph_profile_gate_rejects_missing_or_mismatched_provenance(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = self.make_profile(root / 'cemu')
+            graph_path = root / 'graph-profile.json'
+            graph_path.write_text(json.dumps({
+                'format': 'nsmbu-world-graph-profile-v1',
+                'world_prefix': 'W1', 'entry_points': ['W101'],
+                'required_locations': ['W102', 'W103'],
+            }), encoding='utf-8')
+
+            missing = inspect_profile(profile, expected_pack='WorldStudioChain',
+                                       graph_profile=graph_path)
+            self.assertFalse(missing['ready'])
+            self.assertIn('Cannot verify graph-profile export manifest', missing['issues'][0])
+
+            packaged = (profile / 'graphicPacks/WorldStudioChain/content/Common/course_select/CS_W1.szs')
+            record = graph_profile_record(load_native_graph_profile(graph_path))
+            record.update(passed=True)
+            packaged.with_suffix('.szs.manifest.json').write_text(json.dumps({
+                'output_sha256': '0' * 64,
+                'graph_validation': record,
+            }), encoding='utf-8')
+            mismatched = inspect_profile(profile, expected_pack='WorldStudioChain',
+                                         graph_profile=graph_path)
+
+        self.assertFalse(mismatched['ready'])
+        self.assertIn('Export manifest hash does not match the packaged CS_W1.szs',
+                      mismatched['issues'])
+
+    def test_graph_profile_gate_rejects_profile_for_another_world(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = self.make_profile(root / 'cemu')
+            graph_path = root / 'world-2-profile.json'
+            graph_path.write_text(json.dumps({
+                'format': 'nsmbu-world-graph-profile-v1',
+                'world_prefix': 'W2', 'entry_points': ['W201'],
+                'required_locations': ['W202'],
+            }), encoding='utf-8')
+            report = inspect_profile(profile, expected_pack='WorldStudioChain',
+                                     graph_profile=graph_path)
+
+        self.assertFalse(report['ready'])
+        self.assertTrue(any('profile is for W2, but the source archive is W1' in issue
+                            for issue in report['issues']))
 
     def test_run_evidence_is_taken_from_latest_title_not_old_log_history(self):
         with tempfile.TemporaryDirectory() as temporary:
