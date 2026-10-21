@@ -4,7 +4,7 @@ This backlog follows verified project dependencies. “Done offline” means par
 
 ## Highest priority
 
-1. **Verify the custom W102-to-W103 route in Cemu.** The user confirms WASD movement works, and the isolated Chain build visibly moves Mario from the Crushing-Cogs Tower to a neighboring road node. Identify that point, traverse the changed link with a sustained input, and verify its course launch.
+1. **Verify the custom W102-to-W103 route in Cemu.** The process-bound two-second WASD test visibly moves Mario from Crushing-Cogs Tower to the right-hand course node and onward on the unmodified Clean profile. Chain reached the overworld, but its movement comparison did not start at the confirmed same point. Identify the exact destination point, traverse the changed link with the same sustained input, and verify its course launch.
 2. **Visually validate topology-preserving terrain projection.** The previous `cemu-island-mainlight` whole-shape replacement loaded with large dark-green overlaps and clipped surfaces. The project exporter now changes 2,451 intersecting heights with a 128-unit boundary blend while preserving all 32,374 target triangles and both UV channels; test the updated archive against the same isolated Cemu profile before treating terrain as playable.
 3. **Broaden the preview data model safely.** Preserve per-shape mesh/submesh, vertex-buffer, material and bone references. Add attribute codecs and hierarchy transforms only for layouts found in local resources; continue rejecting unsupported formats with a precise diagnostic.
 
