@@ -1,5 +1,17 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Reconcile the archived Chain movement evidence
+
+- Reopened the archived process-bound result and its three screenshots instead
+  of relying on the prior prose summary. The run used the expected Chain SZS
+  hash, verified process/window focus, held `D` for 1,500 ms, and shows Mario
+  moving from a visible road junction to the right-hand black course node.
+- The result JSON SHA-256 is recorded in `docs/INTEGRATION.md`. The game view
+  does not reveal internal point IDs, so this still cannot prove that W102's
+  edited `RW102W1T0` → `RW1T0W103` route was the edge traversed. It also is not
+  a matched Clean run from the same confirmed point. No new Cemu process was
+  launched for this evidence review.
+
 ## 2026-10-22 — Sync selected route styling across both graph views
 
 - Native route selection now highlights its corresponding segment in the 2D

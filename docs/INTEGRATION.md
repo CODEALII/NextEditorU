@@ -245,10 +245,19 @@
   visibly showed large dark-green overlaps/clipped terrain. It is not a visual
   pass. The screenshot `cemu-mainlight-terrain-observed.png` is in ignored local
   evidence; the route-only Chain view retained stock-looking terrain.
-- The user confirms Mario can move with WASD. This Computer Use API sends key
-  taps rather than timed holds, so another sustained D test is needed from the
-  observed junction before drawing a route conclusion. Level launch,
-  fresh-save unlocks and save/reload progression remain unverified.
+- An archived process-bound Chain run provides a sustained-input observation:
+  PID 29036 used the exact patched pack hash
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e` and held
+  `D` for 1,500 ms. Its map-check/before screenshots show Mario at a road
+  junction; the after screenshot shows him on the visible black course node to
+  the right. The process result records focus, key-down/up, matching runtime
+  pack hashes, and a normal exit (`chain-modified-d-1500-result.json`, SHA-256
+  `29405c8a71212c43f705707aeff4a1338ca222494606926d9ff8b09e9ff227e7`). This
+  confirms movement on that patched map, but the screenshots do not identify
+  either internal point ID or prove the starting point was W102. It therefore
+  does not verify the specific W102-to-W103 edge or provide a matched Clean
+  comparison from the same point. Level launch, fresh-save unlocks and
+  save/reload progression remain unverified.
 
 These observations supersede older statements below that no sustained input
 or traversal had been performed. The earlier notes remain as historical
