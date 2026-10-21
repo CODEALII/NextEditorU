@@ -26,6 +26,8 @@ Saving changed native or OBJ-preview project content uses atomic per-file replac
 
 The Recent menu stores up to ten native-source/project paths and ten preview paths in a versioned JSON file under the user's local application settings. The lists are type-filtered, deduplicated by resolved path, and updated only after a successful open or save. `tests.test_recent_projects` covers ordering, deduplication, filtering, truncation, and malformed settings recovery; the editor smoke test checks native filtering and that canceling the unsaved-changes guard prevents a recent project from opening.
 
+Edits to a saved native or preview project are debounced into a checksummed per-user recovery snapshot (maximum 64 MiB). Opening that saved project offers an explicit restore prompt; choosing not to restore, discarding unsaved edits, or successfully saving clears the snapshot. Projects opened directly from an SZS without first saving a World Studio JSON project do not get a recovery snapshot. `tests.test_session_recovery` verifies project/kind/baseline binding, checksums, bounded size, and removal; the Tk smoke test exercises a scheduled snapshot, restore prompt acceptance, and explicit discard.
+
 Check a directed route from a declared start to one or more required points:
 
 ```powershell

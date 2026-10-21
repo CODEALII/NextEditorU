@@ -6,6 +6,7 @@ OBJ preview import is separate from explicit experimental native mesh replacemen
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import math
 import queue
@@ -15,6 +16,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from .mesh import MAX_FACE_CORNERS, transform_obj_geometry
 from .recent_projects import RecentProjects
+from .session_recovery import SessionRecovery, StaleRecoveryError
 
 
 MAX_OBJ_FILE_BYTES = 64 * 1024 * 1024
@@ -290,6 +292,11 @@ class WorldStudio(ttk.Frame):
         self.project = copy.deepcopy(project or demo_project())
         self.project_path = None
         self.recent_projects = RecentProjects()
+        self.recovery_store = SessionRecovery()
+        self._recovery_project_path = None
+        self._recovery_baseline_sha256 = None
+        self._recovery_after_id = None
+        self.recovery_delay_ms = 750
         self.dirty = False
         self.mesh = ([], [])
         self.selected = None
@@ -432,6 +439,7 @@ class WorldStudio(ttk.Frame):
     def _record_edit(self):
         self.history.push(self._capture_edit_state())
         self._sync_history_buttons()
+        self._schedule_recovery()
 
     def _reset_edit_history(self):
         self.history.reset(self._capture_edit_state())
@@ -493,6 +501,137 @@ class WorldStudio(ttk.Frame):
             self.fit()
         self.status.set(f"{action} applied; save the project to keep changes")
         self._sync_history_buttons()
+        self._schedule_recovery()
+
+    def _cancel_recovery_write(self):
+        after_id = getattr(self, "_recovery_after_id", None)
+        if after_id is None:
+            return
+        try:
+            self.after_cancel(after_id)
+        except tk.TclError:
+            pass
+        self._recovery_after_id = None
+
+    def _set_recovery_context(self, project_path, *, offer=False):
+        self._cancel_recovery_write()
+        self._recovery_project_path = Path(project_path) if project_path is not None else None
+        self._recovery_baseline_sha256 = None
+        if self._recovery_project_path is None:
+            return
+        try:
+            baseline = self._recovery_project_path.read_bytes()
+        except OSError as error:
+            self.status.set(f"Session recovery unavailable: cannot read saved project ({error})")
+            return
+        self._recovery_baseline_sha256 = hashlib.sha256(baseline).hexdigest()
+        if offer:
+            self._offer_recovery()
+
+    def _clear_recovery(self, project_path=None):
+        self._cancel_recovery_write()
+        target = Path(project_path) if project_path is not None else getattr(self, "_recovery_project_path", None)
+        store = getattr(self, "recovery_store", None)
+        if target is None or store is None:
+            return
+        try:
+            store.delete(target, self._recent_project_kind())
+        except (OSError, ValueError, RuntimeError) as error:
+            self.status.set(f"Could not clear recovery snapshot: {error}")
+
+    def _schedule_recovery(self):
+        if (not self.dirty or self._recovery_project_path is None or
+                self._recovery_baseline_sha256 is None or getattr(self, "exporting", False)):
+            return
+        self._cancel_recovery_write()
+        self._recovery_after_id = self.after(self.recovery_delay_ms, self._write_recovery)
+
+    def _write_recovery(self):
+        self._recovery_after_id = None
+        if (not self.dirty or self._recovery_project_path is None or
+                self._recovery_baseline_sha256 is None or getattr(self, "exporting", False)):
+            return
+        try:
+            self.recovery_store.save(
+                self._recovery_project_path,
+                self._recent_project_kind(),
+                self._recovery_baseline_sha256,
+                self._capture_edit_state(),
+            )
+        except (OSError, ValueError, RuntimeError) as error:
+            self.status.set(f"Unsaved session recovery unavailable: {error}")
+
+    def _recovery_payload_valid(self, payload):
+        if not isinstance(payload, dict) or payload.get("kind") != self._recent_project_kind():
+            return False
+        mesh = payload.get("mesh")
+        if not isinstance(mesh, (list, tuple)) or len(mesh) != 2:
+            return False
+        if payload["kind"] == "native":
+            required = {"points", "routes", "positions", "layout", "terrain",
+                        "geometry", "bone_renames", "camera_edits", "mesh"}
+            return (required.issubset(payload) and
+                    isinstance(payload["points"], list) and
+                    isinstance(payload["routes"], list) and
+                    isinstance(payload["positions"], dict) and
+                    isinstance(payload["layout"], dict) and
+                    isinstance(payload["bone_renames"], list) and
+                    isinstance(payload["camera_edits"], dict) and
+                    (payload["terrain"] is None or isinstance(payload["terrain"], str)) and
+                    (payload["geometry"] is None or isinstance(payload["geometry"], dict)))
+        project = payload.get("project")
+        try:
+            return isinstance(project, dict) and not validate_preview(project)
+        except (ValueError, KeyError, TypeError, AttributeError):
+            return False
+
+    def _offer_recovery(self):
+        if self._recovery_project_path is None or self._recovery_baseline_sha256 is None:
+            return
+        try:
+            payload = self.recovery_store.load(
+                self._recovery_project_path,
+                self._recent_project_kind(),
+                self._recovery_baseline_sha256,
+            )
+        except StaleRecoveryError as error:
+            self._clear_recovery()
+            messagebox.showwarning("Recovery snapshot is out of date", str(error), parent=self)
+            return
+        except (OSError, ValueError, RuntimeError) as error:
+            self._clear_recovery()
+            messagebox.showwarning("Recovery snapshot unavailable", str(error), parent=self)
+            return
+        if payload is None:
+            return
+        if not self._recovery_payload_valid(payload):
+            self._clear_recovery()
+            messagebox.showwarning("Recovery snapshot unavailable",
+                                   "The saved edit snapshot does not match this editor.", parent=self)
+            return
+        if not messagebox.askyesno(
+                "Recover unsaved edits?",
+                "An autosaved edit session exists for this saved project. Restore those edits?",
+                parent=self):
+            self._clear_recovery()
+            return
+        previous = self._capture_edit_state()
+        try:
+            self._restore_edit_state(payload, "Recovery")
+            issues = self.native.validate() if payload["kind"] == "native" else validate_preview(self.project)
+            if issues:
+                raise ValueError("\n".join(issues[:15]))
+        except (OSError, ValueError, KeyError, TypeError, IndexError, OverflowError, AttributeError) as error:
+            self._restore_edit_state(previous, "Recovery rollback")
+            self.dirty = False
+            self._reset_edit_history()
+            self._clear_recovery()
+            messagebox.showwarning("Recovery snapshot rejected", str(error), parent=self)
+            return
+        self._reset_edit_history()
+        self.dirty = True
+        self.status.set("Recovered unsaved edits. Save the project to keep them.")
+        self._schedule_recovery()
 
     def undo(self):
         if getattr(self, "exporting", False):
@@ -1019,7 +1158,10 @@ class WorldStudio(ttk.Frame):
         answer = messagebox.askyesnocancel(f"Unsaved {kind}", "Save project changes before continuing?", parent=self)
         if answer is None:
             return False
-        return bool(self.save()) if answer else True
+        if answer:
+            return bool(self.save())
+        self._clear_recovery()
+        return True
 
     def _recent_project_kind(self):
         return "preview"
@@ -1070,7 +1212,9 @@ class WorldStudio(ttk.Frame):
 
     def new(self):
         if self.may_discard():
+            self._clear_recovery()
             self.project, self.project_path = demo_project(), None
+            self._set_recovery_context(None)
             self.selected, self.dirty = None, False
             self._load_mesh()
             self.refresh()
@@ -1102,6 +1246,7 @@ class WorldStudio(ttk.Frame):
             self.status.set(f"Opened {path}")
             self._reset_edit_history()
             self._record_recent_project(path)
+            self._set_recovery_context(path, offer=True)
         except (OSError, ValueError, KeyError, TypeError) as error:
             messagebox.showerror("Cannot open project", str(error), parent=self)
 
@@ -1116,7 +1261,10 @@ class WorldStudio(ttk.Frame):
             stored["terrain"] = store_project_path(stored.get("terrain"), destination)
             content = (json.dumps(stored, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
             backup = save_project_bytes(destination, content)
+            self._clear_recovery()
+            self._clear_recovery(destination)
             self.project_path, self.dirty = destination, False
+            self._set_recovery_context(destination)
             suffix = f" Previous version: {backup}" if backup else ""
             self.status.set(f"Saved preview project: {destination}{suffix}")
             self._record_recent_project(destination)
@@ -1167,6 +1315,7 @@ class NativeStudio(WorldStudio):
         self.status.set(f"Loaded {native.source.name} • coordinates: " +
                         ("BFRES hierarchy-transformed rest pose; unsupported branches use labeled layouts" if native.positions else "editor layout only; game transforms unknown"))
         self.canvas.bind("<Map>", lambda event: self.fit(), add="+")
+        self._set_recovery_context(self.project_path, offer=True)
         recent_path = self.project_path or Path(native.source)
         if recent_path.is_file():
             self._record_recent_project(recent_path)
@@ -1566,6 +1715,7 @@ class NativeStudio(WorldStudio):
             child.destroy()
         self.status.set(f"Opened {native.source.name}; " + ("hierarchy-transformed BFRES rest pose; purple points use editor layout" if native.positions else "editor layout; game coordinates unavailable"))
         self._reset_edit_history()
+        self._set_recovery_context(project_path, offer=True)
 
     def open(self):
         if not self.may_discard():
@@ -1608,7 +1758,10 @@ class NativeStudio(WorldStudio):
             return False
         try:
             backup = self.native.save(path)
+            self._clear_recovery()
+            self._clear_recovery(path)
             self.project_path, self.dirty = Path(path), False
+            self._set_recovery_context(self.project_path)
             suffix = f" Previous version: {backup}" if backup else ""
             self.status.set(f"Saved native project: {path}{suffix}")
             self._record_recent_project(path)

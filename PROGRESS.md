@@ -729,6 +729,21 @@ camera behavior and a fully playable custom world remain open.
   cancel behavior, and preview-save registration. The full suite passed
   (**202 tests in 149.170 seconds**), with `compileall` and `git diff --check`.
 
+## 2026-10-21 — Recover saved-project editing sessions
+
+- Editing a saved native or lightweight-preview project now schedules a
+  checksummed recovery snapshot after a 750 ms quiet period. Snapshots are
+  stored outside the project under the user's local application data, bound to
+  the exact saved-file hash and editor kind, and limited to 64 MiB.
+- Opening a matching saved project offers an explicit restore prompt. Invalid,
+  stale, oversized, or mismatched snapshots are rejected; manual save or an
+  explicit discard removes recovery data. Projects loaded only from an SZS
+  remain unrecoverable until saved as a World Studio JSON project.
+- Unit and Tk smoke tests cover checksum/baseline validation, size caps, actual
+  debounced writing, restore acceptance, and discard cleanup for both native
+  and lightweight-preview projects. The full suite passed (**209 tests in
+  148.323 seconds**), with `compileall` and `git diff --check`.
+
 ## 2026-10-21 — Report unsupported OBJ features
 
 - OBJ imports now report when they ignore MTL/material assignments, vertex

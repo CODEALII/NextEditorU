@@ -6,9 +6,11 @@ import threading
 import time
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from worldstudio.editor import NativeStudio, ObjTransformDialog, WorldStudio
 from worldstudio.recent_projects import RecentProjects
+from worldstudio.session_recovery import SessionRecovery
 
 
 class NativeFixture:
@@ -36,6 +38,9 @@ class NativeFixture:
                 "F001": [origin + self.positions["F001"][0], 0, 0],
                 "K001": [origin + self.positions["K001"][0], 0, 0],
                 "RF001K001": [origin + self.positions["RF001K001"][0], 0, 0]}
+
+    def validate(self):
+        return []
 
 
 class EditorSmokeTests(unittest.TestCase):
@@ -72,6 +77,76 @@ class EditorSmokeTests(unittest.TestCase):
         self.app.open_project_path = lambda path: opened.append(path)
         self.app.open_recent_project(str(native_path))
         self.assertEqual(opened, [])
+
+    def test_saved_preview_session_can_recover_after_restart(self):
+        root = Path(self.recent_tmp.name)
+        project_path = root / "preview.json"
+        top = tk.Toplevel(self.root)
+        top.withdraw()
+        preview = WorldStudio(top)
+        preview.recent_projects = RecentProjects(root / "preview-recents.json")
+        preview.recovery_store = SessionRecovery(root / "recoveries")
+        preview.recovery_delay_ms = 5
+        preview.project_path = project_path
+        try:
+            self.assertTrue(preview.save())
+            preview._set_recovery_context(project_path)
+            preview.project["nodes"][0]["x"] = 42
+            preview.dirty = True
+            preview._record_edit()
+            deadline = time.monotonic() + 0.5
+            while not preview.recovery_store.path_for(project_path, "preview").exists() and time.monotonic() < deadline:
+                self.root.update()
+                time.sleep(0.005)
+            self.assertTrue(preview.recovery_store.path_for(project_path, "preview").is_file())
+
+            preview.project["nodes"][0]["x"] = 0
+            preview.dirty = False
+            with patch("worldstudio.editor.messagebox.askyesno", return_value=True):
+                preview._offer_recovery()
+
+            self.assertEqual(preview.project["nodes"][0]["x"], 42)
+            self.assertTrue(preview.dirty)
+            self.assertTrue(preview.history.can_undo is False)
+            with patch("worldstudio.editor.messagebox.askyesnocancel", return_value=False):
+                self.assertTrue(preview.may_discard())
+            self.assertIsNone(preview.recovery_store.load(
+                project_path, "preview", preview._recovery_baseline_sha256))
+        finally:
+            top.destroy()
+
+    def test_saved_native_session_can_recover_after_restart(self):
+        root = Path(self.recent_tmp.name)
+        project_path = root / "native-project.json"
+        project_path.write_text('{"saved": true}', encoding="utf-8")
+        self.app.recovery_store = SessionRecovery(root / "recoveries")
+        self.app.recovery_delay_ms = 5
+        self.app._set_recovery_context(project_path)
+        try:
+            self.native.positions["K001"][0] = 88
+            self.app.dirty = True
+            self.app._record_edit()
+            deadline = time.monotonic() + 0.5
+            recovery_path = self.app.recovery_store.path_for(project_path, "native")
+            while not recovery_path.exists() and time.monotonic() < deadline:
+                self.root.update()
+                time.sleep(0.005)
+            self.assertTrue(recovery_path.is_file())
+
+            self.native.positions["K001"][0] = 20
+            self.app.dirty = False
+            with patch("worldstudio.editor.messagebox.askyesno", return_value=True):
+                self.app._offer_recovery()
+
+            self.assertEqual(self.native.positions["K001"][0], 88)
+            self.assertTrue(self.app.dirty)
+            with patch("worldstudio.editor.messagebox.askyesnocancel", return_value=False):
+                self.assertTrue(self.app.may_discard())
+            self.assertIsNone(self.app.recovery_store.load(
+                project_path, "native", self.app._recovery_baseline_sha256))
+        finally:
+            self.app._clear_recovery(project_path)
+            self.app._set_recovery_context(None)
 
     def test_auxiliary_uses_world_coordinates_and_omits_macro_points(self):
         self.assertEqual([node["id"] for node in self.app.project["nodes"]], ["W101", "W102"])
