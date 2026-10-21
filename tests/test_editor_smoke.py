@@ -286,6 +286,26 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertIn("W102 is unreachable", show_error.call_args.args[1])
         choose_output.assert_not_called()
 
+    def test_validate_uses_the_same_selected_profile_as_export(self):
+        self.app.graph_profile_path = Path("profiles/w1-core-progression.json")
+        with patch("worldstudio.__main__._validate_with_graph_profile",
+                   return_value=["Unreachable location W103"]), \
+             patch("worldstudio.editor.messagebox.showerror") as show_error, \
+             patch("worldstudio.editor.messagebox.showinfo") as show_info:
+            self.app.validate()
+
+        show_error.assert_called_once()
+        self.assertIn("Unreachable location W103", show_error.call_args.args[1])
+        show_info.assert_not_called()
+
+        with patch("worldstudio.__main__._validate_with_graph_profile",
+                   return_value=[]), \
+             patch("worldstudio.editor.messagebox.showinfo") as show_info:
+            self.app.validate()
+
+        self.assertIn("selected graph profile", show_info.call_args.args[1])
+        self.assertIn("Cemu testing", show_info.call_args.args[1])
+
     def test_add_route_dialog_builds_a_draft_from_an_existing_bfres_segment(self):
         before = [row[:] for row in self.native.routes.rows]
         self.native.points.rows[1][4] = "RW102F001"

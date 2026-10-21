@@ -10,13 +10,16 @@
   output was created, and verifies the source SZS is byte-identical. Profile
   checks remain opt-in and do not claim game unlock semantics.
 - The native editor also offers a **Graph check** toolbar menu to select or
-  disable the same profile before SZS export. It clears the selection when a
-  different source world opens and reports the required static paths without
-  implying event, unlock, or save behavior. Tk regressions confirm selection
-  and that failed checks block the output picker.
+  disable the same profile. Both **Validate** and SZS export run that profile;
+  switching source worlds clears it. The result names the required static
+  paths without implying event, unlock, or save behavior. Tk regressions confirm
+  selection and identical validation/export gating.
 - Full repository regression after this editor integration: **343 tests passed
   in 272.426 seconds**. This validates local code paths only; Cemu traversal,
   level entry, clear/unlock progression, and save/reload remain open.
+- Follow-up validation/export unification: **61 editor and graph tests passed**;
+  `compileall` and `git diff --check` also pass. The full repository suite was
+  not rerun for this follow-up.
 
 ## 2026-10-22 — Resolve ambiguous local albedo references
 

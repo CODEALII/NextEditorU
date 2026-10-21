@@ -2407,9 +2407,21 @@ class NativeStudio(WorldStudio):
         self.status.set("Draft deletion. Point index changes block export until engine/script remapping exists.")
 
     def validate(self):
-        issues = self.native.validate()
-        messagebox.showinfo("Native resource validation", "\n".join(issues[:35]) if issues else
-                            "Native graph and model references pass static validation.\nGame behavior still requires Cemu testing.", parent=self)
+        try:
+            issues = self._validation_issues()
+        except (OSError, ValueError) as error:
+            issues = [str(error)]
+        if issues:
+            messagebox.showerror("Native resource validation failed",
+                                 "\n".join(issues[:35]), parent=self)
+            return
+        profile_note = (" The selected graph profile also reaches its required locations."
+                        if self.graph_profile_path is not None else "")
+        messagebox.showinfo(
+            "Native resource validation",
+            "Native graph and model references pass static validation."
+            + profile_note + "\nGame behavior still requires Cemu testing.",
+            parent=self)
 
     def open_szs(self):
         if not self.may_discard():
@@ -2637,14 +2649,10 @@ class NativeStudio(WorldStudio):
     def export_szs(self):
         if self.exporting:
             return
-        issues = self.native.validate()
-        if self.graph_profile_path is not None:
-            try:
-                from .__main__ import _validate_with_graph_profile
-                issues = sorted(set(issues) | set(
-                    _validate_with_graph_profile(self.native, self.graph_profile_path)))
-            except (OSError, ValueError) as error:
-                issues = sorted(set(issues) | {str(error)})
+        try:
+            issues = self._validation_issues()
+        except (OSError, ValueError) as error:
+            issues = [str(error)]
         if issues:
             messagebox.showerror("Export blocked", "\n".join(issues[:35]), parent=self)
             return
@@ -2662,6 +2670,13 @@ class NativeStudio(WorldStudio):
                     self.export_results.put((False, str(error)))
             threading.Thread(target=worker, name="worldstudio-export", daemon=True).start()
             self.after(60, self.poll_export)
+
+    def _validation_issues(self):
+        issues = set(self.native.validate())
+        if self.graph_profile_path is not None:
+            from .__main__ import _validate_with_graph_profile
+            issues.update(_validate_with_graph_profile(self.native, self.graph_profile_path))
+        return sorted(issues)
 
     def choose_graph_profile(self):
         if self.exporting:
