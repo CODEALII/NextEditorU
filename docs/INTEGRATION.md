@@ -108,14 +108,15 @@ activate World Studio Chain. Its `controller0.txt` selects DirectInput and a
 Wireless Controller, not the keyboard GamePad profile. Therefore that live
 process is not a valid WASD test of the custom route. The isolated direct-route
 profile does contain the expected keyboard mappings and exact archive, but has
-not been launched. `build/cemu-clean-route-retest-20261021` and
+not been launched. `build/cemu-clean-route-retest-20261021`,
+`build/cemu-chain-route-retest-20261021` and
 `build/cemu-direct-route-retest-20261021` are now prepared with identical copies
-of the same existing traversal save snapshot; hash checks confirmed both files
-match in each profile. The clean profile's preflight confirms CrashFix only and
-the keyboard left-stick mappings. The direct profile's preflight confirms World
-Studio Chain and an exact match to its direct-route archive. Neither profile
-has a run log yet. This reused save is only for movement comparison, not a
-fresh-save progression test.
+of the same existing traversal save snapshot; hash checks confirmed the personal
+and common save files match across all three profiles. The clean profile's
+preflight excludes World Studio Chain, while both modified profiles enable it
+and contain their exact expected archives. All three use the keyboard left-
+stick mappings. None has a run log yet. This reused save is only for movement
+comparison, not a fresh-save progression test.
 
 ## Legacy emulator details actually encountered
 

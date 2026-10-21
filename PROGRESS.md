@@ -1334,3 +1334,8 @@ camera behavior and a fully playable custom world remain open.
   exact mod archive required. Neither profile has been launched yet.
 - Verification: **301 tests passed in 189.019 seconds**; all six focused Cemu
   preflight tests passed, and `compileall` plus `git diff --check` passed.
+
+- Added `build/cemu-chain-route-retest-20261021` as a third comparison case
+  for the point-only chain. It shares the same two hash-verified save files with
+  clean and direct-route profiles. The three static preflights pass; no profile
+  has been launched and no game movement is verified.
