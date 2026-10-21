@@ -6,20 +6,26 @@ World Studio is an offline research prototype. Items below describe work still n
 
 A controlled Cemu retest on 2026-10-21 reached the World 1 map in both the
 CrashFix-only Clean profile and the World Studio Chain profile. Holding `D` for
-about two seconds moved Mario from the Crushing-Cogs Tower to the visible
-right-hand map node in both runs. This verifies movement with the configured
-keyboard GamePad profile in those runs, but does not identify the destination's
-exact point ID or show that the custom chain caused the movement. Pressing `Z`
-at the Chain destination left the map open; level launch remains unverified.
+about two seconds moved Mario to a visible neighboring node in both Clean and
+Chain. A later Chain screenshot showed **Acorn Plains-2 — Tilted Tunnel**, but
+Computer Use detected external user input at that time, so the movement cannot
+be attributed to a particular test key or profile action. Pressing `Z` there
+left the map open after a 2.5-second wait; level launch remains unverified.
 The Direct profile used the expected hashed archive and active pack but stayed
 in the title/demo flow, so it has no movement result. The three isolated
-profiles retain byte-identical personal and common saves. These results
-supersede the historical no-input observations below.
+profiles retained byte-identical personal and common saves in the earlier
+controlled comparison. The latest Chain run moved Mario afterward and was still
+open when external input was detected, so rerun the save comparison after it is
+closed. These results supersede the historical no-input observations below.
 
-Next verify the exact destination point, level launch, fresh-save progression,
-save/reload, and camera transitions. Keep each result tied to the exact pack,
-input profile and save snapshot. See `docs/INTEGRATION.md` for process IDs,
-archive hashes, screenshot evidence and the remaining controlled-test steps.
+Archive inspection shows the patched chain changes `pointW1.csv`; the stock
+archive already connects W101 to W102. The controlled first-node movement
+therefore does not validate the modified W102-to-W103 path (`RW102W1T0` then
+`RW1T0W103`). Next test that link from a known W102 state, then verify level
+launch, fresh-save progression, save/reload, and camera transitions. Keep each
+result tied to the exact pack, input profile and save snapshot. See
+`docs/INTEGRATION.md` for process IDs, archive hashes, screenshot evidence and
+the remaining controlled-test steps.
 
 ## Rendering fidelity
 

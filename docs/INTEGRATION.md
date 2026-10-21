@@ -6,11 +6,12 @@
   same pre-test personal/common save snapshot. Preflight checks confirm all
   three save files remain byte-identical after the runs.
 - Clean and Chain profiles both reached the World 1 map at the Crushing-Cogs
-  Tower. With the matching Cemu process focused, holding `D` for about two
-  seconds moved Mario to the visible right-hand map node in both profiles.
-  This verifies basic movement under the keyboard profile in these two runs;
-  the destination's exact point ID and whether the custom chain caused the
-  movement are not established.
+  Tower. In the controlled comparison, holding `D` for about two seconds moved
+  Mario to the visible neighboring node in both profiles; its name was not
+  captured. In a later isolated Chain run, a refreshed screenshot showed Mario
+  at **Acorn Plains-2 — Tilted Tunnel**, but Computer Use reported external
+  user input at the same time, so that follow-up movement cannot be attributed
+  to a particular test key. The internal point ID is not confirmed.
 - The Chain profile activated CrashFix and World Studio Chain. Its packaged
   `CS_W1.szs` SHA-256 is
   `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`, matching
@@ -18,17 +19,23 @@
   `build/`): `cemu-chain-map-stable.png`, `cemu-chain-after-d.png`, and
   `cemu-chain-enter-node.png`; the clean movement comparison is
   `cemu-clean-after-d-valid.png`.
-- Pressing `Z` at the right-hand node left the Chain run on the world map. A
-  level launch was not observed. The Direct profile activated the expected
+- Pressing `Z` at Acorn Plains-2 left the Chain run on the world map after a
+  2.5-second wait. A level launch was not observed. Archive inspection shows
+  the test chain changes only `pointW1.csv`; stock data already connects W101
+  to W102. Therefore the controlled first-node movement does not exercise the
+  modified W102-to-W103 link. That link uses `RW102W1T0` and `RW1T0W103` and
+  still needs a controlled traversal test. The Direct profile activated the expected
   archive (`8a473f413788cb5b3fab07f5f6ae174a6948159b39cc6019df97ef7ae24c3d35`);
   it remained in the title/demo flow and did not reach the map, so it provides
   no movement result.
-- Clean, Chain and Direct all pass `tools/cemu_preflight.py` with current-run
-  title/module and pack checks. `--compare-save-to` confirms byte-identical
-  saves among the test profiles. The clean run excludes World Studio Chain;
-  each modified profile enables it and its packaged archive matches the test
-  input exactly. No fresh-save progression or terrain-appearance result is
-  established.
+- Before the latest Chain retest, Clean, Chain and Direct passed
+  `tools/cemu_preflight.py` with current-run title/module and pack checks, and
+  `--compare-save-to` confirmed byte-identical save snapshots. The current Chain
+  run has since moved Mario on the map and was still open when Computer Use
+  detected user input; do not assume its save still matches until Cemu is closed
+  and the comparison is rerun. The clean run excludes World Studio Chain; each
+  modified profile enables it and its packaged archive matches the test input
+  exactly. No fresh-save progression or terrain-appearance result is established.
 
 These observations supersede older statements below that no sustained input
 or traversal had been performed. The earlier notes remain as historical

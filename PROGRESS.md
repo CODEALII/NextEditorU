@@ -1375,3 +1375,25 @@ camera behavior and a fully playable custom world remain open.
   Historical notes that no sustained input had been tested are superseded by
   this controlled observation; level entry, progression, fresh-save behavior,
   persistence and terrain appearance remain open.
+
+## 2026-10-21 — Chain route reaches a named course node
+
+- Relaunched the isolated Chain profile (PID 19444) with its own MLC and
+  confirmed the Wii U GamePad selection screen, then resumed the saved story.
+  On the map, Mario started at the Crushing-Cogs Tower. After Computer Use
+  reported external user input, a refreshed screenshot showed Mario standing
+  on **Acorn Plains-2 — Tilted Tunnel**. The displayed game state is verified,
+  but the follow-up movement cannot be attributed to a particular test key.
+  The internal point ID is not confirmed.
+- Pressing `Z` at the node and waiting 2.5 seconds left the game on the map.
+  No level start was observed. Computer Use then detected input in the window;
+  the state was refreshed and recorded, and no further app input was sent. The
+  isolated Cemu run was still open, so its save may now differ from the earlier
+  byte-identical profile snapshot; compare only after the run is closed.
+- Updated `docs/INTEGRATION.md` and `ROADMAP.md` to name the visible destination
+  and preserve the unverified level-launch and save-equivalence limits.
+- Archive inspection confirms the Chain export changes only `pointW1.csv`, and
+  stock data already connects W101 to W102. Thus the controlled first-node
+  movement does not validate the modified W102-to-W103 link through
+  `RW102W1T0` and `RW1T0W103`; testing that link from a known W102 state is now
+  the next gameplay milestone.
