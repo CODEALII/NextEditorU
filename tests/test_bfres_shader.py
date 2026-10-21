@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 from worldstudio.archive import Archive
 from worldstudio.bfres import Skeletons
+from worldstudio.bfres_material import extract_texture_srt_parameters
+from worldstudio.bfres_texture import extract_base_color_texture
 from worldstudio.bfres_shader import (attach_shader_metadata,
                                       extract_material_shader_assignments,
                                       load_shader_archives,
@@ -96,6 +98,54 @@ class BfresShaderMetadataTests(unittest.TestCase):
         selected = {row['name']: row['value'] for row in selection['macro_values']}
         self.assertEqual(selected['ENABLE_EDGE_MASK'], '1')
         self.assertIn('var_color_anim', selection['ignored_options'])
+
+    def test_local_w1_main_grass_material_contract(self):
+        model, archives = self._assets()
+        shapes = extract_rigid_model(model)
+        self.assertEqual(attach_shader_metadata(model, shapes, archives), set())
+        grass = next(shape for shape in shapes
+                     if shape['name'] == 'polySurface1489__mtGrass')
+        metadata = grass['shaderMetadata']
+
+        self.assertEqual(metadata['programName'], 'nw4f_cs_shader')
+        selection = metadata['variationSelection']
+        self.assertEqual((selection['candidate_index'], selection['candidate_count']), (86, 288))
+        self.assertEqual(selection['unresolved_macros'], ['NUM_SKINNING_VTX'])
+        self.assertEqual(selection['selection_model'],
+                         'AGL material-option lookup; shape variation unresolved')
+        macro_values = {row['name']: row['value'] for row in selection['macro_values']}
+        self.assertEqual({name: macro_values[name] for name in (
+            'AO_TYPE', 'INDIRECT_LIGHT_TYPE', 'ENABLE_NORMAL_MAP',
+            'ENABLE_SPEC_MASK', 'ENABLE_SHADOW',
+        )}, {
+            'AO_TYPE': '2', 'INDIRECT_LIGHT_TYPE': '1', 'ENABLE_NORMAL_MAP': '0',
+            'ENABLE_SPEC_MASK': '1', 'ENABLE_SHADOW': '1',
+        })
+
+        self.assertTrue({'_a0', '_x0', '_x1', '_b0', '_b1', '_s0'}
+                        .issubset(metadata['samplerSymbols']))
+        self.assertIn('texmtx1', metadata['uniformNames'])
+        self.assertEqual(metadata['attributeBindings']['_u0'], {
+            'shader_name': 'aTexCoord0', 'source_attribute': '_u0',
+            'present': True, 'format': 0x80d, 'offset': 16,
+        })
+        self.assertEqual(metadata['attributeBindings']['_u1'], {
+            'shader_name': 'aTexCoordNormal0', 'source_attribute': '_u0',
+            'present': True, 'format': 0x80d, 'offset': 16,
+        })
+        self.assertEqual(metadata['attributeBindings']['_u3'], {
+            'shader_name': 'aTexCoordBake0', 'source_attribute': '_u1',
+            'present': True, 'format': 0x7, 'offset': 32,
+        })
+
+        texture = extract_base_color_texture(model, 'CS_W1_World', 'mtGrass')
+        self.assertEqual((texture['name'], texture['width'], texture['height'],
+                          texture['format']), ('Grass_alb', 256, 256, 0x31))
+        srt = extract_texture_srt_parameters(model, 'CS_W1_World', 'mtGrass')
+        self.assertEqual(srt['texmtx1'], {
+            'mode': 0, 'scale': [1.0, 1.0], 'rotation': 0.0,
+            'translation': [0.0, 0.0],
+        })
 
     def test_material_option_index_uses_declared_mixed_radix_order(self):
         program = {

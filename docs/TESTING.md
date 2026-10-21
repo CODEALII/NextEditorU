@@ -7,6 +7,7 @@ Run from the repository root:
 ```powershell
 python -m unittest discover -s tests -v
 python -m compileall -q worldstudio tests tools
+python -m unittest tests.test_bfres_shader -v
 ```
 
 Inspect a shader program's declared metadata from the local dump:
@@ -17,6 +18,8 @@ python -m worldstudio inspect-shaders "NSMBU Modding Project/content/Common/shad
 ```
 
 The default output is a compact program/interface summary. `--json` prints the complete parsed metadata. Neither mode decodes GX2 instructions or proves the selected runtime variation. The viewer's expandable shader panel shows the material-option candidate and checked BFRES vertex-input bindings, including the original stored format and byte offset; these fields do not assign sampler UV behavior or decode unsupported vertex formats.
+
+`tests.test_bfres_shader` includes a local W1 regression for the main grass shape's assigned program, material-option candidate, unresolved shape variation, declared sampler and vertex-input interfaces, base-color texture, and stored SRT. It skips local-resource tests when the user-supplied W1 or shader archives are unavailable. The viewer inspector prints the unresolved shape-specific macro names; a DOM regression checks that label. A pass verifies static resource metadata only, not the shader output in Cemu or on hardware.
 
 The suite uses synthetic fixtures and, when present, the user-supplied files under `NSMBU Modding Project/`. Local game files are read in memory and are not included in exports or commits.
 

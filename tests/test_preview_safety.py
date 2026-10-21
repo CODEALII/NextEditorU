@@ -193,14 +193,14 @@ let focusedMesh=null;function focusMesh(mesh){focusedMesh=mesh}
 """ + helper + r"""
 const a={name:'Grass <test>',material:'mtGrass',color:[.2,.4,.6],textureName:'Grass_alb',normalTextureName:'Grass_nml',vertexCount:12,triangleCount:8,hasUvs:true,visible:true};
 const b={name:'Rock',material:'mtRock',color:[.3,.3,.3],textureName:'',normalTextureName:'',vertexCount:9,triangleCount:4,hasUvs:false,visible:true};
-a.shaderMetadata={archiveName:'shader',programName:'route',samplerSymbols:{_o0:'cTexMapRouteMask'},uniformNames:['texmtx0'],variationCount:6,variationSelection:{candidate_index:2,candidate_count:6,selection_model:'AGL material-option lookup; shape variation unresolved',macro_values:[{name:'MODE',value:'1',source:'material-option'}],ignored_options:[]},attributeBindings:{_u4:{shader_name:'aTexCoordRouteMask',source_attribute:'_u2',present:true,format:0x80d,offset:24}}};
+a.shaderMetadata={archiveName:'shader',programName:'route',samplerSymbols:{_o0:'cTexMapRouteMask'},uniformNames:['texmtx0'],variationCount:6,variationSelection:{candidate_index:2,candidate_count:6,selection_model:'AGL material-option lookup; shape variation unresolved',macro_values:[{name:'MODE',value:'1',source:'material-option'}],unresolved_macros:['NUM_SKINNING_VTX'],ignored_options:[]},attributeBindings:{_u4:{shader_name:'aTexCoordRouteMask',source_attribute:'_u2',present:true,format:0x80d,offset:24}}};
 addShapeRow(a);addShapeRow(b);a.row.children[2].listeners.click();
 if(!a.row.classList.contains('selected'))throw Error('selected row is not marked');
 const first=registry.selection.children.map(x=>x.textContent).join('\n');
 if(!first.includes('Grass <test>')||!first.includes('12 vertices / 8 triangles')||!first.includes('Grass_alb')||!first.includes('Grass_nml (BC5 SNORM map)'))throw Error(first);
 const shaderPanel=registry.selection.children.find(x=>x.className==='shader-interface');if(!shaderPanel)throw Error('missing expandable shader inspector');
 const shaderText=shaderPanel.children.map(x=>x.textContent).join('\n');
-if(!shaderPanel.children[0].textContent.includes('AGL material-option candidate: 2 / 6')||!shaderText.includes('Vertex input _u4: aTexCoordRouteMask <- BFRES _u2 (format 0x80D at 24)')||!shaderText.includes('Samplers: _o0=cTexMapRouteMask'))throw Error(shaderText);
+if(!shaderPanel.children[0].textContent.includes('AGL material-option candidate: 2 / 6')||!shaderText.includes('Unresolved shape-specific inputs: NUM_SKINNING_VTX')||!shaderText.includes('Vertex input _u4: aTexCoordRouteMask <- BFRES _u2 (format 0x80D at 24)')||!shaderText.includes('Samplers: _o0=cTexMapRouteMask'))throw Error(shaderText);
 registry.selection.children.at(-1).listeners.click();if(focusedMesh!==a)throw Error('focus action is not linked to selection');
 b.row.children[2].listeners.click();
 if(a.row.classList.contains('selected')||!b.row.classList.contains('selected'))throw Error('selection did not move');

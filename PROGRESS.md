@@ -1026,3 +1026,25 @@ camera behavior and a fully playable custom world remain open.
 - Full suite: **245 tests passed in 245.891 seconds**; `compileall` passed and
   `git diff --check` reported no whitespace errors. This is offline viewer
   validation only.
+
+## 2026-10-21 — Pin the main-grass shader resource contract
+
+- Added a local W1 integration regression for `polySurface1489__mtGrass`: its
+  SHARCFB program and 86/288 material-option candidate, unresolved
+  `NUM_SKINNING_VTX`, sampler declarations, exact UV-input-to-BFRES-attribute
+  bindings, `Grass_alb` BC1 resource, and stored identity `texmtx1` value.
+- The test caught and now records that `aTexCoordBake0` is shader input `_u3`
+  mapped to BFRES `_u1`; material inputs `_u1` and `_u2` instead both target
+  `_u0` for the normal/spec-mask interfaces. This is static binding evidence,
+  not proof that each input is consumed by the active game variation.
+- The viewer's shader inspector now lists unresolved shape-specific macro
+  names (for example, `NUM_SKINNING_VTX`) beside the candidate, and a DOM
+  regression checks the displayed label. This exposes why the candidate is
+  incomplete without treating the first-declared macro value as confirmed.
+- Fresh pre-change baseline: **245 tests passed in 244.382 seconds**. After
+  these changes, the full suite passed: **246 tests in 246.883 seconds**;
+  `compileall` and `git diff --check` passed. No Cemu or game-render behavior
+  was verified.
+- Next: resolve the shape-specific skinning variation and GX2 coordinate
+  operations from supported evidence before adding grass shading. In-game
+  movement, level starts, and terrain appearance remain unverified.
