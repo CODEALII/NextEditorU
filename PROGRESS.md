@@ -1048,3 +1048,18 @@ camera behavior and a fully playable custom world remain open.
 - Next: resolve the shape-specific skinning variation and GX2 coordinate
   operations from supported evidence before adding grass shading. In-game
   movement, level starts, and terrain appearance remain unverified.
+
+## 2026-10-21 — Trace the BFRES shape skin-count input
+
+- Cross-checked Tsuru AGL's second variation lookup: it indexes a caller-
+  supplied skin-value array using `ResShape::GetVtxSkinCount()`. The Wii U
+  BFRES shape reader stores this field in the local `FSHP` record. The preview
+  parser now carries the stored value (zero for accepted rigid meshes) into
+  the shader inspector.
+- The inspector now shows `BFRES vertex skin count: 0` while stating that its
+  mapping to `NUM_SKINNING_VTX` is unresolved. A local W1 regression verifies
+  the main grass value and the UI test verifies both the value and limitation.
+- Full suite: **246 tests passed in 245.627 seconds**; `compileall` and
+  `git diff --check` passed. This narrows the reverse-engineering question but
+  does not identify the AGL caller's skin-value array or confirm a runtime
+  shader permutation.

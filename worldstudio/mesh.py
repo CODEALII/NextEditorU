@@ -190,6 +190,7 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
         extracted = {
             'name': shape_name,
             'material': materials[material_index][0],
+            'vertexSkinCount': data[shape + 22],
             'positions': positions,
             'normals': normals,
             'indices': indices,

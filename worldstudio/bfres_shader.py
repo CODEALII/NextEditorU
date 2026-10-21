@@ -203,6 +203,7 @@ def attach_shader_metadata(model_data, shapes, shader_archives):
                 failed_materials.add(material_name)
         if material_metadata[material_name] is not None:
             metadata = dict(material_metadata[material_name])
+            metadata["vertexSkinCount"] = shape.get("vertexSkinCount")
             vertex_attributes = shape.get("vertexAttributes", {})
             bindings = {}
             for slot, binding in metadata.pop("attributeSymbols").items():

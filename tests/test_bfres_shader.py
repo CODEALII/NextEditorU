@@ -108,6 +108,7 @@ class BfresShaderMetadataTests(unittest.TestCase):
         metadata = grass['shaderMetadata']
 
         self.assertEqual(metadata['programName'], 'nw4f_cs_shader')
+        self.assertEqual(metadata['vertexSkinCount'], 0)
         selection = metadata['variationSelection']
         self.assertEqual((selection['candidate_index'], selection['candidate_count']), (86, 288))
         self.assertEqual(selection['unresolved_macros'], ['NUM_SKINNING_VTX'])
