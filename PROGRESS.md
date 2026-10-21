@@ -1020,6 +1020,9 @@ camera behavior and a fully playable custom world remain open.
 - Shapes using approximate color now show an accessible warning badge directly
   in the mesh list. The list filter also searches the bounded fallback reason,
   and selecting the shape reveals the same explanation in the inspector.
+- The twelve-world local asset sweep now verifies that each UV shape has either
+  a decoded base texture or its bounded fallback reason; non-UV shapes are not
+  mislabeled. Focused integration test: **1 passed in 40.091 seconds**.
 - Full suite: **245 tests passed in 245.891 seconds**; `compileall` passed and
   `git diff --check` reported no whitespace errors. This is offline viewer
   validation only.

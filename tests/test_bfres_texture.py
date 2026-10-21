@@ -249,13 +249,24 @@ class LocalTextureReferenceTests(unittest.TestCase):
                 model = archive.read(f'CS_{world}.bfres')
                 model_name = f'CS_{world}_World'
                 shapes = extract_rigid_model(model, model_name)
-                textures, _ = attach_base_color_textures(
+                textures, failed_materials = attach_base_color_textures(
                     model, shapes, model_name=model_name)
 
                 self.assertEqual(len(shapes), shape_count)
                 self.assertEqual(sum(bool(shape.get('texture')) for shape in shapes),
                                  textured_count)
                 self.assertEqual(len(textures), texture_count)
+                for shape in shapes:
+                    has_uvs = shape.get('uvs') is not None
+                    has_texture = bool(shape.get('texture'))
+                    fallback_reason = shape.get('textureWarning')
+                    self.assertEqual(has_texture, has_uvs and not fallback_reason,
+                                     shape['name'])
+                    self.assertEqual(bool(fallback_reason),
+                                     has_uvs and shape['material'] in failed_materials,
+                                     shape['name'])
+                    if fallback_reason:
+                        self.assertLessEqual(len(fallback_reason), 240, shape['name'])
                 for texture in textures.values():
                     self.assertIn(texture['format'], (0x31, 0x33))
                     rgba = base64.b64decode(texture['rgbaBase64'], validate=True)
