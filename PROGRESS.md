@@ -472,6 +472,10 @@ camera behavior and a fully playable custom world remain open.
 - Texture cards now show each supported map's decoded dimensions and stored
   GX2 format. The texture catalogs retain the format values for BC1/BC3 base
   maps and BC5 SNORM normal maps; sampler slots remain explicitly diagnostic.
-- Focused WebGL and BFRES texture checks: **38 passed**. Full regression is
-  **157 tests passed in 94.632 seconds**; `compileall`, `git diff --check`,
+- Focused WebGL and BFRES texture checks: **38 passed**. Full regression:
+  **157 tests passed in 96.340 seconds**; `compileall`, `git diff --check`,
   and W101 → W102/W103 reachability passed.
+- Headless Chrome/SwiftShader validation loaded all **42** W1 shapes, activated
+  Top, applied target `(12.5, -3, 7.25)`, selected a route mesh and reported
+  its `RouteW1_msk | 128x256 | BC4 UNorm` map without a WebGL error overlay.
+  Screenshot evidence stays ignored under `local/evidence/`.

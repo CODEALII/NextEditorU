@@ -32,7 +32,8 @@ is still needed before baseline/patch route QA.
 - Implemented: Front, Side and Top camera presets orient the viewer around its current focus point, expose their selected state accessibly, and clear that state when the user resumes orbiting.
 - Implemented: the camera panel exposes editable preview-target X/Y/Z coordinates in model units, updates after mesh focus and Fit view, and rejects non-finite or out-of-range values without changing the active target.
 - Implemented: selected-mesh texture cards report dimensions and supported stored formats for BC1/BC3 base maps, BC5 SNORM, and the observed `_o0` BC5 UNorm / `_o1` BC4 UNorm maps. Diagnostic sampler semantics remain unknown.
-- Next: verify the new viewer controls with the user's browser/GPU; add a richer material inspector.
+- Verified in headless Chrome/SwiftShader: the local W1 page rendered 42 shapes, Top became active, model-space target entry changed the focus, the selected route mesh showed `RouteW1_msk | 128x256 | BC4 UNorm`, and no WebGL error overlay appeared. The user's browser/GPU is still unverified.
+- Next: verify the controls on the user's browser/GPU; investigate other BC4 sampler slots, UV transforms, transparency, light maps and GX2 layouts with local evidence.
 - Investigate other BC4 sampler slots, UV transforms, transparent material modes, baked light maps, and additional GX2 tile layouts before rendering them; require local slot evidence and fixed regression vectors.
 - Broaden geometry parsing to multiple meshes, more vertex encodings, hierarchy transforms, skinning, and other BFRES variants. The current static geometry subset must reject unsupported layouts clearly.
 
