@@ -182,6 +182,24 @@ class WorldProject:
         errors = []
         world = re.search(r'pointW([1-9])', self.point_name)
         world_prefix = f'W{world[1]}' if world else None
+        if self.geometry is not None:
+            if not isinstance(self.geometry, dict):
+                errors.append('Terrain geometry must be an object')
+            else:
+                missing = [field for field in ('vertices', 'faces')
+                           if field not in self.geometry]
+                if missing:
+                    errors.append('Terrain geometry missing required field(s): ' +
+                                  ', '.join(missing))
+                else:
+                    try:
+                        from .mesh import _geometry
+                        _geometry(
+                            self.geometry['vertices'], self.geometry['faces'],
+                            uvs=self.geometry.get('uvs'),
+                            imported_normals=self.geometry.get('normals'))
+                    except (KeyError, TypeError, ValueError, OverflowError) as exc:
+                        errors.append(f'Terrain geometry invalid: {exc}')
         for filename in self.camera_edits:
             try:
                 self.camera_table(filename).build()

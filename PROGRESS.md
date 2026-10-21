@@ -630,3 +630,14 @@ camera behavior and a fully playable custom world remain open.
   (**185 tests in 130.928 seconds**); `compileall` and `git diff --check` also
   passed. In-game baked-light UV interpretation remains an unverified
   assumption until the corrected terrain is visually compared in Cemu.
+
+## 2026-10-21 — Validate saved terrain geometry
+
+- Reproduced a project-state bug where `geometry = {}` passed validation and
+  later raised a raw `KeyError('vertices')` during export. Validation now
+  checks the terrain object, required fields, and full supported geometry
+  constraints; malformed records return a terrain-specific diagnostic and
+  block export before any archive is created.
+- Regression coverage checks missing fields and degenerate faces against a
+  real local W1 source archive. The full suite passed (**186 tests in
+  132.356 seconds**); `compileall` and `git diff --check` passed.

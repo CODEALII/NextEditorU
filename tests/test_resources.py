@@ -244,6 +244,26 @@ class LocalIntegrationTests(unittest.TestCase):
             self.assertFalse(output.with_suffix('.szs.manifest.json').exists())
         self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
 
+    def test_invalid_terrain_geometry_blocks_export_with_clear_validation(self):
+        p = WorldProject.open(DEFAULT_SOURCE)
+        with tempfile.TemporaryDirectory() as tmp:
+            cases = (
+                ({}, 'missing required field'),
+                ({'vertices': [[0, 0, 0]], 'faces': [[0, 0, 0]]},
+                 'Terrain geometry invalid: Degenerate source triangle'),
+            )
+            for index, (geometry, message) in enumerate(cases):
+                with self.subTest(geometry=geometry):
+                    p.geometry = geometry
+                    issues = p.validate()
+                    self.assertTrue(any(message in issue for issue in issues), issues)
+                    output = Path(tmp) / f'invalid-geometry-{index}.szs'
+                    with self.assertRaisesRegex(ValueError, message):
+                        p.export(output)
+                    self.assertFalse(output.exists())
+
+        self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
+
 
 class ProjectGraphValidationTests(unittest.TestCase):
     def test_route_only_disconnect_blocks_project_export(self):
@@ -256,6 +276,7 @@ class ProjectGraphValidationTests(unittest.TestCase):
         project = object.__new__(WorldProject)
         project.camera_edits = {}
         project.bone_renames = []
+        project.geometry = None
         project.references = {'W101', 'W102', 'W103', *[row[0] for row in route_rows]}
         project.skeletons = SimpleNamespace(
             models={}, bones=set(project.references),
@@ -286,6 +307,7 @@ class ProjectGraphValidationTests(unittest.TestCase):
         project = object.__new__(WorldProject)
         project.camera_edits = {}
         project.bone_renames = []
+        project.geometry = None
         project.references = {'W101', 'W102', 'RW101W201'}
         project.skeletons = SimpleNamespace(models={}, bones=set(project.references))
         project.points = SimpleNamespace(
