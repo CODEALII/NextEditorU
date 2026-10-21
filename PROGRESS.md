@@ -1403,9 +1403,11 @@ camera behavior and a fully playable custom world remain open.
 - Rechecked the live isolated Chain process (PID 19444). The game remains on
   Acorn Plains-2 — Tilted Tunnel. Two individual `W` presses left Mario on the
   same node and changed only his facing. No W102-to-W103 traversal was observed.
-- The Computer Use `press_key` API exposes a key/chord press but no duration or
-  held-key control. These short presses cannot substitute for the earlier
-  two-second `D` hold and cannot establish that the modified route is broken.
+- Several short `W`, `D`, and `W+D` presses/chords at the node changed Mario's
+  facing but did not translate him along the route. The Computer Use `press_key`
+  API exposes a key/chord press but no duration or held-key control. These
+  short presses cannot substitute for the earlier two-second `D` hold and
+  cannot establish that the modified route is broken.
   Keep the Cemu process and save isolated until a controlled hold can be run;
   do not compare its save against the earlier snapshots while this session is
   live.
