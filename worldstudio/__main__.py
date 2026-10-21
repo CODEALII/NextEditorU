@@ -47,6 +47,45 @@ def direct_route_demo(project):
     return project
 
 
+def _shader_summary(report, limit=24):
+    """Format bounded, readable interface metadata for terminal inspection."""
+    lines = [
+        f"SHARCFB v{report['version']} - {report['archive_name']} - {report['endian']} endian",
+        f"{report['shader_binary_count']} shader binaries - {report['shader_program_count']} programs - metadata only",
+    ]
+
+    def names(items, format_item):
+        rendered = [format_item(item)[:180] for item in items[:limit]]
+        if len(items) > limit:
+            rendered.append(f"... {len(items) - limit} more")
+        return ", ".join(rendered) if rendered else "(none)"
+
+    def variation(item):
+        values = item['values']
+        shown = "|".join(value[:32] for value in values[:8])
+        if len(values) > 8:
+            shown += f"|...+{len(values) - 8}"
+        return f"{item['name']}={{{shown}}}"
+
+    stage_labels = {0: "vertex", 1: "pixel", 2: "geometry"}
+    for program in report['programs']:
+        stages = ", ".join(stage_labels[index] for index in range(3)
+                            if program['shader_flags'] & (1 << index))
+        lines.extend((
+            "",
+            f"{program['name']} - {stages} - {program['variation_count']} compiled combinations",
+            "  variations: " + names(program['variation_macros'], variation),
+            "  samplers: " + names(program['samplers'], lambda item:
+                f"{item['symbol']}={item['name']}"),
+            "  uniforms: " + names(program['uniforms'], lambda item: item['name']),
+            "  uniform blocks: " + names(program['uniform_blocks'], lambda item: item['name']),
+            "  attributes: " + names(program['attributes'], lambda item:
+                f"{item['symbol']}={item['name']}"),
+        ))
+    lines.extend(("", "GX2 instructions, active variation, and rendered material behavior are not evaluated."))
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(prog='python -m worldstudio')
     sub = parser.add_subparsers(dest='command')
@@ -61,6 +100,12 @@ def main():
                        help='Playable entry point; repeat to specify multiple starts')
     graph.add_argument('--require', action='append', default=[], metavar='POINT',
                        help='Location that must be reachable from an entry; repeat as needed')
+    shaders = sub.add_parser('inspect-shaders', help='Read SHARCFB shader interface metadata')
+    shaders.add_argument('source', type=Path,
+                         help='SHARCFB file or SZS/SARC containing a SHARCFB entry')
+    shaders.add_argument('--entry', help='SHARCFB member name inside an SZS/SARC archive')
+    shaders.add_argument('--program', help='Return only the named shader program')
+    shaders.add_argument('--json', action='store_true', help='Print the full metadata object as JSON')
     demo = sub.add_parser('demo', help='Build experimental three-level progression patch')
     demo.add_argument('--source', default=str(DEFAULT_SOURCE))
     demo.add_argument('--out', required=True, type=Path)
@@ -102,6 +147,36 @@ def main():
             print(json.dumps(report, indent=2))
             if issues:
                 parser.exit(1, 'Graph validation failed.\n')
+        elif args.command == 'inspect-shaders':
+            from .archive import Archive
+            from .shader_archive import parse_sharcfb
+            raw = args.source.read_bytes()
+            if raw[:4] in (b'Yaz0', b'SARC'):
+                archive = Archive(raw)
+                candidates = [name for name in archive.entries
+                              if name.lower().endswith('.sharcfb')]
+                if args.entry:
+                    if args.entry not in candidates:
+                        raise ValueError(f'No SHARCFB entry named {args.entry!r}')
+                    shader_data = archive.read(args.entry)
+                elif len(candidates) == 1:
+                    shader_data = archive.read(candidates[0])
+                elif candidates:
+                    raise ValueError('Choose --entry from: ' + ', '.join(candidates))
+                else:
+                    raise ValueError('Archive contains no SHARCFB entries')
+            else:
+                if args.entry:
+                    raise ValueError('--entry is only valid for an SZS/SARC source')
+                shader_data = raw
+            report = parse_sharcfb(shader_data)
+            if args.program:
+                selected = [program for program in report['programs']
+                            if program['name'] == args.program]
+                if not selected:
+                    raise ValueError(f"Shader program not found: {args.program}")
+                report['programs'] = selected
+            print(json.dumps(report, indent=2) if args.json else _shader_summary(report))
         elif args.command == 'demo':
             p = (direct_route_demo if args.direct_route else chain_demo)(WorldProject.open(args.source))
             if args.island:

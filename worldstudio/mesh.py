@@ -127,6 +127,10 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
             'positions': positions,
             'normals': normals,
             'indices': indices,
+            'vertexAttributes': {
+                name: {'format': fmt, 'offset': offset}
+                for name, (offset, fmt) in attrs.items()
+            },
         }
         if uvs is not None:
             extracted['uvs'] = uvs

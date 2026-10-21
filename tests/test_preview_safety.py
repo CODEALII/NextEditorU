@@ -63,7 +63,8 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertIn("cameraPlanes(distance,sceneRadius)", script)
         probe = match.group(0) + "\nconsole.log(JSON.stringify([cameraPlanes(2.65,1),cameraPlanes(16,1),cameraPlanes(.2,1),cameraPlanes(0,0)]))"
-        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True,
+                                text=True, encoding="utf-8")
         fit, zoomed_out, close, invalid = json.loads(result.stdout)
         for near, far in (fit, zoomed_out, close, invalid):
             self.assertTrue(0 < near < far)
@@ -138,8 +139,8 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn('normalTextureName', page)
         self.assertIn('diagnosticTextureName', page)
         self.assertIn('maskTextureName', page)
-        self.assertIn('textureMapLabel(kind,payload)', page)
-        self.assertIn('sampler channels are shown for inspection only; material meaning is unverified.', page)
+        self.assertIn('textureMapLabel(kind,payload,shader?.samplerSymbols)', page)
+        self.assertIn('BC5 UNorm stored channels are shown for inspection; shader behavior is not evaluated.', page)
         self.assertIn('R/G channels are shown as diagnostic colors only', page)
         self.assertNotIn('https://', page)
         self.assertIn('<button id="wireframe">Wireframe off</button>', page)
@@ -184,10 +185,14 @@ let focusedMesh=null;function focusMesh(mesh){focusedMesh=mesh}
 """ + helper + r"""
 const a={name:'Grass <test>',material:'mtGrass',color:[.2,.4,.6],textureName:'Grass_alb',normalTextureName:'Grass_nml',vertexCount:12,triangleCount:8,hasUvs:true,visible:true};
 const b={name:'Rock',material:'mtRock',color:[.3,.3,.3],textureName:'',normalTextureName:'',vertexCount:9,triangleCount:4,hasUvs:false,visible:true};
+a.shaderMetadata={archiveName:'shader',programName:'route',samplerSymbols:{_o0:'cTexMapRouteMask'},uniformNames:['texmtx0'],variationCount:6,variationSelection:{candidate_index:2,candidate_count:6,selection_model:'AGL material-option lookup; shape variation unresolved',macro_values:[{name:'MODE',value:'1',source:'material-option'}],ignored_options:[]},attributeBindings:{_u4:{shader_name:'aTexCoordRouteMask',source_attribute:'_u2',present:true,format:0x80d,offset:24}}};
 addShapeRow(a);addShapeRow(b);a.row.children[2].listeners.click();
 if(!a.row.classList.contains('selected'))throw Error('selected row is not marked');
 const first=registry.selection.children.map(x=>x.textContent).join('\n');
 if(!first.includes('Grass <test>')||!first.includes('12 vertices / 8 triangles')||!first.includes('Grass_alb')||!first.includes('Grass_nml (BC5 SNORM map)'))throw Error(first);
+const shaderPanel=registry.selection.children.find(x=>x.className==='shader-interface');if(!shaderPanel)throw Error('missing expandable shader inspector');
+const shaderText=shaderPanel.children.map(x=>x.textContent).join('\n');
+if(!shaderPanel.children[0].textContent.includes('AGL material-option candidate: 2 / 6')||!shaderText.includes('Vertex input _u4: aTexCoordRouteMask <- BFRES _u2 (format 0x80D at 24)')||!shaderText.includes('Samplers: _o0=cTexMapRouteMask'))throw Error(shaderText);
 registry.selection.children.at(-1).listeners.click();if(focusedMesh!==a)throw Error('focus action is not linked to selection');
 b.row.children[2].listeners.click();
 if(a.row.classList.contains('selected')||!b.row.classList.contains('selected'))throw Error('selection did not move');
@@ -240,14 +245,14 @@ console.log('mesh selection inspector ok');
         self.assertIn("texturePreview:texturePayload,normalPreview:normalPayload", page)
         self.assertIn("textureThumbnail(payload,kind)", page)
         self.assertIn("Texture maps · stored format and dimensions", page)
-        self.assertIn("textureMapLabel(kind,payload)", page)
+        self.assertIn("textureMapLabel(kind,payload,shader?.samplerSymbols)", page)
 
     def test_material_texture_labels_show_dimensions_and_observed_formats(self):
         node = shutil.which("node")
         if not node:
             self.skipTest("Node.js is required to exercise material inspector labels")
         page = build_document({"shapes": [], "nodes": [], "routes": []})
-        start = page.index("function textureMapLabel(kind,payload){")
+        start = page.index("function textureMapLabel(kind,payload,samplerSymbols={}){")
         end = page.index("\nconst textureThumbnailCache", start)
         helper = page[start:end]
         probe = helper + r"""
@@ -258,15 +263,17 @@ diagnostic:{name:'Mask',width:4,height:8,format:0x35,samplerSlot:'_o0'},
 bc4:{name:'RouteW1_msk',width:128,height:256,format:0x34,samplerSlot:'_o1'},
 sampler:{name:'lmDifCSW1a',width:16,height:16,format:0x33,samplerSlot:'_x0'}
 };
-console.log(JSON.stringify(Object.entries(maps).map(([kind,payload])=>textureMapLabel(kind,payload))));
+const symbols={_o0:'cTexMapRouteMask',_o1:'cTexMapEdgeMask',_x0:'cLightMap0'};
+console.log(JSON.stringify(Object.entries(maps).map(([kind,payload])=>textureMapLabel(kind,payload,symbols))));
 """
-        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True,
+                                text=True, encoding="utf-8")
         self.assertEqual(json.loads(result.stdout), [
             "Base color | Albedo | 256x128 | BC3 UNorm",
             "Normal map | Normal | 64x32 | BC5 SNORM",
-            "Sampler _o0 | Mask | 4x8 | BC5 UNorm",
-            "Sampler _o1 | RouteW1_msk | 128x256 | BC4 UNorm",
-            "Sampler _x0 | lmDifCSW1a | 16x16 | BC3 UNorm",
+            "Sampler _o0 · cTexMapRouteMask | Mask | 4x8 | BC5 UNorm",
+            "Sampler _o1 · cTexMapEdgeMask | RouteW1_msk | 128x256 | BC4 UNorm",
+            "Sampler _x0 · cLightMap0 | lmDifCSW1a | 16x16 | BC3 UNorm",
         ])
 
     def test_bc4_sampler_selector_orders_route_slot_and_lists_available_maps(self):
@@ -468,7 +475,8 @@ console.log(JSON.stringify({direction:Array.from(previewLightDirection),intensit
         self.assertEqual(packed["shapes"][0]["textureSrt"], {"texmtx0": srt})
         self.assertIn("mesh.textureSrt=textureSrtByShape.get(mesh.name)||{}", page)
         self.assertIn("row.textContent=textureSrtLabel(name,srt)", page)
-        self.assertIn("Not applied in preview; sampler and shader mapping remain unverified.", page)
+        self.assertIn("transform math and sampler association are unresolved.", page)
+        self.assertIn("Assigned program declares ${matched.join(', ')}", page)
         start = page.index("function textureSrtLabel(name,srt){")
         end = page.index("\nfunction selectMesh", start)
         helper = page[start:end]
@@ -477,6 +485,30 @@ console.log(JSON.stringify({direction:Array.from(previewLightDirection),intensit
             check=True, capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(result.stdout.strip(),
                          "texmtx0 \u00b7 mode 0 \u00b7 scale (1.000, 1.000) \u00b7 rotation 0.000 \u00b7 translation (0.000, -3.000)")
+
+    def test_shader_option_candidate_is_embedded_and_labeled_as_unresolved(self):
+        metadata = {
+            "archiveName": "nw4f_cs_shader",
+            "programName": "nw4f_cs_route_shader",
+            "samplerSymbols": {"_o0": "cTexMapRouteMask"},
+            "uniformNames": ["texmtx0"],
+            "variationCount": 576,
+            "variationSelection": {
+                "candidate_index": 42,
+                "candidate_count": 576,
+                "macro_values": [{"name": "AO_TYPE", "value": "2"}],
+            },
+        }
+        scene = {"shapes": [{"name": "route", "material": "routeMat",
+                             "shaderMetadata": metadata, "positions": [],
+                             "normals": [], "indices": []}], "nodes": [], "routes": []}
+        page = build_document(scene)
+        packed = json.loads(re.search(r"const scene=(.*?);", page).group(1))
+        self.assertEqual(packed["shapes"][0]["shaderMetadata"]["variationSelection"],
+                         metadata["variationSelection"])
+        self.assertIn("AGL material-option candidate:", page)
+        self.assertIn("shape-specific variation unresolved", page)
+        self.assertIn("Candidate options:", page)
 
     def test_viewer_packs_geometry_as_little_endian_typed_arrays(self):
         shape = {"name": "mesh", "material": "mat",

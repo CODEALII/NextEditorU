@@ -516,6 +516,8 @@ class WorldStudio(ttk.Frame):
                 mask_textures = {}
                 texture_srt_failures = set()
                 texture_srt_parameters = 0
+                shader_metadata_failures = set()
+                shader_metadata_issue = None
                 warned_materials = set()
                 warned_normal_materials = set()
                 warned_diagnostic_materials = set()
@@ -533,6 +535,21 @@ class WorldStudio(ttk.Frame):
                     srt_by_material = {shape["material"]: shape["textureSrt"] for shape in shapes
                                        if shape.get("textureSrt")}
                     texture_srt_parameters = sum(len(values) for values in srt_by_material.values())
+                    shader_source = self.native.game_root / "content/Common/shader/shaderfb.szs"
+                    if shader_source.is_file():
+                        try:
+                            from .archive import Archive
+                            from .bfres_shader import attach_shader_metadata
+                            shader_container = Archive(shader_source.read_bytes())
+                            shader_archives = {
+                                entry.rsplit("/", 1)[-1][:-len(".sharcfb")]: shader_container.read(entry)
+                                for entry in shader_container.entries
+                                if entry.lower().endswith(".sharcfb")
+                            }
+                            shader_metadata_failures = attach_shader_metadata(
+                                self.native.model, shapes, shader_archives)
+                        except (OSError, ValueError, TypeError, OverflowError) as error:
+                            shader_metadata_issue = str(error)
                 textured_shapes = sum(bool(shape.get("texture")) for shape in shapes)
                 normal_textured_shapes = sum(bool(shape.get("normalTexture")) for shape in shapes)
                 texture_notice = (
@@ -546,6 +563,16 @@ class WorldStudio(ttk.Frame):
                                        "read-only in the inspector; none are applied to the preview.")
                 if texture_srt_failures:
                     texture_notice += f" {len(texture_srt_failures)} material(s) have unsupported texture SRT data."
+                shader_metadata_shapes = sum(bool(shape.get("shaderMetadata")) for shape in shapes)
+                if shader_metadata_shapes:
+                    texture_notice += (f" Assigned shader-program and sampler symbol names are shown for "
+                                       f"{shader_metadata_shapes} shapes; compiled shading and active "
+                                       "variation are not evaluated.")
+                if shader_metadata_failures:
+                    texture_notice += (f" Shader interface metadata is unavailable for "
+                                       f"{len(shader_metadata_failures)} material(s).")
+                if shader_metadata_issue:
+                    texture_notice += " Shader symbol parsing failed; rendering continues without interface labels."
                 normal_texture_notice = (
                     f"BC5 SNORM channel inspection: {len(normal_textures)} unique maps on "
                     f"{normal_textured_shapes} UV meshes. R/G are diagnostic channels only; no tangent-space "
@@ -570,7 +597,8 @@ class WorldStudio(ttk.Frame):
                     f"Diagnostic sampler previews: {len(mask_textures)} unique maps across "
                     f"{mask_textured_shapes} UV meshes from `_o1`, `_b0`, `_s0`, `_x2`, `_x0`, and `_x1`. "
                     "BC4 channels can be viewed in grayscale on the mesh; BC3 `_x0`/`_x1` remain inspector thumbnails. "
-                    "Both show stored texels only; sampler meaning and game material behavior are unverified. "
+                    "Assigned-program symbol names are shown when available; these previews show stored texels and "
+                    "do not evaluate the game's shader calculations. "
                     "Only top-level texture images are previewed."
                 )
                 if self.native.geometry is not None:
@@ -607,6 +635,8 @@ class WorldStudio(ttk.Frame):
                     badges.append(f"Sampler diagnostics ×{len(mask_textures)}")
                 if texture_srt_parameters:
                     badges.append(f"Texture SRT ×{texture_srt_parameters} · read-only")
+                if shader_metadata_shapes:
+                    badges.append(f"Shader interfaces ×{shader_metadata_shapes}")
             else:
                 from .mesh import _geometry
                 vertices, indices, normals, _ = _geometry(self.mesh[0], self.mesh[1])

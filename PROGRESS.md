@@ -159,6 +159,40 @@ Completed:
   UV transforms, baked lighting, shaders, animation and arbitrary BFRES layouts
   remain unsupported. No in-game or Cemu claim changes.
 
+## 2026-10-21 - SHARCFB interface and BFRES input inspection
+
+- Added a bounds-checked, read-only SHARCFB v8 parser for little- and
+  big-endian archives. It checks archive sections, record ranges, binary stage
+  order and program variation bounds, and reports symbols without copying or
+  decoding GX2 instruction payloads. The `inspect-shaders` CLI has compact
+  output by default and full metadata with `--json`.
+- Resolved the local World 1 BFRES assignments against the five programs in
+  `nw4f_cs_shader.sharcfb`. All 42 supported shapes get their exact assigned
+  program, matched sampler symbols, declared uniforms, and checked
+  shader-input-to-BFRES-attribute mapping with the source attribute's stored
+  format and offset.
+- The selected route material reports AGL-style material-option candidate
+  `190 / 576`. This follows the pinned Tsuru AGL lookup order; its separate
+  shape-specific `NUM_SKINNING_VTX` lookup remains unresolved. The candidate is
+  not claimed as the game's final active shader.
+- The inspector groups these fields in an expandable panel. For the local
+  route mesh it shows `_u4` / `aTexCoordRouteMask` mapped to BFRES `_u2`
+  (`0x80D`, offset 24), and `_u3` / `aTexCoordBake0` mapped to `_u1`
+  (`0x7`, offset 44). No unsupported vertex format is decoded, and no sampler
+  UV behavior or shader calculation is inferred.
+- Headless Chrome with SwiftShader rendered all 42 shapes, selected
+  `hoge69__mtRW101W102a`, and exposed the candidate and input bindings without
+  a WebGL error overlay. Ignored local evidence is
+  `local/evidence/preview-w1-shader-bindings.png`.
+- Verification: **178 tests passed in 109.583 seconds**; focused parser, mesh
+  and viewer tests passed; `compileall`, `git diff --check`, and graph
+  reachability from W101 to W102/W103 passed. This does not validate game
+  shaders, final active variation, Cemu rendering, or Mario's route movement.
+
+Next: identify the form-specific skinning value and trace one shader's declared
+uniform and texture-coordinate operations using independently checkable local
+evidence. Keep route movement marked failed until a Cemu traversal is observed.
+
 Not yet proven / outstanding:
 - Actual game traversal, level launch, clear-triggered unlock/save persistence,
   camera behavior and cutscene interactions for the topology experiment.

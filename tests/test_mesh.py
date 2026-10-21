@@ -111,6 +111,10 @@ class MeshTests(unittest.TestCase):
         self.assertEqual(shapes[0]['positions'][:3], self.vertices)
         self.assertEqual(shapes[0]['indices'], [0, 1, 2, 0, 0, 0])
         self.assertEqual(shapes[0]['normals'][0], (0., 1., 0.))
+        self.assertEqual(shapes[0]['vertexAttributes']['_u0'],
+                         {'format': 0x80d, 'offset': 16})
+        self.assertEqual(shapes[0]['vertexAttributes']['_u1'],
+                         {'format': 7, 'offset': 24})
 
     def test_rejects_capacity_and_bad_input(self):
         with self.assertRaisesRegex(ValueError,'vertex capacity'):
