@@ -744,6 +744,18 @@ camera behavior and a fully playable custom world remain open.
   and lightweight-preview projects. The full suite passed (**209 tests in
   148.323 seconds**), with `compileall` and `git diff --check`.
 
+## 2026-10-21 — Compare exports with a fresh project reimport
+
+- Added `python -m worldstudio verify-export <project.json> <export.szs>` to
+  validate an existing export against a fresh export generated from the saved
+  project. It checks the manifest's source/output hashes and path, all archive
+  members and contents, manifest change metadata, and any camera companion
+  outputs. The JSON result explicitly reports `game_tested: false`.
+- Synthetic tests cover a valid roundtrip, a changed reimported resource even
+  when the output hash is updated, a manifest tied to a different project, and
+  a changed camera companion file. The full suite passed (**213 tests in
+  149.962 seconds**), with `compileall` and `git diff --check`.
+
 ## 2026-10-21 — Report unsupported OBJ features
 
 - OBJ imports now report when they ignore MTL/material assignments, vertex

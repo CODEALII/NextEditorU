@@ -114,6 +114,9 @@ def main():
     exp = sub.add_parser('export', help='Validate and export a saved project')
     exp.add_argument('project')
     exp.add_argument('--out', type=Path, required=True)
+    verify = sub.add_parser('verify-export', help='Reimport an export and compare it with the saved project')
+    verify.add_argument('project', help='Saved World Studio JSON project')
+    verify.add_argument('archive', type=Path, help='Exported world archive produced with its manifest')
     args = parser.parse_args()
     try:
         if args.command in (None, 'gui'):
@@ -204,6 +207,12 @@ def main():
             print(json.dumps(manifest, indent=2))
         elif args.command == 'export':
             print(json.dumps(WorldProject.load(args.project).export(args.out), indent=2))
+        elif args.command == 'verify-export':
+            from .export_verify import verify_export
+            report = verify_export(WorldProject.load(args.project), args.archive)
+            print(json.dumps(report, indent=2))
+            if not report['verified']:
+                parser.exit(1, 'Export verification failed.\n')
     except (ValueError, OSError, KeyError) as exc:
         parser.exit(1, f'Error: {exc}\n')
 

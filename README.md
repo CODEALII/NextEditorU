@@ -49,6 +49,15 @@ python -m worldstudio demo --out build/my-chain
 python -m worldstudio gui build/my-chain/three-level-chain.nws.json
 ```
 
+After exporting a saved project, reimport the archive and compare every member,
+the export manifest, and any camera companion files against a fresh export:
+
+```powershell
+python -m worldstudio verify-export build/my-chain/three-level-chain.nws.json build/my-chain/content/Common/course_select/CS_W1.szs
+```
+
+This checks offline package consistency; its report keeps `game_tested` false.
+
 Inspect the named interface in a local shader archive:
 
 ```powershell
