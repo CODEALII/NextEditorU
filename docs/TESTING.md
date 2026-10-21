@@ -24,6 +24,8 @@ Each export manifest keeps the backward-compatible `changed_entries` list and ad
 
 Saving changed native or OBJ-preview project content uses atomic per-file replacement to rotate the two most recent previous versions into adjacent `name.backup.json` and `name.backup-2.json` files. Both remain regular loadable projects, so they appear in the existing `*.json` picker; unchanged saves leave both backups untouched, and the status bar reports the newest backup path. The main project and each backup are replaced atomically as individual files; a multi-file rotation is not transactional if a later file operation fails. `test_overwriting_project_creates_openable_previous_version_backup` exercises native project reloads and rotation against the local source resource; the editor smoke test verifies the OBJ-preview save and status.
 
+The Recent menu stores up to ten native-source/project paths and ten preview paths in a versioned JSON file under the user's local application settings. The lists are type-filtered, deduplicated by resolved path, and updated only after a successful open or save. `tests.test_recent_projects` covers ordering, deduplication, filtering, truncation, and malformed settings recovery; the editor smoke test checks native filtering and that canceling the unsaved-changes guard prevents a recent project from opening.
+
 Check a directed route from a declared start to one or more required points:
 
 ```powershell

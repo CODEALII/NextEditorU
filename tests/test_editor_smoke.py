@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 from worldstudio.editor import NativeStudio, ObjTransformDialog, WorldStudio
+from worldstudio.recent_projects import RecentProjects
 
 
 class NativeFixture:
@@ -46,11 +47,31 @@ class EditorSmokeTests(unittest.TestCase):
         self.root.withdraw()
         self.native = NativeFixture()
         self.app = NativeStudio(self.root, self.native)
+        self.recent_tmp = tempfile.TemporaryDirectory()
+        self.app.recent_projects = RecentProjects(Path(self.recent_tmp.name) / "recent.json")
         self.root.update()
 
     def tearDown(self):
         if hasattr(self, "root"):
             self.root.destroy()
+        if hasattr(self, "recent_tmp"):
+            self.recent_tmp.cleanup()
+
+    def test_recent_projects_filter_by_editor_kind_and_respect_cancel(self):
+        root = Path(self.recent_tmp.name)
+        native_path = root / "world.szs"
+        preview_path = root / "preview.json"
+        self.app.recent_projects.record(native_path, "native")
+        self.app.recent_projects.record(preview_path, "preview")
+        self.assertEqual([Path(item["path"]).name for item in self.app.recent_project_entries()],
+                         ["world.szs"])
+
+        opened = []
+        self.app.dirty = True
+        self.app.may_discard = lambda: False
+        self.app.open_project_path = lambda path: opened.append(path)
+        self.app.open_recent_project(str(native_path))
+        self.assertEqual(opened, [])
 
     def test_auxiliary_uses_world_coordinates_and_omits_macro_points(self):
         self.assertEqual([node["id"] for node in self.app.project["nodes"]], ["W101", "W102"])
@@ -160,6 +181,7 @@ class EditorSmokeTests(unittest.TestCase):
             path = Path(folder) / "preview.json"
             studio = object.__new__(WorldStudio)
             studio.project_path = path
+            studio.recent_projects = RecentProjects(Path(folder) / "recent.json")
             studio.project = {"format": "worldstudio-preview-v1", "terrain": None,
                               "nodes": [], "routes": [], "camera": {}}
             studio.dirty = True
@@ -176,6 +198,8 @@ class EditorSmokeTests(unittest.TestCase):
             backup = path.with_name("preview.backup.json")
             self.assertEqual(backup.read_bytes(), first_save)
             self.assertIn(str(backup), status.value)
+            self.assertEqual(studio.recent_projects.list("preview"), [
+                {"kind": "preview", "path": str(path.resolve())}])
 
     def test_dragging_a_native_root_point_is_one_undoable_edit(self):
         original = list(self.native.positions["W101"])

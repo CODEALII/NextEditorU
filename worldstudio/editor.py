@@ -14,6 +14,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from .mesh import MAX_FACE_CORNERS, transform_obj_geometry
+from .recent_projects import RecentProjects
 
 
 MAX_OBJ_FILE_BYTES = 64 * 1024 * 1024
@@ -288,6 +289,7 @@ class WorldStudio(ttk.Frame):
         self.pack(fill="both", expand=True)
         self.project = copy.deepcopy(project or demo_project())
         self.project_path = None
+        self.recent_projects = RecentProjects()
         self.dirty = False
         self.mesh = ([], [])
         self.selected = None
@@ -342,11 +344,15 @@ class WorldStudio(ttk.Frame):
         bar = ttk.Frame(self, padding=8)
         bar.pack(fill="x")
         for title, action in [("New preview", self.new), ("Open project", self.open),
+                              ("Recent", self.show_recent_projects),
                               ("Save project", self.save), ("Import OBJ", self.import_obj),
                               ("Add node", self.add_node), ("Add route", self.add_route),
                               ("Delete selected", self.delete), ("Validate", self.validate),
                               ("3D model preview", self.open_3d_preview), ("Fit view", self.fit)]:
-            ttk.Button(bar, text=title, command=action).pack(side="left", padx=2)
+            button = ttk.Button(bar, text=title, command=action)
+            button.pack(side="left", padx=2)
+            if title == "Recent":
+                self.recent_button = button
         history_bar = ttk.Frame(self, padding=(8, 0, 8, 4))
         history_bar.pack(fill="x")
         self.undo_button = ttk.Button(history_bar, text="Undo  Ctrl+Z", command=self.undo, state="disabled")
@@ -1009,10 +1015,58 @@ class WorldStudio(ttk.Frame):
     def may_discard(self):
         if not self.dirty:
             return True
-        answer = messagebox.askyesnocancel("Unsaved preview", "Save project changes before continuing?", parent=self)
+        kind = "native project" if self._recent_project_kind() == "native" else "preview project"
+        answer = messagebox.askyesnocancel(f"Unsaved {kind}", "Save project changes before continuing?", parent=self)
         if answer is None:
             return False
         return bool(self.save()) if answer else True
+
+    def _recent_project_kind(self):
+        return "preview"
+
+    def recent_project_entries(self):
+        return self.recent_projects.list(self._recent_project_kind())
+
+    def _record_recent_project(self, path):
+        try:
+            self.recent_projects.record(path, self._recent_project_kind())
+        except (OSError, ValueError, RuntimeError) as error:
+            self.status.set(f"Project opened, but the recent-project list could not be saved: {error}")
+
+    def show_recent_projects(self):
+        entries = self.recent_project_entries()
+        previous_menu = getattr(self, "_recent_menu", None)
+        if previous_menu is not None:
+            try:
+                if previous_menu.winfo_exists():
+                    previous_menu.destroy()
+            except tk.TclError:
+                pass
+        menu = tk.Menu(self.master, tearoff=False, background="#172330", foreground="#e7eff6",
+                       activebackground="#1e5860", activeforeground="#ffffff")
+        self._recent_menu = menu
+        if not entries:
+            label = "No recent preview projects" if self._recent_project_kind() == "preview" else "No recent native projects"
+            menu.add_command(label=label, state="disabled")
+        else:
+            for entry in entries:
+                path = Path(entry["path"])
+                parent = str(path.parent)
+                if len(parent) > 52:
+                    parent = "…" + parent[-51:]
+                menu.add_command(label=f"{path.name}  —  {parent}",
+                                 command=lambda project_path=entry["path"]:
+                                 self.open_recent_project(project_path))
+        x = self.recent_button.winfo_rootx()
+        y = self.recent_button.winfo_rooty() + self.recent_button.winfo_height()
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    def open_recent_project(self, path):
+        if self.may_discard():
+            self.open_project_path(path)
 
     def new(self):
         if self.may_discard():
@@ -1028,8 +1082,12 @@ class WorldStudio(ttk.Frame):
         path = filedialog.askopenfilename(filetypes=[("World Studio preview", "*.json")], parent=self)
         if not path:
             return
+        self.open_project_path(path)
+
+    def open_project_path(self, path):
         try:
-            project = json.loads(Path(path).read_text(encoding="utf-8"))
+            path = Path(path)
+            project = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(project, dict):
                 raise ValueError("Not a World Studio preview project object")
             if project.get("format") != "worldstudio-preview-v1":
@@ -1043,6 +1101,7 @@ class WorldStudio(ttk.Frame):
             self.refresh()
             self.status.set(f"Opened {path}")
             self._reset_edit_history()
+            self._record_recent_project(path)
         except (OSError, ValueError, KeyError, TypeError) as error:
             messagebox.showerror("Cannot open project", str(error), parent=self)
 
@@ -1060,6 +1119,7 @@ class WorldStudio(ttk.Frame):
             self.project_path, self.dirty = destination, False
             suffix = f" Previous version: {backup}" if backup else ""
             self.status.set(f"Saved preview project: {destination}{suffix}")
+            self._record_recent_project(destination)
             return True
         except OSError as error:
             messagebox.showerror("Cannot save project", str(error), parent=self)
@@ -1093,7 +1153,7 @@ class WorldStudio(ttk.Frame):
 class NativeStudio(WorldStudio):
     """Edit native point/route tables while preserving unsupported columns."""
 
-    def __init__(self, master, native):
+    def __init__(self, master, native, project_path=None):
         self.native = native
         self.exporting = False
         self.export_results = queue.Queue()
@@ -1103,9 +1163,16 @@ class NativeStudio(WorldStudio):
         self.show_auxiliary = tk.BooleanVar(master, value=False)
         super().__init__(master, self.view_project())
         self.master.title("NSMBU World Studio — native world resources")
+        self.project_path = Path(project_path) if project_path is not None else None
         self.status.set(f"Loaded {native.source.name} • coordinates: " +
                         ("BFRES hierarchy-transformed rest pose; unsupported branches use labeled layouts" if native.positions else "editor layout only; game transforms unknown"))
         self.canvas.bind("<Map>", lambda event: self.fit(), add="+")
+        recent_path = self.project_path or Path(native.source)
+        if recent_path.is_file():
+            self._record_recent_project(recent_path)
+
+    def _recent_project_kind(self):
+        return "native"
 
     def view_project(self):
         nodes, routes = [], []
@@ -1479,12 +1546,7 @@ class NativeStudio(WorldStudio):
             return
         path = filedialog.askopenfilename(filetypes=[("World resource", "*.szs")], parent=self)
         if path:
-            try:
-                from .project import WorldProject
-                native = WorldProject.open(path)
-                self.replace_native(native, None)
-            except (OSError, ValueError) as error:
-                messagebox.showerror("Cannot open world", str(error), parent=self)
+            self.open_project_path(path)
 
     def replace_native(self, native, project_path):
         if self.exporting:
@@ -1508,13 +1570,27 @@ class NativeStudio(WorldStudio):
     def open(self):
         if not self.may_discard():
             return
-        path = filedialog.askopenfilename(filetypes=[("Native World Studio project", "*.json")], parent=self)
+        path = filedialog.askopenfilename(filetypes=[("Native World Studio project", "*.json"),
+                                                     ("World resource archive", "*.szs")], parent=self)
         if path:
-            try:
-                from .project import WorldProject
-                self.replace_native(WorldProject.load(path), Path(path))
-            except (OSError, ValueError, KeyError, TypeError) as error:
-                messagebox.showerror("Cannot open project", str(error), parent=self)
+            self.open_project_path(path)
+
+    def open_project_path(self, path):
+        try:
+            from .project import WorldProject
+            path = Path(path)
+            if path.suffix.lower() == ".json":
+                native = WorldProject.load(path)
+                project_path = path
+            elif path.suffix.lower() == ".szs":
+                native = WorldProject.open(path)
+                project_path = None
+            else:
+                raise ValueError("Choose a native World Studio JSON project or an SZS world resource")
+            self.replace_native(native, project_path)
+            self._record_recent_project(path)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            messagebox.showerror("Cannot open native project", str(error), parent=self)
 
     def new(self):
         if self.may_discard():
@@ -1535,6 +1611,7 @@ class NativeStudio(WorldStudio):
             self.project_path, self.dirty = Path(path), False
             suffix = f" Previous version: {backup}" if backup else ""
             self.status.set(f"Saved native project: {path}{suffix}")
+            self._record_recent_project(path)
             return True
         except (OSError, ValueError) as error:
             messagebox.showerror("Cannot save project", str(error), parent=self)
@@ -1898,7 +1975,8 @@ def main(argv=None):
         source = Path(args.source) if args.source else Path(__file__).resolve().parents[1] / "NSMBU Modding Project/content/Common/course_select/CS_W1.szs"
         try:
             native = WorldProject.load(source) if source.suffix.lower() == ".json" else WorldProject.open(source)
-            NativeStudio(root, native)
+            NativeStudio(root, native,
+                         project_path=source if source.suffix.lower() == ".json" else None)
         except (OSError, ValueError, KeyError) as error:
             messagebox.showerror("Cannot open native world", str(error), parent=root)
             root.destroy()

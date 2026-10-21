@@ -713,6 +713,22 @@ camera behavior and a fully playable custom world remain open.
   path. The full suite passed (**195 tests in 152.289 seconds**), with
   `compileall` and `git diff --check`.
 
+## 2026-10-21 — Add recent project access
+
+- The editor now keeps up to ten native-resource/project paths and ten
+  lightweight-preview paths in a versioned settings file under the user's
+  local application data directory. The toolbar's Recent menu filters entries
+  for the active editor and shows both file and parent folder.
+- Successful opens and saves add entries; opening a recent item runs the same
+  unsaved-change check and validates/loads into local state before replacing the
+  current document. Native history includes source SZS archives and saved JSON
+  projects. Opening a native JSON project at startup now retains that project
+  path for the next save.
+- Store tests cover ordering, deduplication, type filtering, the ten-item cap,
+  and malformed-file recovery. Tk smoke coverage verifies native filtering,
+  cancel behavior, and preview-save registration. The full suite passed
+  (**202 tests in 149.170 seconds**), with `compileall` and `git diff --check`.
+
 ## 2026-10-21 — Report unsupported OBJ features
 
 - OBJ imports now report when they ignore MTL/material assignments, vertex
