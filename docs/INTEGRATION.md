@@ -510,3 +510,29 @@ each confirmation and re-verifies the exact Cemu window focus before the next ke
 This makes the test result easier to reproduce and interpret; it does not add
 new in-game movement evidence by itself. The next Cemu retest was deferred by
 the user, so no new emulator instance was started for this change.
+
+## Current Clean/Chain preflight and ready movement comparison — 2026-10-22
+
+- Rechecked both existing isolated profiles without launching Cemu. Clean has
+  only CrashFix active; Chain activates `WorldStudioChain`, and its packaged
+  `CS_W1.szs` matches the expected archive at SHA-256
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`.
+  Both profiles use the verified keyboard GamePad mapping (WASD on IDs 18–21,
+  Z as GamePad A), have a current NSMBU run in their logs, and contain identical
+  personal/common save files. Both `cemu_preflight.py` checks returned ready
+  with no issues. These are configuration and file-integrity checks only.
+- To compare the same held movement sequence, run the process-bound runner once
+  per profile from the repository root, using the same game RPX and options:
+
+  ```powershell
+  $rpx = '.\NSMBU Modding Project\code\red-pro2.rpx'
+  python tools/cemu_input_test.py --profile build/cemu-clean-gamepad-input-v3-20261021 --rpx $rpx --case clean-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --pack-name WorldStudioChain
+  python tools/cemu_input_test.py --profile build/cemu-chain-gamepad-input-v3-20261021 --rpx $rpx --case chain-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --pack-name WorldStudioChain
+  ```
+
+  Each run refuses another active Cemu process, waits for the exact game window
+  to be foreground before every input, and pauses after the first direction so
+  the operator can confirm the visible node. If `A` does not reach the same
+  expected W102 node in both runs, stop and record that difference instead of
+  interpreting the following `D` result as a W102-to-W103 traversal. The
+  command sequence is a ready protocol, not a new gameplay result.
