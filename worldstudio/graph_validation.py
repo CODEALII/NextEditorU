@@ -5,11 +5,63 @@ point CSVs also contain helper, trigger, and camera points, so callers must
 identify the playable entry and required locations instead of treating every
 point as a level node.
 """
+import json
 import re
+from pathlib import Path
 
 
 _POINT_ID = re.compile(r"[WF][A-Za-z0-9]{3}\Z")
 _ROUTE_ID = re.compile(r"R[A-Za-z0-9]{8}\Z")
+_GRAPH_PROFILE_FORMAT = "nsmbu-world-graph-profile-v1"
+_MAX_GRAPH_PROFILE_BYTES = 64 * 1024
+
+
+def load_native_graph_profile(path, expected_world_prefix=None):
+    """Load explicit entry/required nodes for a repeatable static graph check."""
+    path = Path(path)
+
+    def reject_duplicate_keys(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"Graph profile contains duplicate JSON key {key!r}")
+            result[key] = value
+        return result
+
+    try:
+        with path.open("rb") as source:
+            data = source.read(_MAX_GRAPH_PROFILE_BYTES + 1)
+        if len(data) > _MAX_GRAPH_PROFILE_BYTES:
+            raise ValueError(f"Graph profile exceeds {_MAX_GRAPH_PROFILE_BYTES} bytes")
+        profile = json.loads(data.decode("utf-8"), object_pairs_hook=reject_duplicate_keys)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("Graph profile must be valid UTF-8 JSON") from error
+    if not isinstance(profile, dict):
+        raise ValueError("Graph profile must be a JSON object")
+    expected_fields = {"format", "world_prefix", "entry_points", "required_locations"}
+    if set(profile) != expected_fields:
+        raise ValueError("Graph profile fields must be format, world_prefix, entry_points, and required_locations")
+    if profile["format"] != _GRAPH_PROFILE_FORMAT:
+        raise ValueError(f"Unsupported graph profile format {profile['format']!r}")
+    world_prefix = profile["world_prefix"]
+    if not isinstance(world_prefix, str) or not re.fullmatch(r"W[1-9]", world_prefix):
+        raise ValueError("Graph profile world_prefix must be W1 through W9")
+    if expected_world_prefix and world_prefix != expected_world_prefix:
+        raise ValueError(
+            f"Graph profile is for {world_prefix}, but the source archive is {expected_world_prefix}")
+
+    result = {"world_prefix": world_prefix}
+    for field in ("entry_points", "required_locations"):
+        values = profile[field]
+        if not isinstance(values, list) or not values or len(values) > 256:
+            raise ValueError(f"Graph profile {field} must contain 1 to 256 point IDs")
+        if any(not isinstance(value, str) or not _POINT_ID.fullmatch(value) or
+               not value.startswith(world_prefix) for value in values):
+            raise ValueError(f"Graph profile {field} contains an invalid {world_prefix} point ID")
+        if len(set(values)) != len(values):
+            raise ValueError(f"Graph profile {field} contains duplicate point IDs")
+        result[field] = tuple(values)
+    return result
 
 
 def native_point_path_route_ids(point_rows):

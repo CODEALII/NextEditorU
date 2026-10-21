@@ -1251,5 +1251,22 @@ camera behavior and a fully playable custom world remain open.
 - This identifies the declared input path, not compiled GX2 calculations or
   pixel output. The exporter still writes white for new geometry, but whether
   white is neutral for the assigned material remains unverified.
-- Next: audit graph validation for missing destination/event references and
-  add the highest-impact reproducible static check without relying on Cemu.
+- Follow-up: a versioned W1 graph profile and CLI support are in progress so
+  the static reachability check can be repeated without remembering point IDs.
+
+## 2026-10-21 — Repeatable W1 graph profile
+
+- Added `profiles/w1-core-progression.json` with explicit W101 entry and W102 /
+  W103 required locations, bound to the W1 point-table prefix.
+- Added `validate-graph --profile` and a bounded strict JSON loader that rejects
+  duplicate keys, unexpected schema fields, duplicate/invalid point IDs,
+  oversized files, and profiles from another world. The checked-in fixture is
+  explicitly a static test profile; it does not encode or prove game unlocks.
+- Added tests for profile parsing, malformed inputs, source-world mismatch,
+  bounded reads, and the CLI against the local W1 archive when available.
+- Verification: **292 tests passed in 277.138 seconds**; the focused graph
+  suite passed 28 tests, the checked-in profile passed against the local W1
+  archive, and `compileall` plus `git diff --check` passed.
+- Next: continue identifying evidence-backed event/progression references;
+  keep runtime route movement and level launches marked unverified until the
+  game reaches the map and accepts input.

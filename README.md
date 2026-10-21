@@ -76,6 +76,8 @@ Check a route from an explicit start to required locations:
 python -m worldstudio validate-graph --entry W101 --require W102 --require W103
 ```
 
+For the checked-in World 1 static reachability profile, run `python -m worldstudio validate-graph --profile profiles/w1-core-progression.json`. The profile pins W101 as an explicit start and W102/W103 as required reachable locations; this checks native table connectivity and does not model events, unlock state, Mario movement, level loading, or save persistence.
+
 Pass a saved `.nws.json` project path as the first argument to validate edits. Local route endpoints must resolve to the current BFRES; remote-world endpoints are left unresolved because their archive is outside the project. Remote segments cannot satisfy local reachability. This verifies the declared graph only; it does not simulate in-game movement or unlock rules.
 
 The experimental mesh export accepts the included original sample island:

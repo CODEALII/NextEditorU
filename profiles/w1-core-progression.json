@@ -1,0 +1,6 @@
+{
+  "format": "nsmbu-world-graph-profile-v1",
+  "world_prefix": "W1",
+  "entry_points": ["W101"],
+  "required_locations": ["W102", "W103"]
+}

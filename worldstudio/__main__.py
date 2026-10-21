@@ -100,6 +100,8 @@ def main():
                        help='Playable entry point; repeat to specify multiple starts')
     graph.add_argument('--require', action='append', default=[], metavar='POINT',
                        help='Location that must be reachable from an entry; repeat as needed')
+    graph.add_argument('--profile', type=Path,
+                       help='Versioned JSON file with explicit world entry and required points')
     shaders = sub.add_parser('inspect-shaders', help='Read SHARCFB shader interface metadata')
     shaders.add_argument('source', type=Path,
                          help='SHARCFB file or SZS/SARC containing a SHARCFB entry')
@@ -131,21 +133,34 @@ def main():
         elif args.command == 'validate-graph':
             p = (WorldProject.load(args.source) if str(args.source).lower().endswith('.json')
                  else WorldProject.open(args.source))
-            from .graph_validation import validate_native_world
+            from .graph_validation import load_native_graph_profile, validate_native_world
             references = set(p.references)
             for rename in p.bone_renames:
                 references.discard(rename.get('old'))
                 if rename.get('new'):
                     references.add(rename['new'])
             world = re.search(r'pointW([1-9])', p.point_name)
+            world_prefix = f'W{world[1]}' if world else None
+            entry_points, required_locations = args.entry, args.require
+            if args.profile:
+                if args.entry or args.require:
+                    raise ValueError('Use either --profile or --entry/--require, not both')
+                if not world_prefix:
+                    raise ValueError('Cannot match graph profile to the source world')
+                profile = load_native_graph_profile(args.profile, world_prefix)
+                entry_points = list(profile['entry_points'])
+                required_locations = list(profile['required_locations'])
             issues = set(p.validate())
             issues.update(validate_native_world(
                 p.points.rows, p.routes.rows, known_references=references,
                 initial_points=p.points.initial, initial_routes=p.routes.initial,
-                world_prefix=f'W{world[1]}' if world else None,
-                entry_points=args.entry, required_locations=args.require))
-            report = {'source': str(p.source), 'entry_points': args.entry,
-                      'required_locations': args.require, 'reachable_locations_checked': bool(args.require),
+                world_prefix=world_prefix,
+                entry_points=entry_points, required_locations=required_locations))
+            report = {'source': str(p.source),
+                      'profile': str(args.profile) if args.profile else None,
+                      'entry_points': entry_points,
+                      'required_locations': required_locations,
+                      'reachable_locations_checked': bool(required_locations),
                       'validation_errors': sorted(issues)}
             print(json.dumps(report, indent=2))
             if issues:

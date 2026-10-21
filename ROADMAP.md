@@ -76,6 +76,7 @@ Resolve the start prompt before drawing any conclusion about map movement.
 
 ## Topology, events, and camera
 
+- Implemented: repeatable static reachability profiles use an explicit versioned schema, world-prefix binding, bounded JSON input, duplicate-key and point-ID checks, and a checked-in W1 profile for W101 to W102/W103. The test establishes native graph connectivity only; event references and game progression semantics remain unidentified.
 - Implemented: project, editor, and export validation require a directed segment chain for newly added same-world destinations. Changed local destinations are also checked against paired BFRES macro-path references when the listed bones form one unambiguous linear chain. Branched legacy lists, pre-existing gaps and cross-world links are preserved. Route edits recheck baseline-connected destinations and block an export if an edit disconnects one.
 - Implemented: a route segment may reference endpoints in another world without requiring those bones in the current BFRES. Local endpoints are still validated, and cross-world segments cannot satisfy local reachability checks.
 - Extend graph validation only as each native reference is identified: level destinations, event dependencies, and progression conditions.
