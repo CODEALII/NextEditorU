@@ -1,4 +1,5 @@
 import unittest
+from collections import Counter
 from pathlib import Path
 import tempfile
 from unittest.mock import patch
@@ -69,6 +70,19 @@ class BfresShaderMetadataTests(unittest.TestCase):
         self.assertEqual(failures, set())
         self.assertEqual(len(shapes), 42)
         self.assertTrue(all(shape.get('shaderMetadata') for shape in shapes))
+        colored = [shape for shape in shapes if '_c0' in shape['vertexAttributes']]
+        self.assertEqual(Counter(shape['vertexAttributes']['_c0']['format'] for shape in colored),
+                         {0x0a: 21, 0x80f: 1})
+        self.assertEqual(Counter(shape['shaderMetadata']['programName'] for shape in colored),
+                         {'nw4f_cs_shader': 14, 'nw4f_cs_route_shader': 8})
+        for shape in colored:
+            matches = [binding for binding in shape['shaderMetadata']['attributeBindings'].values()
+                       if binding['source_attribute'] == '_c0']
+            self.assertEqual(len(matches), 1, shape['name'])
+            self.assertEqual(matches[0]['shader_name'], 'aColor0', shape['name'])
+            self.assertTrue(matches[0]['present'], shape['name'])
+            self.assertEqual(matches[0]['format'], shape['vertexAttributes']['_c0']['format'])
+            self.assertEqual(matches[0]['offset'], shape['vertexAttributes']['_c0']['offset'])
         route = next(shape for shape in shapes
                      if shape['shaderMetadata']['programName'] == 'nw4f_cs_route_shader' and
                      shape['shaderMetadata']['samplerSymbols'].get('_o1') == 'cTexMapEdgeMask')

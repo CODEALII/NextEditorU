@@ -84,7 +84,7 @@ Completed:
 - Switched the experimental exporter to `polySurface1489__mtGrass`, the main
   grass shape, and now imports OBJ corner UVs/normals with seam splitting.
   `_u1` baked-light coordinates are sampled from the original surface by
-  nearest XZ vertex; `_c0` is set to neutral white. This is structurally tested,
+  nearest XZ vertex; `_c0` is written white, with its material effect unverified. This is structurally tested,
   while the texture/channel interpretation and runtime appearance remain
   hypotheses until compared in Cemu.
 - OBJ parsing and mesh exporter tests: **10 passed**. A corrected isolated
@@ -1236,5 +1236,20 @@ camera behavior and a fully playable custom world remain open.
   suites passed 66 tests, and `compileall` plus `git diff --check` passed.
   Stored channel inspection does not establish shader use, alpha behavior,
   material fidelity, Cemu appearance, or gameplay.
-- Next: inspect the W1 shader-interface bindings for `_c0` and record whether
-  the local shader metadata provides evidence of an input binding.
+- Follow-up: the local W1 `_c0` shader-interface binding is recorded in the
+  next milestone; instruction-level behavior remains open.
+
+## 2026-10-21 — W1 `_c0` shader-interface binding
+
+- Joined all W1 BFRES material assignments to the local `shaderfb.szs` program
+  interfaces. Every one of the 22 shapes carrying `_c0` resolves exactly one
+  declared `aColor0` input mapped to BFRES `_c0`; its stored format and offset
+  match the parsed vertex attribute. Fourteen shapes use `nw4f_cs_shader` and
+  eight use `nw4f_cs_route_shader`.
+- Added a local-resource regression that checks each of those bindings and both
+  format counts. The focused BFRES shader metadata test passes.
+- This identifies the declared input path, not compiled GX2 calculations or
+  pixel output. The exporter still writes white for new geometry, but whether
+  white is neutral for the assigned material remains unverified.
+- Next: audit graph validation for missing destination/event references and
+  add the highest-impact reproducible static check without relying on Cemu.
