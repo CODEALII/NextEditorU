@@ -4,7 +4,7 @@ World Studio is an offline research prototype. Items below describe work still n
 
 ## Highest priority: verify route movement
 
-The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still unverified. A config audit found that the folder previously named `cemu-island-baseline` enables WorldStudioChain, so its movement result is not a clean baseline. `build/cemu-clean-baseline` has CrashFix only and a separate MLC. It was launched once, but the Cemu window showed an empty library and no RPX was loaded. UI state capture then failed with `foreground window did not report a process id`; no stock movement was observed. First load the supplied RPX and verify the keyboard-to-left-stick mapping in Cemu before comparing stock and patched routes. Then verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
+The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still unverified. A config audit found that the folder previously named `cemu-island-baseline` enables WorldStudioChain, so its movement result is not a clean baseline. A later live inspection of that patched profile confirmed W/A/S/D on the left stick and arrows on the D-pad; two short D taps changed Mario's facing but did not advance him to another node. That is not a sustained-input test, and the loaded archive hash matches `build/chain-quoted`, not the direct-route variant. `build/cemu-clean-baseline` has CrashFix only and a separate MLC. It was launched once, but the Cemu window showed the empty library and no RPX was loaded. UI state capture then failed with `foreground window did not report a process id`; no stock movement was observed. First load the supplied RPX and verify the keyboard-to-left-stick mapping in that clean profile before comparing stock and patched routes. Then verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
 
 The isolated `cemu-island-mainlight` process has a log confirming both the
 World Studio Chain and crash-fix packs activated and reached the title screen.
@@ -71,6 +71,11 @@ compared.
 
 ## Editor and project workflow
 
+- Implemented: the native graph viewport fits its nodes using the same
+  perspective projection as drawing, coalesces the initial fit until layout is
+  ready, and refits on resize only until the user orbits/zooms. The Fit view
+  action restores automatic fitting. Synthetic coverage checks rotated depth
+  bounds, resizing and invalid coordinates.
 - Implemented: native graph labels route around point markers and each other, with
   contrast backing plates; checked in a fresh local editor window.
 - Implemented: bounded Ctrl+Z/Ctrl+Y history covers native point/route rows,

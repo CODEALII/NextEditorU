@@ -45,6 +45,81 @@ def camera_plane_world_delta(dx, dy, yaw, pitch, projection_scale):
     )
 
 
+def _rotate_preview_point(point, center, yaw, pitch):
+    x, y, z = [float(point[i]) - float(center[i]) for i in range(3)]
+    x, z = x * math.cos(yaw) - z * math.sin(yaw), x * math.sin(yaw) + z * math.cos(yaw)
+    y, z = y * math.cos(pitch) - z * math.sin(pitch), y * math.sin(pitch) + z * math.cos(pitch)
+    return x, y, z
+
+
+def _project_camera_point(x, y, z, view_scale, width, height):
+    scale = float(view_scale)
+    perspective = scale * 900 / max(100, 900 + z * scale)
+    return float(width) / 2 + x * perspective, float(height) / 2 - y * perspective, z
+
+
+def project_preview_point(point, center, yaw, pitch, view_scale, width, height):
+    """Project one model-space point with the native editor's perspective view."""
+    camera_point = _rotate_preview_point(point, center, yaw, pitch)
+    return _project_camera_point(*camera_point, view_scale, width, height)
+
+
+def fit_preview_scale(points, center, yaw, pitch, width, height, *, max_scale=8.0):
+    """Find the largest perspective scale that keeps points inside the viewport."""
+    try:
+        center = tuple(float(value) for value in center[:3])
+        yaw, pitch, width, height, max_scale = map(float, (yaw, pitch, width, height, max_scale))
+    except (TypeError, ValueError, OverflowError, IndexError) as error:
+        raise ValueError("Fit view requires finite points, camera values and viewport dimensions") from error
+    if (len(center) != 3 or
+            not all(math.isfinite(value) for value in (*center, yaw, pitch, width, height, max_scale)) or
+            width <= 0 or height <= 0 or max_scale <= 0):
+        raise ValueError("Fit view requires finite points, camera values and viewport dimensions")
+    low, high = [math.inf] * 3, [-math.inf] * 3
+    point_count = 0
+    try:
+        for point in points:
+            values = tuple(float(point[index]) for index in range(3))
+            if not all(math.isfinite(value) for value in values):
+                raise ValueError("Fit view requires finite points, camera values and viewport dimensions")
+            camera_point = _rotate_preview_point(values, center, yaw, pitch)
+            for index, value in enumerate(camera_point):
+                low[index] = min(low[index], value)
+                high[index] = max(high[index], value)
+            point_count += 1
+    except (TypeError, ValueError, OverflowError, IndexError) as error:
+        raise ValueError("Fit view requires finite points, camera values and viewport dimensions") from error
+    if point_count == 0:
+        return 1.0
+    bounds_corners = [(x, y, z) for x in (low[0], high[0])
+                      for y in (low[1], high[1]) for z in (low[2], high[2])]
+    margin = min(56.0, max(18.0, min(width, height) * 0.06))
+    half_width = max(1.0, width / 2 - margin)
+    half_height = max(1.0, height / 2 - margin)
+
+    def fits(view_scale):
+        for camera_point in bounds_corners:
+            x, y, _ = _project_camera_point(*camera_point, view_scale, width, height)
+            if not math.isfinite(x) or not math.isfinite(y):
+                return False
+            if abs(x - width / 2) > half_width or abs(y - height / 2) > half_height:
+                return False
+        return True
+
+    low, high = 0.0001, max_scale
+    if not fits(low):
+        return low
+    if fits(high):
+        return high
+    for _ in range(48):
+        middle = (low + high) / 2
+        if fits(middle):
+            low = middle
+        else:
+            high = middle
+    return low
+
+
 def read_obj(path, include_attributes=False, include_report=False):
     """Read a bounded Wavefront OBJ and optionally report ignored features."""
     path = Path(path)
@@ -893,12 +968,9 @@ class WorldStudio(ttk.Frame):
     def project_point(self, point):
         camera = self.project.setdefault("camera", {})
         yaw, pitch = camera.get("yaw", -0.55), camera.get("pitch", 0.65)
-        x, y, z = [point[i] - self.center[i] for i in range(3)]
-        x, z = x * math.cos(yaw) - z * math.sin(yaw), x * math.sin(yaw) + z * math.cos(yaw)
-        y, z = y * math.cos(pitch) - z * math.sin(pitch), y * math.sin(pitch) + z * math.cos(pitch)
-        view_scale = camera.get("scale", 1)
-        scale = view_scale * 900 / max(100, 900 + z * view_scale)
-        return self.canvas.winfo_width() / 2 + x * scale, self.canvas.winfo_height() / 2 - y * scale, z
+        return project_preview_point(point, self.center, yaw, pitch,
+                                     camera.get("scale", 1),
+                                     self.canvas.winfo_width(), self.canvas.winfo_height())
 
     def draw_clear_label(self, text, x, y, obstacles, offsets, *, fill="#ffffff", font=("Segoe UI", 9, "bold")):
         """Place a readable canvas label without covering labels already drawn."""
@@ -1119,7 +1191,10 @@ class WorldStudio(ttk.Frame):
         low = [min((point[i] for point in points), default=-150) for i in range(3)]
         high = [max((point[i] for point in points), default=150) for i in range(3)]
         self.center = tuple((low[i] + high[i]) / 2 for i in range(3))
-        self.project.setdefault("camera", {})["scale"] = max(0.0001, min(self.canvas.winfo_width(), self.canvas.winfo_height()) / max(300, max(high[i] - low[i] for i in range(3)) * 1.6))
+        camera = self.project.setdefault("camera", {})
+        camera["scale"] = fit_preview_scale(
+            points, self.center, camera.get("yaw", -0.55), camera.get("pitch", 0.65),
+            self.canvas.winfo_width(), self.canvas.winfo_height())
         self.draw()
 
     def press(self, event):
@@ -1304,6 +1379,8 @@ class NativeStudio(WorldStudio):
     def __init__(self, master, native, project_path=None):
         self.native = native
         self.exporting = False
+        self._auto_fit = True
+        self._fit_after_id = None
         self.export_results = queue.Queue()
         self.preview_results = queue.Queue()
         self.disabled_for_export = []
@@ -1314,7 +1391,10 @@ class NativeStudio(WorldStudio):
         self.project_path = Path(project_path) if project_path is not None else None
         self.status.set(f"Loaded {native.source.name} • coordinates: " +
                         ("BFRES hierarchy-transformed rest pose; unsupported branches use labeled layouts" if native.positions else "editor layout only; game transforms unknown"))
-        self.canvas.bind("<Map>", lambda event: self.fit(), add="+")
+        self.canvas.bind("<Map>", self._schedule_auto_fit, add="+")
+        self.canvas.bind("<Configure>",
+                         lambda event: self._schedule_auto_fit(event, delay_ms=90), add="+")
+        self.after_idle(self._schedule_auto_fit)
         self._set_recovery_context(self.project_path or native.source, offer=True)
         recent_path = self.project_path or Path(native.source)
         if recent_path.is_file():
@@ -1396,6 +1476,32 @@ class NativeStudio(WorldStudio):
         ttk.Button(extra_bar, text="Direct 1-2 → 1-3 (experimental)", command=self.direct_route).pack(side="left", padx=2)
         ttk.Label(extra_bar, text="Raw offset banks and direct-route traversal require in-game verification.").pack(side="left", padx=8)
 
+    def _schedule_auto_fit(self, event=None, *, delay_ms=0):
+        if not self._auto_fit or self.canvas.winfo_width() <= 1 or self.canvas.winfo_height() <= 1:
+            return
+        if self._fit_after_id is not None:
+            try:
+                self.after_cancel(self._fit_after_id)
+            except tk.TclError:
+                pass
+        if delay_ms > 0:
+            self._fit_after_id = self.after(delay_ms, self._fit_if_automatic)
+        else:
+            self._fit_after_id = self.after_idle(self._fit_if_automatic)
+
+    def _fit_if_automatic(self):
+        self._fit_after_id = None
+        if self._auto_fit and self.canvas.winfo_width() > 1 and self.canvas.winfo_height() > 1:
+            self.fit()
+
+    def fit(self):
+        self._auto_fit = True
+        super().fit()
+
+    def zoom(self, event):
+        self._auto_fit = False
+        super().zoom(event)
+
     def refresh(self):
         self.project = self.view_project()
         selection = self.tree.selection()
@@ -1458,6 +1564,9 @@ class NativeStudio(WorldStudio):
 
     def orbit(self, event):
         if not isinstance(self.drag, dict):
+            if (self.drag is not None and not self.drag[2] and
+                    math.hypot(event.x - self.drag[0], event.y - self.drag[1]) > 2):
+                self._auto_fit = False
             super().orbit(event)
             return
         if self.exporting:
@@ -1467,6 +1576,7 @@ class NativeStudio(WorldStudio):
         if not drag["moved"] and math.hypot(event.x - start_x, event.y - start_y) <= 2:
             drag["last"] = event.x, event.y
             return
+        self._auto_fit = False
         last_x, last_y = drag["last"]
         dx, dy = event.x - last_x, event.y - last_y
         drag["last"] = event.x, event.y

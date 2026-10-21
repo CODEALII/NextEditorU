@@ -58,12 +58,21 @@
   path bones are present. This proves the declared resource references exist,
   not that Cemu can move along them. The mainlight profile has no captured boot
   log, so activation and runtime behavior for that exact pack remain unverified.
-- A prior UI observation showed `D` beside the right-stick control and reported
-  that D/Right taps did not move Mario. The saved profile and settings belong
-  to a folder with WorldStudioChain enabled, so that observation is not a clean
-  baseline result and does not isolate route behavior. No Cemu process is
-  running now. The new baseline folder must first confirm its effective
-  keyboard-to-left-stick mapping in the installed UI.
+- A later live UI inspection of `build/cemu-island-baseline` showed the game
+  profile using `Keyboard [Keyboard]`, with W/A/S/D assigned to the **left**
+  stick and the right stick empty; arrow keys map to the D-pad. The UI labels
+  this mapping as game-profile-controlled, so no settings were changed. This
+  corrects the earlier misread that put D on the right stick.
+- The live window showed Mario at Acorn Plains-1 (W101). Two short `D` key
+  presses changed his facing but did not move him to the next map node. Computer
+  Use sends taps rather than a sustained key hold, so this cannot distinguish a
+  route failure from a too-short input and does not verify the reported
+  W102-to-W103 traversal.
+- The active test archive hash is `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`,
+  matching `build/chain-quoted`; it is not `build/direct-route-v2`. The exact
+  direct-route variant therefore remains untested in this live session. The
+  clean CrashFix-only folder still has no RPX loaded and is not the window just
+  inspected.
 
 Earlier attempts displayed black after initial dialogs. They were inconclusive:
 input setup, UI navigation and CSV quoting changed before the successful patched

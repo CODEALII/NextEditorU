@@ -8,7 +8,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from worldstudio.editor import NativeStudio, ObjTransformDialog, WorldStudio
+from worldstudio.editor import (NativeStudio, ObjTransformDialog, WorldStudio,
+                                fit_preview_scale, project_preview_point)
 from worldstudio.recent_projects import RecentProjects
 from worldstudio.session_recovery import SessionRecovery
 
@@ -41,6 +42,30 @@ class NativeFixture:
 
     def validate(self):
         return []
+
+
+class PerspectiveFitTests(unittest.TestCase):
+    def test_fit_scale_keeps_rotated_depth_bounds_inside_the_canvas(self):
+        points = [(-900, -240, -1250), (840, 420, 950), (120, 180, 1450),
+                  (-160, 310, -420)]
+        center = (-30, 90, 100)
+        yaw, pitch, width, height = -0.55, 0.65, 1100, 760
+        scale = fit_preview_scale(points, center, yaw, pitch, width, height)
+        margin = min(56, max(18, min(width, height) * 0.06))
+        projected = [project_preview_point(point, center, yaw, pitch, scale, width, height)
+                     for point in points]
+        self.assertGreater(scale, 0.0001)
+        self.assertTrue(all(margin <= x <= width - margin and
+                            margin <= y <= height - margin for x, y, _ in projected))
+
+    def test_fit_scale_uses_the_resized_viewport_and_rejects_nonfinite_bounds(self):
+        points = [(-600, 0, -700), (600, 0, 700)]
+        center = (0, 0, 0)
+        small = fit_preview_scale(points, center, -0.55, 0.65, 900, 600)
+        large = fit_preview_scale(points, center, -0.55, 0.65, 1600, 900)
+        self.assertGreater(large, small)
+        with self.assertRaises(ValueError):
+            fit_preview_scale([(float("inf"), 0, 0)], center, 0, 0, 800, 600)
 
 
 class EditorSmokeTests(unittest.TestCase):

@@ -856,3 +856,27 @@ camera behavior and a fully playable custom world remain open.
   seconds**), with `compileall` and `git diff --check`.
 - The check validates registry membership only. It does not prove that a
   command is accepted by the game or that an event loader is installed.
+
+## 2026-10-21 — Live Cemu movement-state audit
+
+- Re-inspected the running isolated Cemu window. Input Settings shows the
+  game-selected Keyboard profile with W/A/S/D on the left stick and arrows on
+  the D-pad; the right stick is unbound. No controller settings were changed.
+- The rendered map showed Mario at Acorn Plains-1 (W101). Two short `D` taps
+  turned his facing but did not move him to the next node. The UI automation
+  does not provide a sustained key hold, so this is not a held-movement test.
+- The active `WorldStudioChain` archive hash matches `build/chain-quoted`
+  (`19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`), not
+  `build/direct-route-v2`. The clean CrashFix-only profile still has no RPX
+  loaded. Route movement and the direct-route variant remain unverified.
+
+## 2026-10-21 — Perspective-aware native graph framing
+
+- The graph's Fit view now uses the same perspective projection as drawing and
+  chooses the largest scale that keeps all model-space points inside the canvas.
+  Initial fitting waits for widget layout; resize fitting coalesces configure
+  events and stops when the user orbits or zooms, until Fit view is chosen again.
+- Regression tests check rotated depth bounds, larger viewports and non-finite
+  coordinates. The full suite passed (**223 tests in 172.707 seconds**), with
+  `compileall` and `git diff --check`.
+- This changes editor camera framing only; exported resource data is unchanged.
