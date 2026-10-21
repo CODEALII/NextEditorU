@@ -346,3 +346,14 @@ camera behavior and a fully playable custom world remain open.
 - This fails the baseline input check, so it cannot distinguish route data from
   emulator input. Logged the evidence in `docs/INTEGRATION.md`; a physical or
   otherwise accepted controller source is still needed for traversal QA.
+
+## 2026-10-21 — texture thumbnails in mesh inspector
+
+- Added cached, nearest-sampled inspector thumbnails capped at 96×96 pixels for
+  supported base-color and BC5 diagnostic maps. Pixel sampling validates RGBA
+  dimensions and avoids allocating a full-resolution canvas for previews.
+- Headless Chrome rendered the actual `RouteW1_alb` image beside the separate
+  `RouteW1_nml` diagnostic sample on the selected route mesh. Screenshot:
+  `local/evidence/preview-w1-texture-inspector-bc5.png` (ignored evidence).
+  Full regression: **129 tests passed in 88.426 seconds**; `compileall`,
+  `git diff --check`, and local W1 graph validation passed.

@@ -167,6 +167,33 @@ console.log('mesh selection inspector ok');
         self.assertAlmostEqual(bounds["radius"], math.sqrt(12))
         self.assertEqual(empty, {"center": [0, 0, 0], "radius": 1})
 
+    def test_texture_preview_downsamples_rgba_with_bounded_dimensions(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise texture preview sampling")
+        source = bytes((
+            255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255,
+            255, 0, 255, 255, 0, 255, 255, 255, 0, 0, 0, 255, 255, 255, 255, 255,
+        ))
+        payload = {"name": "sample", "width": 4, "height": 2,
+                   "rgbaBase64": base64.b64encode(source).decode("ascii")}
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        start = page.index("function texturePreviewPixels(")
+        end = page.index("\nconst textureThumbnailCache=", start)
+        helper = page[start:end]
+        probe = helper + "\nconst thumb=texturePreviewPixels(" + json.dumps(payload) + ",2);console.log(JSON.stringify([thumb.width,thumb.height,Array.from(thumb.data)]))"
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        width, height, data = json.loads(result.stdout)
+        self.assertEqual((width, height), (2, 1))
+        self.assertEqual(data, [0, 255, 255, 255, 255, 255, 255, 255])
+
+    def test_mesh_inspector_exposes_cached_base_and_bc5_thumbnails(self):
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        self.assertIn("texturePreview:texturePayload,normalPreview:normalPayload", page)
+        self.assertIn("textureThumbnail(payload,kind)", page)
+        self.assertIn("BC5 diagnostic channels", page)
+        self.assertIn("Base color · ${payload.name}", page)
+
     def test_viewport_pick_ids_and_hidpi_pixel_coordinates(self):
         node = shutil.which("node")
         if not node:
