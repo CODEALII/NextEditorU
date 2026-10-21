@@ -38,9 +38,35 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("invoke('select_item'", page)
         self.assertIn("invoke('move_item'", page)
         self.assertIn("pickWorldNode", page)
+        self.assertIn("overlays.selectedRoute", page)
+        self.assertIn("updateSelectionOverlays()", page)
+        self.assertIn("drawOverlay(overlays.selectedRoute,[.24,1,.68,1]", page)
         self.assertIn("units=2*depth*Math.tan", page)
         self.assertIn("lastAppliedX:e.clientX", page)
         self.assertIn("const movedNow=drag.moved||Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)>3", page)
+
+    def test_embedded_selected_route_overlay_tracks_selection_and_endpoints(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise viewport selection overlays")
+        page = build_document({"shapes": [], "nodes": [
+            {"id": "W101", "editorId": "point:0", "x": 1, "y": 2, "z": 3},
+            {"id": "W102", "editorId": "point:1", "x": 4, "y": 5, "z": 6}], "routes": [
+                {"id": "RW101W102", "editorId": "segment:0", "start": "W101", "end": "W102"}]})
+        helper = page[page.index("function updateSelectionOverlays()"):]
+        helper = helper[:helper.index("\n")]
+        probe = """
+const scene={nodes:[{id:'W101',editorId:'point:0',x:1,y:2,z:3},{id:'W102',editorId:'point:1',x:4,y:5,z:6}],routes:[{id:'RW101W102',editorId:'segment:0',start:'W101',end:'W102'}]};
+const nodeMap=new Map(scene.nodes.map(node=>[node.id,node]));
+let selectedEditorId='segment:0';
+let overlays={selected:null,selectedRoute:null};
+function replaceOverlay(_old,points,mode='LINES'){return points.length?{points,mode}:null}
+""" + helper + "\nupdateSelectionOverlays();\nconsole.log(JSON.stringify(overlays));"
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        overlays = json.loads(result.stdout)
+        self.assertEqual(overlays["selected"], None)
+        self.assertEqual(overlays["selectedRoute"]["mode"], "LINES")
+        self.assertEqual(overlays["selectedRoute"]["points"], [[1, 2, 3], [4, 5, 6]])
 
     def test_embedded_drag_camera_plane_delta_tracks_screen_motion(self):
         node = shutil.which("node")

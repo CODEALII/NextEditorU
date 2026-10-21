@@ -1,5 +1,16 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Make selected routes visible in the embedded viewport
+
+- Selecting a route already moved the viewport camera to its midpoint, but the
+  route retained its normal/secret path color. The WebGL overlay now draws the
+  selected segment in a bright highlight and updates that overlay on list,
+  graph, or viewport selection changes without rebuilding the BFRES scene.
+- Updated the embedded-viewport guidance and added a generated-page regression
+  that executes the selection helper in Node and checks the exact selected
+  route endpoints. The 73 editor and preview tests pass; `compileall` and
+  `git diff --check` pass. Cemu behavior remains outside this check.
+
 ## 2026-10-22 — Bind Cemu preflight to graph-profile provenance
 
 - Cemu preflight can now opt into checking the loaded pack's sidecar export
