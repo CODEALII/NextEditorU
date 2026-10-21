@@ -179,9 +179,11 @@ def main():
             print(json.dumps(report, indent=2) if args.json else _shader_summary(report))
         elif args.command == 'demo':
             p = (direct_route_demo if args.direct_route else chain_demo)(WorldProject.open(args.source))
+            obj_compatibility_warnings = ()
             if args.island:
                 from .editor import read_obj
-                vertices, faces = read_obj(args.island)
+                (vertices, faces), obj_compatibility_warnings = read_obj(
+                    args.island, include_report=True)
                 p.geometry = {'vertices': vertices, 'faces': faces}
                 p.terrain = str(args.island.resolve())
             if args.out.exists():
@@ -195,6 +197,7 @@ def main():
                  if args.direct_route else 'W102 uses existing RW102W1T0,RW1T0W103 macro paths.'),
                 ('One rigid grass shape replaced by original OBJ; other shapes retained.'
                  if args.island else 'No mesh replacement selected.'),
+                *[f'OBJ compatibility: {warning}.' for warning in obj_compatibility_warnings],
                 'Level files, cameras, scripts and saves unchanged.',
                 'Test on a separate game copy/profile. Contains user-owned resources; do not redistribute.']
             (args.out / 'EXPERIMENT.txt').write_text('\n'.join(notes) + '\n', encoding='utf-8')

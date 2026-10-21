@@ -42,14 +42,18 @@ def camera_plane_world_delta(dx, dy, yaw, pitch, projection_scale):
     )
 
 
-def read_obj(path, include_attributes=False):
-    """Read a bounded Wavefront OBJ and optionally split corner attributes."""
+def read_obj(path, include_attributes=False, include_report=False):
+    """Read a bounded Wavefront OBJ and optionally report ignored features."""
     path = Path(path)
     if path.stat().st_size > MAX_OBJ_FILE_BYTES:
         raise ValueError(f"OBJ exceeds the {MAX_OBJ_FILE_BYTES // (1024 * 1024)} MiB file-size limit")
     vertices, texcoords, source_normals, raw_faces = [], [], [], []
+    compatibility_warnings = set()
     total_face_corners = 0
     bytes_read = 0
+
+    def finish(mesh):
+        return (mesh, tuple(sorted(compatibility_warnings))) if include_report else mesh
 
     def resolve(raw, values, label):
         if not raw:
@@ -79,6 +83,8 @@ def read_obj(path, include_attributes=False):
             if not fields:
                 continue
             if fields[0] == "v":
+                if len(fields) >= 7:
+                    compatibility_warnings.add("OBJ vertex colors are ignored")
                 if len(vertices) >= MAX_OBJ_RECORDS:
                     raise ValueError(f"OBJ exceeds the {MAX_OBJ_RECORDS:,} vertex-record limit")
                 xyz = tuple(float(value) for value in fields[1:4])
@@ -119,10 +125,22 @@ def read_obj(path, include_attributes=False):
                 if len(face) < 3:
                     raise ValueError("OBJ face must contain at least three vertices")
                 raw_faces.append(tuple(face))
+            elif fields[0] in {"mtllib", "usemtl"}:
+                compatibility_warnings.add(
+                    "OBJ material libraries and assignments are ignored; the preview or replacement uses one existing material")
+            elif fields[0] in {"o", "g"}:
+                compatibility_warnings.add(
+                    "OBJ object and group boundaries are merged into one mesh")
+            elif fields[0] == "s":
+                compatibility_warnings.add(
+                    "OBJ smoothing groups are ignored; missing normals use generated smooth normals")
+            elif fields[0] in {"l", "p", "curv", "curv2", "surf", "parm", "trim", "hole", "scrv", "sp"}:
+                compatibility_warnings.add(
+                    "Non-polygon OBJ geometry records are ignored; only polygon faces are imported")
     if not vertices or not raw_faces:
         raise ValueError("OBJ needs vertices and polygon faces")
     if not include_attributes:
-        return vertices, [tuple(corner[0] for corner in face) for face in raw_faces]
+        return finish((vertices, [tuple(corner[0] for corner in face) for face in raw_faces]))
     # BFRES stores one attribute set per vertex; OBJ permits independent corner attributes.
     split_vertices, split_uvs, split_normals, faces, remap = [], [], [], [], {}
     for face in raw_faces:
@@ -138,7 +156,7 @@ def read_obj(path, include_attributes=False):
                 split_normals.append(source_normals[normal] if normal is not None else None)
             split_face.append(remap[key])
         faces.append(tuple(split_face))
-    return split_vertices, faces, split_uvs, split_normals
+    return finish((split_vertices, faces, split_uvs, split_normals))
 
 
 def obj_geometry_summary(vertices, faces):
@@ -1057,7 +1075,7 @@ class WorldStudio(ttk.Frame):
         path = filedialog.askopenfilename(filetypes=[("Wavefront OBJ", "*.obj")], parent=self)
         if path:
             try:
-                mesh = read_obj(path)
+                mesh, compatibility_warnings = read_obj(path, include_report=True)
                 transform = ObjTransformDialog(self.winfo_toplevel())
                 if transform.result is None:
                     return
@@ -1067,7 +1085,9 @@ class WorldStudio(ttk.Frame):
                 self._record_edit()
                 self.fit()
                 self.status.set(f"OBJ preview imported · {obj_geometry_summary(*mesh)} · "
-                                f"{obj_transform_summary(transform.result)}. BFRES export is not implemented.")
+                                f"{obj_transform_summary(transform.result)}. BFRES export is not implemented."
+                                + (" Compatibility: " + "; ".join(compatibility_warnings) + "."
+                                   if compatibility_warnings else ""))
             except (OSError, ValueError) as error:
                 messagebox.showerror("Cannot import OBJ", str(error), parent=self)
 
@@ -1531,7 +1551,7 @@ class NativeStudio(WorldStudio):
         path = filedialog.askopenfilename(filetypes=[("Wavefront OBJ preview", "*.obj")], parent=self)
         if path:
             try:
-                mesh = read_obj(path)
+                mesh, compatibility_warnings = read_obj(path, include_report=True)
                 transform = ObjTransformDialog(self.winfo_toplevel())
                 if transform.result is None:
                     return
@@ -1544,7 +1564,9 @@ class NativeStudio(WorldStudio):
                 self.refresh()
                 self.fit()
                 self.status.set(f"OBJ preview imported · {obj_geometry_summary(*mesh)} · "
-                                f"{obj_transform_summary(transform.result)}; native mesh replacement is disabled.")
+                                f"{obj_transform_summary(transform.result)}; native mesh replacement is disabled."
+                                + (" Compatibility: " + "; ".join(compatibility_warnings) + "."
+                                   if compatibility_warnings else ""))
             except (OSError, ValueError) as error:
                 messagebox.showerror("Cannot import OBJ", str(error), parent=self)
 
@@ -1590,7 +1612,8 @@ class NativeStudio(WorldStudio):
         path = filedialog.askopenfilename(filetypes=[("Experimental grass mesh OBJ", "*.obj")], parent=self)
         if path:
             try:
-                vertices, faces, uvs, normals = read_obj(path, include_attributes=True)
+                (vertices, faces, uvs, normals), compatibility_warnings = read_obj(
+                    path, include_attributes=True, include_report=True)
                 transform = ObjTransformDialog(self.winfo_toplevel())
                 if transform.result is None:
                     return
@@ -1606,7 +1629,9 @@ class NativeStudio(WorldStudio):
                 self.fit()
                 self.status.set(f"Experimental OBJ candidate · {obj_geometry_summary(vertices, faces)} · "
                                 f"{obj_transform_summary(transform.result)}. Replaces one existing grass mesh; "
-                                "capacity and layout checks run during export.")
+                                "capacity and layout checks run during export."
+                                + (" Compatibility: " + "; ".join(compatibility_warnings) + "."
+                                   if compatibility_warnings else ""))
             except (OSError, ValueError) as error:
                 messagebox.showerror("Cannot use OBJ mesh", str(error), parent=self)
 

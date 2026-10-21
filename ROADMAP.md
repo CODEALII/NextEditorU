@@ -51,6 +51,7 @@ is still needed before baseline/patch route QA.
 - Implemented: import-time conversion applies nonzero per-axis scale, XYZ rotation, and translation; a Z-up-to-Y-up preset uses a -90° X rotation. UVs are preserved, normals use inverse-transpose scaling, mirrored transforms reverse face winding, and the source OBJ remains unchanged.
 - Implemented: baked-light UV transfer uses an exact nearest-XZ spatial tree, so far-offset imported vertices do not scan distance-scaled empty grid rings.
 - Implemented: saved terrain geometry is validated before export, including required fields, topology, and finite supported attributes; malformed projects fail before output creation.
+- Implemented: OBJ imports surface compatibility notes when material libraries/assignments, vertex colors, smoothing groups, object/group boundaries or non-polygon geometry are ignored.
 - Simple planar concave OBJ faces now use ear clipping; malformed, non-planar, duplicate-corner and over-1,024-corner faces are rejected.
 - Compare corrected terrain output against a controlled stock Cemu baseline. Investigate the previous dark patch observation and verify UV, color, culling, and lighting behavior.
 - Add strict import diagnostics, coordinate/scale conversion controls, geometry summaries, and archive reimport validation.

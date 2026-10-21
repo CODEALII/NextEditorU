@@ -8,11 +8,11 @@ from worldstudio.mesh import transform_obj_geometry
 
 
 class ObjAttributeTests(unittest.TestCase):
-    def parse(self, source, include_attributes=True):
+    def parse(self, source, include_attributes=True, include_report=False):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'seam.obj'
             path.write_text(source,encoding='utf-8')
-            return read_obj(path,include_attributes=include_attributes)
+            return read_obj(path,include_attributes=include_attributes,include_report=include_report)
 
     def test_corner_uv_and_normal_seams_split_vertices(self):
         source='''
@@ -127,6 +127,26 @@ v 0 0 1
 f 1 2 3
 ''', include_attributes=False)
         self.assertEqual(obj_geometry_summary(vertices, faces), '3 vertices · 1 polygon face')
+
+    def test_compatibility_report_identifies_ignored_obj_material_and_geometry_data(self):
+        mesh, warnings = self.parse('''
+mtllib island.mtl
+o Island
+usemtl grass
+s off
+v 0 0 0 1 0 0 1
+v 1 0 0
+v 0 0 1
+l 1 2
+f 1 2 3
+''', include_attributes=False, include_report=True)
+        self.assertEqual(mesh[1], [(0, 1, 2)])
+        self.assertEqual(len(warnings), 5)
+        self.assertTrue(any('material libraries' in warning for warning in warnings))
+        self.assertTrue(any('object and group boundaries' in warning for warning in warnings))
+        self.assertTrue(any('smoothing groups' in warning for warning in warnings))
+        self.assertTrue(any('vertex colors' in warning for warning in warnings))
+        self.assertTrue(any('Non-polygon' in warning for warning in warnings))
 
     def test_checked_in_island_obj_uses_the_bounded_attribute_import_path(self):
         source = Path(__file__).resolve().parents[1] / 'examples' / 'island-game.obj'

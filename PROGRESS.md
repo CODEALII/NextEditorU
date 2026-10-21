@@ -705,3 +705,15 @@ camera behavior and a fully playable custom world remain open.
 - A local regression reloads both the saved and backup projects and checks
   that each contains the intended version. This keeps one previous version;
   rotation and recent-project discovery remain open roadmap items.
+
+## 2026-10-21 — Report unsupported OBJ features
+
+- OBJ imports now report when they ignore MTL/material assignments, vertex
+  colors, smoothing groups, object/group boundaries, or non-polygon geometry.
+  The warning appears in editor status after preview import or when preparing
+  the experimental native grass replacement; CLI demo notes include it too.
+- Existing geometry parsing and its default return shape stay compatible. A
+  regression confirms the polygon faces still import while all five warning
+  categories are reported for a mixed-feature fixture.
+- The focused OBJ suite passed (**13 tests**) and `compileall` passed. Full
+  regression verification follows before push.
