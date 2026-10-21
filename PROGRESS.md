@@ -1004,3 +1004,13 @@ camera behavior and a fully playable custom world remain open.
   command reports no errors for W101→W103 reachability. Full suite: **244 tests
   passed in 248.483 seconds**; `compileall` and `git diff --check` passed.
   No runtime route result is inferred.
+
+## 2026-10-21 — Explain base-texture preview fallbacks
+
+- Affected UV shapes now carry the bounded reason their base-color texture
+  could not be previewed, and the 3D inspector shows it as compatibility text.
+  This makes unsupported formats and malformed references actionable while
+  preserving approximate material colors and using safe text-only rendering.
+- Full suite: **245 tests passed in 248.333 seconds**; `compileall` passed and
+  `git diff --check` reported no whitespace errors. This is offline viewer
+  validation only.

@@ -49,9 +49,12 @@ def attach_base_color_textures(model_data, shapes, *, model_name="CS_W1_World",
 
     textures = {}
     material_textures = {}
+    material_warnings = {}
     failed_materials = set()
     decoded_pixels = 0
     for shape in shapes:
+        shape.pop("texture", None)
+        shape.pop("textureWarning", None)
         if shape.get("uvs") is None:
             continue
         material = shape["material"]
@@ -87,12 +90,16 @@ def attach_base_color_textures(model_data, shapes, *, model_name="CS_W1_World",
                     }
                     decoded_pixels += pixels
                 material_textures[material] = texture["name"]
-            except (ValueError, KeyError, TypeError, OverflowError):
+            except (ValueError, KeyError, TypeError, OverflowError) as error:
                 material_textures[material] = None
                 failed_materials.add(material)
+                reason = str(error).strip() or type(error).__name__
+                material_warnings[material] = reason[:240]
         texture_name = material_textures[material]
         if texture_name:
             shape["texture"] = texture_name
+        else:
+            shape["textureWarning"] = material_warnings[material]
     return textures, failed_materials
 
 

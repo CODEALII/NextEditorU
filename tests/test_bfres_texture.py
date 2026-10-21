@@ -130,6 +130,7 @@ class SyntheticTextureReferenceTests(unittest.TestCase):
         self.assertFalse(textures)
         self.assertEqual(failed, {'mtGrass'})
         self.assertNotIn('texture', unsupported)
+        self.assertIn('expected supported base-color format', unsupported['textureWarning'])
 
     def test_texture_catalog_enforces_decoded_pixel_budget(self):
         shape = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}

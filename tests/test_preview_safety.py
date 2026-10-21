@@ -44,6 +44,11 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertNotIn("</script><script>alert(1)", page)
         self.assertIn("<\\/script>", page)
 
+    def test_texture_fallback_reason_is_shown_as_inspector_text(self):
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        self.assertIn("textureWarning:shape.textureWarning||''", page)
+        self.assertIn("row.className='inspector-row texture-warning';row.textContent='Texture fallback: '+mesh.textureWarning", page)
+
     def test_webgl_startup_failures_show_an_obvious_viewer_fallback(self):
         page = build_document({"shapes": [], "nodes": [], "routes": []})
         script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
