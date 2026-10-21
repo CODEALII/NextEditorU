@@ -1,5 +1,16 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Exercise static GLB terrain through archive export
+
+- Added a local-dump end-to-end regression for the GLB path: generate a bounded
+  embedded static mesh, import it through the editor reader, save and reopen a
+  World Studio project, export the SZS, and re-extract the W1 BFRES grass mesh.
+- The test confirms terrain displacement was applied while source vertex count,
+  triangle indices and UV values remain unchanged, and verifies the supplied
+  source archive is byte-identical after the export. This strengthens offline
+  GLB roundtrip evidence; it does not establish in-game terrain appearance or
+  collision.
+
 ## 2026-10-22 — Keep rejected 3D point drags synchronized
 
 - The embedded viewport previews point movement while dragging. If the native

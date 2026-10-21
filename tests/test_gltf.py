@@ -6,9 +6,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from worldstudio.archive import Archive
-from worldstudio.editor import read_import_mesh
+from worldstudio.editor import read_import_mesh, read_obj
 from worldstudio.gltf import parse_glb, read_glb
-from worldstudio.mesh import replace_rigid_mesh
+from worldstudio.mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model, replace_rigid_mesh
+from worldstudio.project import WorldProject
+from worldstudio.__main__ import DEFAULT_SOURCE
 
 
 def _fixture(*, uv_component=5126, node=None, primitive=None):
@@ -64,6 +66,50 @@ def _glb(document, binary):
               struct.pack("<II", len(binary_chunk), 0x004E4942) + binary_chunk)
     total = 12 + len(chunks)
     return struct.pack("<III", 0x46546C67, 2, total) + chunks
+
+
+def _geometry_glb(vertices, faces, uvs, normals):
+    """Pack validated terrain arrays as one embedded static GLB mesh."""
+    values = []
+    for point in vertices:
+        values.extend(point)
+    positions = struct.pack("<" + "f" * len(values), *values)
+    texcoords = [component for uv in uvs for component in uv]
+    uv_data = struct.pack("<" + "f" * len(texcoords), *texcoords)
+    normal_values = [component for normal in normals for component in normal]
+    normal_data = struct.pack("<" + "f" * len(normal_values), *normal_values)
+    indexes = [index for face in faces for index in face]
+    index_data = struct.pack("<" + "H" * len(indexes), *indexes)
+    chunks = []
+    offsets = []
+    for payload in (positions, uv_data, normal_data, index_data):
+        while sum(map(len, chunks)) % 4:
+            chunks.append(b"\0")
+        offsets.append(sum(map(len, chunks)))
+        chunks.append(payload)
+    binary = b"".join(chunks)
+    document = {
+        "asset": {"version": "2.0"},
+        "buffers": [{"byteLength": len(binary)}],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": offsets[0], "byteLength": len(positions)},
+            {"buffer": 0, "byteOffset": offsets[1], "byteLength": len(uv_data)},
+            {"buffer": 0, "byteOffset": offsets[2], "byteLength": len(normal_data)},
+            {"buffer": 0, "byteOffset": offsets[3], "byteLength": len(index_data)},
+        ],
+        "accessors": [
+            {"bufferView": 0, "componentType": 5126, "count": len(vertices), "type": "VEC3"},
+            {"bufferView": 1, "componentType": 5126, "count": len(uvs), "type": "VEC2"},
+            {"bufferView": 2, "componentType": 5126, "count": len(normals), "type": "VEC3"},
+            {"bufferView": 3, "componentType": 5123, "count": len(indexes), "type": "SCALAR"},
+        ],
+        "meshes": [{"primitives": [{
+            "attributes": {"POSITION": 0, "TEXCOORD_0": 1, "NORMAL": 2},
+            "indices": 3,
+        }]}],
+        "nodes": [{"mesh": 0}], "scenes": [{"nodes": [0]}], "scene": 0,
+    }
+    return _glb(document, binary)
 
 
 class GlbReaderTests(unittest.TestCase):
@@ -231,6 +277,63 @@ class GlbReaderTests(unittest.TestCase):
             model, vertices, faces, uvs=uvs, imported_normals=normals)
         self.assertEqual(len(output), len(model))
         self.assertEqual((report["vertices"], report["triangles"]), (3, 1))
+
+    @unittest.skipUnless(DEFAULT_SOURCE.is_file(), "Local user-owned W1 dump unavailable")
+    def test_glb_project_export_roundtrip_preserves_native_grass_topology(self):
+        root = Path(__file__).resolve().parents[1]
+        obj_path = root / "examples" / "island-game.obj"
+        vertices, faces, _, _ = read_obj(obj_path, include_attributes=True)
+        normalized_vertices, indices, normals, _ = _geometry(vertices, faces)
+        normalized_faces = [tuple(indices[index:index + 3])
+                            for index in range(0, len(indices), 3)]
+        low_x, high_x = min(point[0] for point in normalized_vertices), max(
+            point[0] for point in normalized_vertices)
+        low_z, high_z = min(point[2] for point in normalized_vertices), max(
+            point[2] for point in normalized_vertices)
+        uvs = [((point[0] - low_x) / max(1., high_x - low_x),
+                (point[2] - low_z) / max(1., high_z - low_z))
+               for point in normalized_vertices]
+        project = WorldProject.open(DEFAULT_SOURCE)
+        original_archive = DEFAULT_SOURCE.read_bytes()
+
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            glb_path = folder / "island.glb"
+            glb_path.write_bytes(_geometry_glb(
+                normalized_vertices, normalized_faces, uvs, normals))
+            imported, warnings = read_import_mesh(
+                glb_path, include_attributes=True, include_report=True)
+            self.assertEqual(warnings, ())
+            project.geometry = {
+                "vertices": imported[0], "faces": imported[1],
+                "uvs": imported[2], "normals": imported[3],
+            }
+            project.terrain = str(glb_path)
+            project_path = folder / "terrain.nws.json"
+            output_path = folder / "CS_W1-glb-terrain.szs"
+            project.save(project_path)
+            reopened_project = WorldProject.load(project_path)
+            manifest = reopened_project.export(output_path)
+
+            self.assertTrue(manifest["terrain_exported"])
+            self.assertTrue(manifest["geometry"]["topology_preserved"])
+            self.assertTrue(manifest["geometry"]["indices_preserved"])
+            self.assertGreater(manifest["geometry"]["vertices_displaced"], 0)
+            archive = Archive(output_path.read_bytes())
+            model = archive.read(project.model_name)
+            grass = next(shape for shape in extract_rigid_model(model)
+                         if shape["name"] == DEFAULT_SHAPE)
+            source_model = Archive(original_archive).read(project.model_name)
+            source_grass = next(shape for shape in extract_rigid_model(source_model)
+                                if shape["name"] == DEFAULT_SHAPE)
+            self.assertEqual(grass["indices"], source_grass["indices"])
+            self.assertEqual(grass["uvs"], source_grass["uvs"])
+            self.assertEqual(len(grass["positions"]), len(source_grass["positions"]))
+            self.assertTrue(any(abs(actual[1] - before[1]) > 1e-5
+                                for actual, before in zip(grass["positions"],
+                                                          source_grass["positions"])))
+
+        self.assertEqual(DEFAULT_SOURCE.read_bytes(), original_archive)
 
 
 if __name__ == "__main__":

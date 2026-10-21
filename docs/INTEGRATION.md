@@ -1,5 +1,16 @@
 # Runtime evidence and test protocol
 
+## Static GLB terrain archive roundtrip — 2026-10-22
+
+- Added a local-W1 integration test for importing an embedded GLB mesh into a
+  project, saving/reopening the project, exporting an SZS and re-extracting its
+  BFRES grass shape. The export displaces terrain vertices while keeping source
+  vertex count, triangle indices and UVs intact; the original SZS remains
+  byte-identical.
+- Regression: `tests.test_gltf.GlbReaderTests.test_glb_project_export_roundtrip_preserves_native_grass_topology`.
+  This proves the offline data path only. The resulting terrain appearance and
+  collision still require a controlled Cemu run.
+
 ## Rejected embedded 3D drag refresh — 2026-10-22
 
 - WebGL previews supported point movement during a drag. When native world/local
