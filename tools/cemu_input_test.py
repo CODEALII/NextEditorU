@@ -22,6 +22,9 @@ import sys
 import time
 
 
+if __package__ in (None, ''):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 if sys.platform != 'win32':
     raise SystemExit('Cemu input testing is supported only on Windows.')
 
@@ -375,6 +378,16 @@ def record_final_artifacts(report, profile):
     report['game_log_sha256'] = sha256(log_path) if log_path.is_file() else None
 
 
+def record_prelaunch_failure(report, args, profile, message):
+    report['prelaunch_error'] = message
+    report['finished_at'] = timestamp()
+    record_final_artifacts(report, profile)
+    args.screenshot_dir.mkdir(parents=True, exist_ok=True)
+    result_path = args.screenshot_dir / f'{args.case}-result.json'
+    result_path.write_text(json.dumps(report, indent=2), encoding='utf-8')
+    print(f'Result: {result_path.resolve()}')
+
+
 def run(args):
     profile = args.profile.resolve(strict=True)
     rpx = args.rpx.resolve(strict=True)
@@ -418,8 +431,27 @@ def run(args):
         report['pack_matches_profile_copy'] = (
             sha256(pack) == sha256(profile_pack) if profile_pack.is_file() else None)
         if not report['pack_matches_profile_copy']:
-            raise ValueError(
-                f"The requested pack archive does not match {profile_pack}; refusing to launch the wrong build.")
+            message = (f"The requested pack archive does not match {profile_pack}; "
+                       "refusing to launch the wrong build.")
+            record_prelaunch_failure(report, args, profile, message)
+            raise ValueError(message)
+    if args.graph_profile is not None:
+        try:
+            from tools.cemu_preflight import inspect_profile
+            report['profile_preflight'] = inspect_profile(
+                profile, expected_pack=args.pack_name, archive=pack,
+                require_keyboard=True, require_gamepad_a=args.enter_level,
+                compare_save_to=args.compare_save_to,
+                graph_profile=args.graph_profile)
+        except (OSError, ValueError) as error:
+            report['profile_preflight_error'] = str(error)
+            record_prelaunch_failure(report, args, profile, str(error))
+            raise ValueError(f'Graph-profile preflight failed: {error}') from error
+        if not report['profile_preflight']['ready']:
+            issues = report['profile_preflight']['issues']
+            message = 'Cemu preflight blocked launch: ' + '; '.join(issues)
+            record_prelaunch_failure(report, args, profile, message)
+            raise RuntimeError(message)
     if args.attach:
         if len(current) != 1:
             raise RuntimeError(f'Attach mode requires exactly one active Cemu process; found {current}.')
@@ -668,6 +700,10 @@ def main(argv=None):
     parser.add_argument('--focus-timeout', type=float, default=30.)
     parser.add_argument('--pack-file', type=Path,
                         help='Exact W1 archive to hash and compare to this profile copy')
+    parser.add_argument('--graph-profile', type=Path,
+                        help='Require this passing static graph profile in the packed export manifest before launching')
+    parser.add_argument('--compare-save-to', type=Path, metavar='PROFILE',
+                        help='Require identical NSMBU saves before launch')
     parser.add_argument('--pack-name', default='WorldStudioChain',
                         help='Graphic-pack folder name inside the isolated profile')
     parser.add_argument('--enter-level', action='store_true',
@@ -703,6 +739,8 @@ def main(argv=None):
         parser.error('--start-label cannot be empty')
     if not args.pack_name or any(character not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_' for character in args.pack_name):
         parser.error('--pack-name may contain only ASCII letters, digits, dash and underscore')
+    if args.graph_profile and not args.pack_file:
+        parser.error('--graph-profile requires --pack-file')
     try:
         run(args)
     except (OSError, ValueError, RuntimeError) as error:

@@ -25,6 +25,8 @@ The suite uses synthetic fixtures and, when present, the user-supplied files und
 
 `python tools/cemu_preflight.py <isolated-profile> --expect-pack WorldStudioChain --graph-profile profiles/w1-core-progression.json` can optionally require that the packaged `CS_W1.szs` sidecar manifest records the same passing static graph profile and archive hash. Preflight still does not launch Cemu or verify movement.
 
+`tools/cemu_input_test.py` accepts the same `--graph-profile` and `--compare-save-to` options. With `--graph-profile`, `--pack-file` is required; a mismatch writes a prelaunch result and does not start Cemu.
+
 Each export manifest keeps the backward-compatible `changed_entries` list and adds an `entry_changes` record for every changed archive member, including source/output SHA-256 hashes, byte sizes and size delta. Profile-gated exports also record the normalized graph profile, its SHA-256, and a passed static-check marker; the archive-level hashes and `game_tested: false` remain explicit. The local export regression recomputes these values from the source and reopened output archive.
 
 After exporting a saved project, run `python -m worldstudio verify-export <project.json> <export.szs>`. The verifier checks the output hash and path in the manifest, reimports the archive, compares its complete member list and contents with a fresh export from the project, and checks manifest fields and camera companion outputs. For a profile-gated export, pass the same profile with `--profile`; the verifier recalculates and compares that profile result. A success means the local package roundtrips consistently; it does not test Cemu or game behavior.

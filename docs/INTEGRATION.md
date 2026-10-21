@@ -531,7 +531,7 @@ the user, so no new emulator instance was started for this change.
   ```powershell
   $rpx = '.\NSMBU Modding Project\code\red-pro2.rpx'
   python tools/cemu_input_test.py --profile build/cemu-clean-gamepad-input-v3-20261021 --rpx $rpx --case clean-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --pack-name WorldStudioChain
-  python tools/cemu_input_test.py --profile build/cemu-chain-profile-gated-20261022 --rpx $rpx --case chain-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --pack-name WorldStudioChain --pack-file build/profile-gated-chain-patch/content/Common/course_select/CS_W1.szs
+  python tools/cemu_input_test.py --profile build/cemu-chain-profile-gated-20261022 --rpx $rpx --case chain-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --pack-name WorldStudioChain --pack-file build/profile-gated-chain-patch/content/Common/course_select/CS_W1.szs --graph-profile profiles/w1-core-progression.json --compare-save-to build/cemu-clean-gamepad-input-v3-20261021
   ```
 
   Each run refuses another active Cemu process, waits for the exact game window
@@ -539,7 +539,9 @@ the user, so no new emulator instance was started for this change.
   the operator can confirm the visible node. If `A` does not reach the same
   expected W102 node in both runs, stop and record that difference instead of
   interpreting the following `D` result as a W102-to-W103 traversal. The
-  command sequence is a ready protocol, not a new gameplay result.
+  runner independently enforces the profile/manifest/archive/save preflight
+  before launching Cemu and saves any prelaunch rejection as a result JSON.
+  The command sequence is a ready protocol, not a new gameplay result.
 
 ## Profile-provenance Cemu package — 2026-10-22
 

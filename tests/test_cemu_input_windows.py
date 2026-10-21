@@ -1,5 +1,6 @@
 import sys
 import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -83,6 +84,45 @@ class CemuWindowSelectionTests(unittest.TestCase):
             self.assertEqual(report["game_log_sha256"], hashlib.sha256(b"boot log").hexdigest())
             self.assertEqual(report["final_save_hashes"][
                 "common/rp_savedata.dat"]["sha256"], hashlib.sha256(b"save").hexdigest())
+
+    def test_failed_graph_profile_preflight_records_result_without_launching_cemu(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = root / "profile"
+            profile.mkdir()
+            (profile / "Cemu.exe").write_bytes(b"test-executable")
+            packaged = (profile / "graphicPacks/WorldStudioChain/content/Common/course_select/CS_W1.szs")
+            packaged.parent.mkdir(parents=True)
+            packaged.write_bytes(b"profiled-world")
+            pack = root / "expected-CS_W1.szs"
+            pack.write_bytes(b"profiled-world")
+            rpx = root / "red-pro2.rpx"
+            rpx.write_bytes(b"test-rpx")
+            graph_profile = root / "profile.json"
+            graph_profile.write_text("{}", encoding="utf-8")
+            screenshot_dir = root / "evidence"
+            args = SimpleNamespace(
+                profile=profile, rpx=rpx, key="d", keys=None,
+                screenshot_dir=screenshot_dir, pack_file=pack,
+                pack_name="WorldStudioChain", graph_profile=graph_profile,
+                compare_save_to=None, enter_level=False, attach=False,
+                case="blocked-profile", sequence=["d"], start_label="Tower",
+                pause_after_each_step=False, hold_ms=2000,
+                navigation_key=None, navigation_hold_ms=700,
+            )
+            with patch.object(self.cemu_input_test, "active_cemu_pids", return_value=[]), \
+                    patch("tools.cemu_preflight.inspect_profile", return_value={
+                        "ready": False, "issues": ["manifest does not match profile"]
+                    }), \
+                    patch.object(self.cemu_input_test.subprocess, "Popen") as launch:
+                with self.assertRaisesRegex(RuntimeError, "Cemu preflight blocked launch"):
+                    self.cemu_input_test.run(args)
+
+            launch.assert_not_called()
+            result = json.loads((screenshot_dir / "blocked-profile-result.json").read_text(
+                encoding="utf-8"))
+            self.assertIn("manifest does not match profile", result["prelaunch_error"])
+            self.assertFalse(result["profile_preflight"]["ready"])
 
     def test_confirmation_returns_after_enter_while_launched_cemu_is_alive(self):
         stdin = SimpleNamespace(isatty=lambda: True)

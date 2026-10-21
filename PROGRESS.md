@@ -12,6 +12,10 @@
   passes. Prepared a fresh isolated Cemu profile with the same controller
   mapping and byte-identical saves; preflight returns `ready:true`. Cemu was
   not launched, so this confirms setup only.
+- The process-bound movement runner can now require the same graph profile,
+  packaged archive hash, keyboard mapping, and optional matching save snapshot
+  before process creation. A failing check writes a prelaunch result record and
+  refuses to launch; 27 Cemu-runner/preflight tests pass.
 
 ## 2026-10-22 — Gate CLI export with an explicit graph profile
 
