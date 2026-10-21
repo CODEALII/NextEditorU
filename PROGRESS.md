@@ -1078,3 +1078,26 @@ camera behavior and a fully playable custom world remain open.
   performed.
 - Focused GLB tests passed: **14 tests**; the full suite passed: **260 tests in
   248.027 seconds**. `compileall` and `git diff --check` passed.
+
+## 2026-10-21 — Tighten path-reference and main-grass regressions
+
+- Changed local single-destination edits now compare the paired BFRES path IDs
+  with the destination when those IDs form a simple linear chain. The checker
+  catches stale and out-of-order chains, while skipping the branched W104/W105
+  stock lists rather than treating them as a linear route. A W1 regression and
+  synthetic cases cover matching, stale, reversed and branched records.
+- Strengthened the local main-grass shader-interface test to pin its full
+  stored material options, sampler-symbol map, vertex-input bindings/formats/
+  offsets, candidate macros, `Grass_alb` metadata and identity `texmtx1`. These
+  remain resource/interface facts; runtime shader selection and evaluation are
+  not established.
+- Rechecked the isolated Cemu baseline. The log confirms the supplied v64 RPX,
+  CrashFix only, separate MLC and no save at boot; the current live screen is
+  still `Press 2!`. The configured profile is Wii U GamePad + Keyboard (Enter
+  for Plus, Z for A, WASD for the left stick), but logs do not record the active
+  profile or input events. No world map, traversal, level start or terrain
+  comparison was observed. The user's earlier “Mario doesn't move” report
+  remains a failed gameplay check pending a controlled test.
+- Full regression suite: **261 tests passed in 252.313 seconds**. Focused graph,
+  shader, and local resource checks also passed. Runtime game behavior remains
+  unverified.

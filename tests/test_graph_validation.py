@@ -85,6 +85,50 @@ class NativeGraphValidationTests(unittest.TestCase):
 
         self.assertEqual(issues, [])
 
+    def test_changed_destination_rejects_out_of_order_macro_path_chain(self):
+        initial_points = [point(0, "W101", "W102"),
+                          point(1, "W102"), point(2, "W103")]
+        points = [row[:] for row in initial_points]
+        points[0][3] = "W103"
+        points[0][4] = "RK001W103,RW101K001"
+        routes = [["RW101K001", "road", ""], ["RK001W103", "road", ""]]
+        references = {"W101", "W102", "W103", "K001",
+                      "RW101K001", "RK001W103"}
+
+        issues = validate_native_world(
+            points,
+            routes,
+            known_references=references,
+            initial_points=initial_points,
+            initial_routes=[],
+            world_prefix="W1",
+        )
+
+        self.assertIn("W101: BFRES macro-path chain does not reach W103", issues)
+
+    def test_changed_destination_skips_ambiguous_stock_branch_path_list(self):
+        initial_points = [point(0, "W104", "W1K3",
+                                "RW104W1K3,RW104F008,RF008W1C0"),
+                          point(1, "W1K3"), point(2, "W1C0")]
+        points = [row[:] for row in initial_points]
+        points[0][3] = "W1C0"
+        routes = [["RW104W1K3", "road", ""],
+                  ["RW104F008", "road", ""],
+                  ["RF008W1C0", "road", ""]]
+        references = {"W104", "W1K3", "W1C0", "F008",
+                      "RW104W1K3", "RW104F008", "RF008W1C0"}
+
+        issues = validate_native_world(
+            points,
+            routes,
+            known_references=references,
+            initial_points=initial_points,
+            initial_routes=routes,
+            world_prefix="W1",
+        )
+
+        self.assertFalse(any("BFRES macro-path chain" in issue for issue in issues))
+
     def test_changed_same_world_destination_rejects_missing_or_disconnected_route(self):
         initial_points = [point(0, "W101"), point(1, "W102")]
         points = [row[:] for row in initial_points]

@@ -109,34 +109,46 @@ class BfresShaderMetadataTests(unittest.TestCase):
 
         self.assertEqual(metadata['programName'], 'nw4f_cs_shader')
         self.assertEqual(metadata['vertexSkinCount'], 0)
+        self.assertEqual(metadata['shaderOptions'], {
+            'var_ao_type': '2', 'var_indirect_light_type': '1',
+            'var_normal_map': '0', 'var_spec_mask': '1',
+            'var_color_anim': '0', 'var_shadow': '1',
+            'var_edge_mask': '0', 'var_proj_fog': '0',
+        })
         selection = metadata['variationSelection']
         self.assertEqual((selection['candidate_index'], selection['candidate_count']), (86, 288))
         self.assertEqual(selection['unresolved_macros'], ['NUM_SKINNING_VTX'])
         self.assertEqual(selection['selection_model'],
                          'AGL material-option lookup; shape variation unresolved')
         macro_values = {row['name']: row['value'] for row in selection['macro_values']}
-        self.assertEqual({name: macro_values[name] for name in (
-            'AO_TYPE', 'INDIRECT_LIGHT_TYPE', 'ENABLE_NORMAL_MAP',
-            'ENABLE_SPEC_MASK', 'ENABLE_SHADOW',
-        )}, {
-            'AO_TYPE': '2', 'INDIRECT_LIGHT_TYPE': '1', 'ENABLE_NORMAL_MAP': '0',
-            'ENABLE_SPEC_MASK': '1', 'ENABLE_SHADOW': '1',
+        self.assertEqual(macro_values, {
+            'NUM_SKINNING_VTX': '-1', 'AO_TYPE': '2',
+            'INDIRECT_LIGHT_TYPE': '1', 'ENABLE_NORMAL_MAP': '0',
+            'ENABLE_SPEC_MASK': '1', 'ENABLE_ADD_COLOR': '0',
+            'ENABLE_SHADOW': '1', 'ENABLE_PROJ_FOG': '0',
         })
+        self.assertEqual(selection['ignored_options'], ['var_edge_mask'])
 
-        self.assertTrue({'_a0', '_x0', '_x1', '_b0', '_b1', '_s0'}
-                        .issubset(metadata['samplerSymbols']))
+        self.assertEqual(metadata['samplerSymbols'], {
+            '_a0': 'cTexMap0', '_x0': 'cLightMap0', '_x1': 'cLightMap1',
+            '_b0': 'cBakeMap0', '_b1': 'cBakeMap1', '_s0': 'cSpecMaskMap0',
+        })
         self.assertIn('texmtx1', metadata['uniformNames'])
-        self.assertEqual(metadata['attributeBindings']['_u0'], {
-            'shader_name': 'aTexCoord0', 'source_attribute': '_u0',
-            'present': True, 'format': 0x80d, 'offset': 16,
-        })
-        self.assertEqual(metadata['attributeBindings']['_u1'], {
-            'shader_name': 'aTexCoordNormal0', 'source_attribute': '_u0',
-            'present': True, 'format': 0x80d, 'offset': 16,
-        })
-        self.assertEqual(metadata['attributeBindings']['_u3'], {
-            'shader_name': 'aTexCoordBake0', 'source_attribute': '_u1',
-            'present': True, 'format': 0x7, 'offset': 32,
+        self.assertEqual(metadata['attributeBindings'], {
+            '_p0': {'shader_name': 'aPosition', 'source_attribute': '_p0',
+                    'present': True, 'format': 0x811, 'offset': 0},
+            '_n0': {'shader_name': 'aNormal', 'source_attribute': '_n0',
+                    'present': True, 'format': 0x20b, 'offset': 24},
+            '_u0': {'shader_name': 'aTexCoord0', 'source_attribute': '_u0',
+                    'present': True, 'format': 0x80d, 'offset': 16},
+            '_u2': {'shader_name': 'aTexCoordSpecMask0', 'source_attribute': '_u0',
+                    'present': True, 'format': 0x80d, 'offset': 16},
+            '_u1': {'shader_name': 'aTexCoordNormal0', 'source_attribute': '_u0',
+                    'present': True, 'format': 0x80d, 'offset': 16},
+            '_u3': {'shader_name': 'aTexCoordBake0', 'source_attribute': '_u1',
+                    'present': True, 'format': 0x7, 'offset': 32},
+            '_c0': {'shader_name': 'aColor0', 'source_attribute': '_c0',
+                    'present': True, 'format': 0xa, 'offset': 28},
         })
 
         texture = extract_base_color_texture(model, 'CS_W1_World', 'mtGrass')

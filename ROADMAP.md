@@ -4,15 +4,19 @@ World Studio is an offline research prototype. Items below describe work still n
 
 ## Highest priority: verify route movement
 
-The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still unverified. A config audit found that the folder previously named `cemu-island-baseline` enables WorldStudioChain, so its movement result is not a clean baseline. A later live inspection of that patched profile confirmed W/A/S/D on the left stick and arrows on the D-pad; two short D taps changed Mario's facing but did not advance him to another node. That is not a sustained-input test, and the loaded archive hash matches `build/chain-quoted`, not the direct-route variant. The separate CrashFix-only profile has now loaded the supplied RPX in its own MLC, and its log confirms no World Studio Chain pack. First boot created a fresh save and stopped at the SpotPass information screen, so stock-map input mapping and movement are still pending. Then verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
+The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still unverified. A config audit found that the folder previously named `cemu-island-baseline` enables WorldStudioChain, so its movement result is not a clean baseline. A later live inspection of that patched profile confirmed W/A/S/D on the left stick and arrows on the D-pad; two short D taps changed Mario's facing but did not advance him to another node. That is not a sustained-input test, and the loaded archive hash matches `build/chain-quoted`, not the direct-route variant. The separate CrashFix-only profile has loaded the supplied RPX in its own MLC, with no World Studio Chain pack. SpotPass was declined and a fresh isolated save directory now exists. The current live baseline window is at `Press 2!`; its configured controller is Wii U GamePad + Keyboard, but neither the log nor current evidence establishes which input the title prompt expects. Establish a supported start input, then verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
 
 The isolated `cemu-island-mainlight` process has a log confirming both the
 World Studio Chain and crash-fix packs activated and reached the title screen.
 The earlier window called `cemu-island-baseline` also had the chain pack
 enabled, so its no-movement result cannot establish stock baseline behavior.
 The later `cemu-clean-baseline` launch loaded the supplied RPX and activated
-CrashFix only. Its first-run SpotPass notice still needs a human choice before
-the game reaches the map and keyboard-to-left-stick input can be checked.
+CrashFix only. SpotPass was declined, but the title still displays `Press 2!`.
+Its GamePad + Keyboard bindings include Enter for Plus, Z for A and WASD for
+the left stick. Enter and Z have not advanced the title to the map; an earlier
+X tap only led to a title/demo sequence. No controller-profile activation or
+input events appear in the log. Resolve the start prompt before drawing any
+conclusion about map movement.
 
 ## Rendering fidelity
 
@@ -67,7 +71,7 @@ the game reaches the map and keyboard-to-left-stick input can be checked.
 
 ## Topology, events, and camera
 
-- Implemented: project, editor, and export validation require a directed segment chain for newly added same-world destinations. Unambiguous changed local destinations are also checked against their paired BFRES macro-path references. Route edits recheck baseline-connected destinations and block an export if an edit disconnects one; ambiguous legacy rows, pre-existing gaps and cross-world links are preserved.
+- Implemented: project, editor, and export validation require a directed segment chain for newly added same-world destinations. Changed local destinations are also checked against paired BFRES macro-path references when the listed bones form one unambiguous linear chain. Branched legacy lists, pre-existing gaps and cross-world links are preserved. Route edits recheck baseline-connected destinations and block an export if an edit disconnects one.
 - Implemented: a route segment may reference endpoints in another world without requiring those bones in the current BFRES. Local endpoints are still validated, and cross-world segments cannot satisfy local reachability checks.
 - Extend graph validation only as each native reference is identified: level destinations, event dependencies, and progression conditions.
 - Support route creation and node placement after safe bone naming, point indexes, and engine/script references are understood. Preserve unknown data and block unresolved exports.

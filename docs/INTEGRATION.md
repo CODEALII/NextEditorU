@@ -11,11 +11,22 @@
   `settings.xml`; their logs confirm both packs. Their successful World 1 map
   loads are patched-build observations, not a clean stock baseline. Earlier
   notes calling those runs baseline are withdrawn.
-- A new `build/cemu-clean-baseline` folder is prepared from the same local
-  Cemu copy with CrashFix only, a separate MLC, and no copied user saves. It
-  was launched once and showed the empty Cemu library; no RPX was loaded. UI
-  state capture then failed with `foreground window did not report a process id`,
-  so the input mapping and stock movement remain unverified. Recreate it with:
+- A new `build/cemu-clean-baseline` folder uses a separate MLC and CrashFix
+  only. Its current log confirms `red-pro2.rpx`, v64, module checksum
+  `0x6caea914`, no World Studio Chain pack, and no save present at boot. The
+  live Cemu window now reaches the title screen, which currently shows
+  `Press 2!`; the SpotPass offer was declined. A fresh isolated save directory
+  now exists. No map or movement test has been reached.
+
+  The Cemu input screen reports Wii U GamePad + Keyboard. Its configured keys
+  are Z=A, X=B, C=X, V=Y, Enter=Plus, arrows=D-pad and WASD=left stick. The log
+  does not record which controller profile was active or any input events. A
+  title prompt reading `Press 2!` has not been matched to this GamePad profile;
+  Enter and Z have not advanced the title to the map, and an earlier X tap led
+  only to a title/demo sequence. If the prompt expects a Wii Remote's `2`
+  button, this profile has no such binding, but that interpretation is not
+  confirmed. Do not treat the title prompt as a movement test. Recreate the
+  isolated baseline only if its files are missing:
 
   ```powershell
   python tools/prepare_cemu.py --cemu build/cemu-island-baseline --baseline --out build/cemu-clean-baseline
@@ -47,12 +58,11 @@
   controller/input state, map state, or the patched route. No traversal pass is
   claimed; reproduce with the active input profile and record the exact start
   node and attempted direction before changing route data.
-- Read-only input-profile check found two different controller APIs: the
-  generated isolated profile is GamePad + Keyboard, while the separate user
-  profile is GamePad + DirectInput / Wireless Controller. The old isolated
-  profile maps arrows to D-pad and writes WASD to stick mapping IDs, but its
-  title does not prove which stick the installed Cemu 1.26 UI assigned them.
-  Verify the displayed left-stick binding before movement testing.
+- Read-only inspection found two controller configurations: the generated
+  isolated profile is GamePad + Keyboard, while the separate user profile is
+  GamePad + DirectInput / Wireless Controller. The isolated XML, text profile
+  and current input UI agree on WASD for the left stick and arrows for D-pad.
+  The log does not prove which profile is active at the title screen.
 - Offline validation of the exact mainlight pack archive found no broken graph
   references. W102 points to W103 through `RW102W1T0` and `RW1T0W103`, and both
   path bones are present. This proves the declared resource references exist,
@@ -68,11 +78,11 @@
   Use sends taps rather than a sustained key hold, so this cannot distinguish a
   route failure from a too-short input and does not verify the reported
   W102-to-W103 traversal.
-- The active test archive hash is `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`,
+- The active patched test archive hash is
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`,
   matching `build/chain-quoted`; it is not `build/direct-route-v2`. The exact
-  direct-route variant therefore remains untested in this live session. The
-  clean CrashFix-only folder still has no RPX loaded and is not the window just
-  inspected.
+  direct-route variant therefore remains untested. The current live window is
+  the separate CrashFix-only baseline, currently at `Press 2!`, not the map.
 
 Earlier attempts displayed black after initial dialogs. They were inconclusive:
 input setup, UI navigation and CSV quoting changed before the successful patched
@@ -95,11 +105,13 @@ No crash stack or failing game function was identified.
 
 ## Still required before declaring the prototype playable
 
-1. Launch `build/cemu-clean-baseline` with the supplied RPX. In Input Settings,
-   confirm that the keyboard profile is active and W/A/S/D address the left
-   stick; remap it in that isolated profile if they do not. Hold D at W101 and
-   confirm Mario moves. Then test the patched archive with the same controller
-   profile and input. Record the exact window, profile, start, and destination.
+1. First establish a supported start input for the clean baseline's visible
+   `Press 2!` prompt. Confirm the active input profile and whether the game
+   expects a GamePad or a Wii Remote button; the current GamePad profile does
+   not expose a separate Wii Remote `2` binding. Reach the map, then confirm
+   W/A/S/D address the left stick and hold D at W101 to confirm movement. Test
+   the patched archive with the same controller profile and input. Record the
+   exact window, profile, start, and destination.
    A valid baseline movement followed by patched immobility isolates a
    route/patch issue; failure in both leaves input unresolved.
 2. Confirm the displayed destination is Acorn Plains 3 and launch that level.

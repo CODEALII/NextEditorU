@@ -67,13 +67,50 @@ def _reachable(adjacency, start, target):
 
 
 def _macro_path_reaches(path_names, start, target):
-    """Check whether listed BFRES macro-path bones connect one local pair."""
-    adjacency = {}
+    """Check a simple ordered macro chain, skipping ambiguous path lists."""
+    segments = []
     for name in path_names:
         if not _ROUTE_ID.fullmatch(name):
             return None
-        adjacency.setdefault(name[1:5], set()).add(name[5:9])
-    return _reachable(adjacency, start, target)
+        segments.append((name[1:5], name[5:9]))
+
+    current = start
+    ordered = True
+    for segment_start, segment_end in segments:
+        if segment_start != current:
+            ordered = False
+            break
+        current = segment_end
+    if ordered:
+        return current == target
+
+    # Some stock records carry multiple branches in one path field. Only call
+    # an ordering mismatch when the IDs still describe one unambiguous chain.
+    outgoing = {}
+    incoming = {}
+    for segment_start, segment_end in segments:
+        outgoing.setdefault(segment_start, set()).add(segment_end)
+        incoming.setdefault(segment_end, set()).add(segment_start)
+    if any(len(ends) > 1 for ends in outgoing.values()) or any(
+            len(starts) > 1 for starts in incoming.values()):
+        return None
+
+    current = start
+    used = set()
+    while current in outgoing:
+        next_nodes = outgoing[current]
+        if len(next_nodes) != 1:
+            return None
+        next_node = next(iter(next_nodes))
+        edge = (current, next_node)
+        if edge in used:
+            return None
+        used.add(edge)
+        current = next_node
+    if len(used) != len(segments):
+        return None
+    # The segments form a valid chain, but their stored sequence is wrong.
+    return False
 
 
 def _known_local_inventory(point_rows, route_rows, known_references, world_prefix):
@@ -244,7 +281,8 @@ def validate_native_world(
                             issues.append(f"{name}: missing BFRES macro-path chain to {destination}")
                         elif all(path in references and _ROUTE_ID.fullmatch(path)
                                  for path in path_names):
-                            if not _macro_path_reaches(path_names, name, destination):
+                            reaches = _macro_path_reaches(path_names, name, destination)
+                            if reaches is False:
                                 issues.append(f"{name}: BFRES macro-path chain does not reach {destination}")
         if references is not None:
             for column in (4, 7):
