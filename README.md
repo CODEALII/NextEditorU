@@ -15,7 +15,7 @@ Progress details and dated findings: [PROGRESS.md](PROGRESS.md) · [Runtime test
 - Inspect supported BFRES skeletons and apply bounded bone-transform changes.
 - Export an experimental three-node progression patch using existing route data.
 - Import a bounded rigid OBJ mesh into a known grass shape while retaining its material and layout.
-- Open an offline WebGL viewer for 42 supported static shapes from the local World 1 BFRES (70,193 vertices and 106,736 triangles), with route overlays, per-shape visibility controls, selectable shape rows and a geometry/material/texture inspector, adjustable preview-light direction/intensity, deduplicated wireframe, and sampled vertex-normal views.
+- Open an offline WebGL viewer for 42 supported static shapes from the local World 1 BFRES (70,193 vertices and 106,736 triangles), with route overlays, per-shape visibility controls, selectable mesh rows with geometry/material/texture details and focus-to-mesh framing, adjustable preview-light direction/intensity, deduplicated wireframe, and sampled vertex-normal views.
 - Decode shared BC1/BC3 base-color textures for all 36 local W1 meshes with supported UVs, including alpha cutouts. Other texture formats and material effects remain approximations.
 - Inspect BC5 SNORM R/G channels for six shared `_n0` maps across 22 UV meshes; the viewer labels this as a diagnostic channel view, not normal-mapped lighting.
 - Pack scene geometry into compact typed buffers for the viewer; its generated page was about 8.1 MB for the supplied W1 model and decoded textures.

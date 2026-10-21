@@ -132,6 +132,7 @@ class PreviewSafetyTests(unittest.TestCase):
 const registry={shapes:element(),selection:element()};
 const document={getElementById:id=>registry[id],createElement:tag=>element(tag)};
 function element(tag){const e={tagName:tag,children:[],dataset:{},listeners:{},attributes:{},style:{},className:'',textContent:'',hidden:false,append(...items){this.children.push(...items)},appendChild(item){this.children.push(item);return item},replaceChildren(...items){this.children=items},setAttribute(k,v){this.attributes[k]=v},addEventListener(k,fn){this.listeners[k]=fn},classList:{add(name){e.className=[...new Set((e.className+' '+name).trim().split(/\s+/))].join(' ')},remove(name){e.className=e.className.split(/\s+/).filter(x=>x!==name).join(' ')},contains(name){return e.className.split(/\s+/).includes(name)}}};return e}
+let focusedMesh=null;function focusMesh(mesh){focusedMesh=mesh}
 """ + helper + r"""
 const a={name:'Grass <test>',material:'mtGrass',color:[.2,.4,.6],textureName:'Grass_alb',normalTextureName:'Grass_nml',vertexCount:12,triangleCount:8,hasUvs:true,visible:true};
 const b={name:'Rock',material:'mtRock',color:[.3,.3,.3],textureName:'',normalTextureName:'',vertexCount:9,triangleCount:4,hasUvs:false,visible:true};
@@ -139,15 +140,48 @@ addShapeRow(a);addShapeRow(b);a.row.children[2].listeners.click();
 if(!a.row.classList.contains('selected'))throw Error('selected row is not marked');
 const first=registry.selection.children.map(x=>x.textContent).join('\n');
 if(!first.includes('Grass <test>')||!first.includes('12 vertices / 8 triangles')||!first.includes('Grass_alb')||!first.includes('Grass_nml (BC5 diagnostic only)'))throw Error(first);
+registry.selection.children.at(-1).listeners.click();if(focusedMesh!==a)throw Error('focus action is not linked to selection');
 b.row.children[2].listeners.click();
 if(a.row.classList.contains('selected')||!b.row.classList.contains('selected'))throw Error('selection did not move');
 if(!registry.selection.children.map(x=>x.textContent).join('\n').includes('UV coordinates: absent'))throw Error('missing UV status');
 if(a.row.children[2].tagName!=='button'||a.row.children[2].attributes['aria-label']!=='Inspect Grass <test>')throw Error('selection button is not accessible');
+registry.selection.children.at(-1).listeners.click();if(focusedMesh!==b)throw Error('focus action did not follow selection');
 console.log('mesh selection inspector ok');
 """
         result = subprocess.run([node, "-e", probe], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "mesh selection inspector ok")
+
+    def test_mesh_bounds_are_centered_and_have_a_safe_radius(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise viewer mesh bounds")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        start = page.index("function shapeBounds(")
+        end = page.index("\nconst textureCache=", start)
+        helper = page[start:end]
+        probe = helper + "\nconsole.log(JSON.stringify([shapeBounds([0,2,4,4,6,8]),shapeBounds([])]))"
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        bounds, empty = json.loads(result.stdout)
+        self.assertEqual(bounds["center"], [2, 4, 6])
+        self.assertAlmostEqual(bounds["radius"], math.sqrt(12))
+        self.assertEqual(empty, {"center": [0, 0, 0], "radius": 1})
+
+    def test_focus_mesh_centers_the_camera_and_uses_mesh_radius(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise viewer camera focus")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        start = page.index("const bounds=scene.bounds||")
+        end = page.index("\nfunction cameraPlanes", start)
+        helper = page[start:end]
+        probe = "const scene={bounds:{center:[1,2,3],radius:100},camera:{}};\n" + helper + "\n" + \
+                "focusMesh({center:[20,30,40],radius:10});\nconsole.log(JSON.stringify([viewCenter,target,distance]))"
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        center, target, distance = json.loads(result.stdout)
+        self.assertEqual(center, [20, 30, 40])
+        self.assertEqual(target, [0, 0, 0])
+        self.assertEqual(distance, 26.5)
 
     def test_preview_light_controls_feed_a_normalized_shader_direction(self):
         node = shutil.which("node")

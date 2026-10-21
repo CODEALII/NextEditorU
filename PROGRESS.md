@@ -311,3 +311,15 @@ camera behavior and a fully playable custom world remain open.
   screenshot is in ignored `local/evidence/preview-w1-lighting.png`. User-browser
   GPU behavior remains unverified. The full suite passed **123 tests in 99.609
   seconds**; `compileall`, `git diff --check`, and local route validation passed.
+
+## 2026-10-21 — focus camera on a selected mesh
+
+- Each preview mesh now records a finite local bounding center and radius. Its
+  inspector adds a Focus mesh action that centers the camera on the chosen
+  shape and scales the view distance to that shape; Fit view returns to the
+  whole-scene center.
+- Node-backed tests cover empty and non-empty bounds, focus distance, and
+  selection-to-focus wiring. The W1 page still renders in headless Chrome;
+  actual pointer interaction in a user's browser remains outstanding. Full
+  regression: **125 tests passed in 99.005 seconds**; `compileall`,
+  `git diff --check`, and local W1 graph validation passed.
