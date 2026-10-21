@@ -28,6 +28,11 @@
   interpretation remains an implementation hypothesis pending that test.
 - The original W1 input hash remains
   `d2547f5bfa9963d05916816301a0b53e8916ab62628210409be232228b117cf0`.
+- Latest manual traversal report: **Mario does not move**. This confirms the
+  current gameplay test is failing, but does not identify whether the cause is
+  controller/input state, map state, or the patched route. No traversal pass is
+  claimed; reproduce with the active input profile and record the exact start
+  node and attempted direction before changing route data.
 
 Earlier attempts displayed black after initial dialogs. They were inconclusive:
 input setup, UI navigation and CSV quoting changed before the successful patched
@@ -48,8 +53,9 @@ No crash stack or failing game function was identified.
 
 ## Still required before declaring the prototype playable
 
-1. At W102, move onto the route toward W103. Record whether the tower is an
-   intermediate pass-through, an enforced stop, or an invalid path.
+1. Reproduce the reported no-movement result from a known node and record the
+   active input profile; then determine whether the tower path blocks travel,
+   stops at the tower, or reaches W103.
 2. Confirm the displayed destination is Acorn Plains 3 and launch that level.
 3. On a fresh save, clear 1-1 then 1-2. Confirm the intended new unlocks and
    restrictions without relying on already-cleared tower flags.

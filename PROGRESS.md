@@ -90,6 +90,9 @@ Completed:
 - OBJ parsing and mesh exporter tests: **10 passed**. A corrected isolated
   Cemu pack was prepared at `build/cemu-island-mainlight`, but a controlled
   baseline comparison and final traversal observation are still outstanding.
+- The user then reported that Mario **does not move** in the manual route test.
+  This is a failed gameplay check; the exact input/state cause and the route's
+  behavior remain undiagnosed.
 - New export report: `build/island-mainlight/`; its manifest correctly says
   `game_tested:false`. No game file or original save was overwritten.
 
@@ -107,7 +110,7 @@ Not yet proven / outstanding:
   camera-table editing and offline event-table conversion are implemented, but
   they do not yet establish in-game behavior.
 
-Next steps: compare the corrected main-grass island render against a controlled
-baseline, complete the pending human traversal/launch test, then verify fresh
-clear-triggered unlocks and save persistence. No claimed completion of the full
-custom-overworld mission.
+Next steps: reproduce the reported movement failure with the current Cemu input
+state, compare the corrected main-grass island render against a controlled
+baseline, then verify level launch, fresh clear-triggered unlocks and save
+persistence. No claimed completion of the full custom-overworld mission.

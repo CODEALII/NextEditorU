@@ -1,41 +1,41 @@
 # NSMBU World Studio
 
-A tested resource-editing prototype for user-owned **New Super Mario Bros. U,
-Wii U** dumps. It edits actual point/route CSV tables and selected BFRES data.
-The full custom-overworld mission is still in progress; see [PROGRESS.md](PROGRESS.md).
+**A research and editing toolkit for New Super Mario Bros. U world maps.**
 
-## Start on this PC
+World Studio reads and edits selected world-map resources, builds experimental topology and terrain patches, and provides a standalone visual editor. It is an actively researched prototype: resource handling and offline export are tested, while in-game movement currently fails in the reported route test. This project does not yet produce a complete playable custom overworld.
 
-Python 3.14 with tkinter is already available. No packages need installing.
-Run from this directory:
+![World Studio project progress dashboard](docs/progress.svg)
+
+Progress details and dated findings: [PROGRESS.md](PROGRESS.md) · [Runtime test notes](docs/INTEGRATION.md)
+
+## What works today
+
+- Read Yaz0/SARC archives and export patched archives while preserving untouched members.
+- Read and edit World 1 point and route tables; validate references before export.
+- Inspect supported BFRES skeletons and apply bounded bone-transform changes.
+- Export an experimental three-node progression patch using existing route data.
+- Import a bounded rigid OBJ mesh into a known grass shape while retaining its material and layout.
+- Read and edit discovered camera-offset tables; analyze and round-trip event data offline.
+- Use the standalone Tk editor to inspect the map, edit supported fields, and save project files.
+- Run a 56-test local suite against synthetic fixtures and the user-provided local dump.
+
+The editor deliberately blocks unsupported node/index changes. Camera and event formats have offline tooling, but their in-game behavior and runtime integration are not verified. Read [Research and format findings](docs/RESEARCH.md), [Resource findings](docs/RESOURCE_FINDINGS.md), [Camera findings](docs/CAMERA_FINDINGS.md), and [Event findings](docs/EVENTS.md) for the evidence and limits of each feature.
+
+## Current runtime status
+
+The experimental topology patch changes the intended three-node path, but the latest manual Cemu attempt reported that **Mario does not move**. The cause has not been identified, so topology traversal, level launch, unlock progression, and save persistence are not claimed to work. The corrected terrain exporter is prepared in an isolated test pack, but its appearance has not been visually confirmed. See [the integration log](docs/INTEGRATION.md).
+
+## Get started
+
+Requirements: Windows, Python 3.14 with Tkinter, a legally obtained NSMBU dump for resource work, and Cemu for optional isolated runtime tests.
 
 ```powershell
 python -m worldstudio gui
 ```
 
-Or double-click `Launch World Studio.cmd`. Default input is the provided
-`NSMBU Modding Project/content/Common/course_select/CS_W1.szs`.
+Or double-click `Launch World Studio.cmd`. By default the editor looks for the local game resource at `NSMBU Modding Project/content/Common/course_select/CS_W1.szs`. The dump is not included in this repository.
 
-Select points/segments in the right-hand table to edit native fields. Known
-level-bone local XYZ is editable. Viewport orbit/zoom and camera sliders affect
-the editor view only. Auxiliary points without computed world transforms are
-hidden by default; their optional fallback layout is explicitly labeled.
-
-Save a project JSON outside the original game directory, then export to a new
-SZS path. Existing exports and original game directories are protected. A
-manifest lists changed members/hashes and never labels an export game-tested.
-
-**Import OBJ** previews terrain. **Use OBJ mesh (experimental)** additionally
-selects one capacity-bounded native replacement: `CS_W1_World/polySurface1489__mtGrass`,
-the main World 1 grass surface.
-It preserves the existing material, layout and submesh partitions, reads OBJ
-normals/UVs when available and generates defaults otherwise, updates bounds,
-and makes unused triangles degenerate. Other landscape
-shapes remain. It accepts only the verified rigid grass layout, not arbitrary
-BFRES files/materials/animations. OBJ units are model-local game units; the
-original `examples/island-game.obj` is suitable for this experiment.
-
-## Reproduce the topology experiment
+Inspect resources and create a sample topology export:
 
 ```powershell
 python -m worldstudio inspect
@@ -43,81 +43,41 @@ python -m worldstudio demo --out build/my-chain
 python -m worldstudio gui build/my-chain/three-level-chain.nws.json
 ```
 
-This changes normal progression to `W101 -> W102 -> W103`. W102 references the
-existing two-part path through the tower area; it does not delete the tower.
-All 72 point rows, including script-sensitive W1S0 and W1Item indices, stay in
-place. Other map points and game scripts remain present. Runtime traversal and
-clear-triggered progression must be verified before treating this as playable.
-
-An alternative `--direct-route` experiment renames the existing tower path
-node to W103 and rewires the final route segment. It preserves the tower CSV
-point and every row index, but the runtime behavior and any script dependence
-on the original bone name still need testing:
+The experimental mesh export accepts the included original sample island:
 
 ```powershell
-python -m worldstudio demo --direct-route --out build/my-direct-route
+python -m worldstudio demo --island assets/island.obj --out build/my-island
 ```
 
-To combine topology with the original test mesh:
+Exports go to new paths and include manifests. Never copy them over the original game files. For the isolated Cemu workflow, see [docs/INTEGRATION.md](docs/INTEGRATION.md) and `tools/prepare_cemu.py`.
 
-```powershell
-python -m worldstudio demo --island examples/island-game.obj --out build/my-island
-```
-
-Do not copy either output over your originals. They are **local test artifacts
-containing your own game resources**, not redistributable mod packages. Share
-the original code/OBJ and project changes; regenerate resources locally.
-
-## Isolated Cemu test
-
-```powershell
-python tools/prepare_cemu.py --cemu "C:\Users\Ali\Documents\Cemu_2.6\Cemu.exe" --patch build/my-chain --out build/my-cemu-test
-& ./build/my-cemu-test/launch.ps1 -GameRpx "$PWD/NSMBU Modding Project/code/red-pro2.rpx"
-```
-
-The helper refuses existing output folders. It copies the installed emulator,
-system fonts and existing CrashFix into a separate directory with new settings,
-cache and saves. It enables only CrashFix and the generated World Studio pack.
-It does not launch Cemu automatically. Legacy settings isolation is intentional:
-`gp_download=true` marks setup completed; `permanent_storage=false` avoids shared
-MLC preferences. Check the log's active packs and save/update paths on every run.
-
-Keyboard: Z=A, X=B, C=X, V=Y, Enter=Plus, arrows=D-pad, WASD=left stick.
-System fonts and CrashFix are copied from the installed emulator, never bundled
-in this repository. The provided dump's metadata identifies an update title
-v64; the local RPX boots in the tested emulator but other dumps need validation.
-
-## Validation and limits
+## Verify locally
 
 ```powershell
 python -m unittest discover -s tests -v
-python tools/inspect_resources.py "NSMBU Modding Project/content/Common/course_select/CS_W1.szs"
+python -m compileall -q worldstudio tests tools
 ```
 
-Tests cover malformed archives, Yaz0 overlaps/window boundaries, exact unchanged
-CSV bytes, graph reference/index guards, modified-byte boundaries, local actual
-BFRES parsing/mesh injection, export round-trips and original-file preservation.
-Actual-dump tests skip when no user-owned dump is present. Automated tests are
-not proof of in-game movement, camera, saving or progression.
+The latest verified local run passed **56 tests**. This confirms offline parsers, exporters, guards, and round-trips; it does not establish that the game accepts every patch or that gameplay works.
 
-Adding/deleting draft points does not create the corresponding model bones or
-remap executable/script indices; native export blocks those unsupported changes.
-Moving a node alone does not regenerate its walking paths. The editor can read
-and edit bounded vectors in the discovered camera offset tables, but their bank
-roles and in-game camera effects remain unverified. Animation and general event
-authoring are not implemented. A local Cobra bridge can inspect and round-trip
-the existing event script table offline; it does not install a runtime loader.
-New point/segment bones and executable patches require further verified reverse
-engineering.
+## Repository map
 
-## Sources and licensing
+| Path | Purpose |
+| --- | --- |
+| `worldstudio/` | Resource readers, patch/export logic, and Tk editor |
+| `tools/` | Cemu test setup and inspection/event bridge tools |
+| `tests/` | Synthetic and user-dump-backed regression tests |
+| `docs/` | Research notes, integration evidence, and progress graphic |
+| `assets/` | Original CC0 preview geometry |
+| `examples/` | Original CC0 game-space test geometry |
+| `patches/` | Small upstream Cobra encoder fix and its license |
 
-Primary-source links, pinned revisions, upstream licenses and address caveats
-are recorded in `docs/RESEARCH.md`; actual local observations and emulator schema
-evidence are in `docs/RESOURCE_FINDINGS.md`. Third-party clones stay ignored in
-`external/`. The BFRES dictionary trie logic is adapted from MIT-licensed
-BfresLibrary and its notice is in `worldstudio/bfres_names.py`. The optional
-Cobra encoder fix is separately documented and keeps Cobra's GPL-3.0 license in
-`patches/COPYING.Cobra`; neither upstream repository is copied into this code.
-No Nintendo assets/executables are committed. The original example OBJ assets
-are dedicated to CC0, as stated in their headers.
+## Safety and licensing
+
+No Nintendo game dump, executable, save, emulator build, or generated game-resource pack is distributed here. Supply your own legally obtained game files; local dump, build, and evidence folders are ignored by Git. The included island OBJ files are original project geometry and carry CC0 notices in their headers.
+
+There is no repository-wide code license yet. The Cobra-related patch and bridge preserve the upstream GPL license notice in `patches/COPYING.Cobra`; see [docs/RESEARCH.md](docs/RESEARCH.md) for provenance and pinned upstream references.
+
+## Contributing
+
+Keep findings tied to reproducible evidence, preserve unknown resource bytes, and distinguish offline tests from Cemu or hardware observations. Update `PROGRESS.md` and the relevant format note when behavior changes. Do not add user-owned game dumps, saves, executables, generated packs, or credentials to commits.

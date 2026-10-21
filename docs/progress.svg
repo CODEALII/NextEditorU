@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+  <title id="title">NSMBU World Studio progress</title>
+  <desc id="desc">A project status dashboard showing 56 local tests passing, a reported Mario movement failure, offline resource tools verified, and terrain rendering still awaiting Cemu visual confirmation.</desc>
+  <defs>
+    <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="M8 0H0V8" fill="none" stroke="#07120f" stroke-opacity=".35" stroke-width="1"/>
+    </pattern>
+    <style>
+      .bg{fill:#0d1117}.panel{fill:#161b22;stroke:#30363d;stroke-width:1}.tile{stroke:#0d1117;stroke-width:3}
+      .title{font:700 25px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f0f6fc}.sub{font:13px system-ui,-apple-system,Segoe UI,sans-serif;fill:#8b949e}
+      .label{font:700 12px system-ui,-apple-system,Segoe UI,sans-serif;fill:#f0f6fc;letter-spacing:.5px}
+      .value{font:700 24px system-ui,-apple-system,Segoe UI,sans-serif;fill:#fff}.copy{font:12px system-ui,-apple-system,Segoe UI,sans-serif;fill:#e6edf3}
+      .tiny{font:11px system-ui,-apple-system,Segoe UI,sans-serif;fill:#c9d1d9}.dark{fill:#0d1117}
+    </style>
+  </defs>
+  <rect class="bg" width="1120" height="560" rx="14"/>
+  <text class="title" x="34" y="43">WORLD STUDIO <tspan fill="#58a6ff">/</tspan> PROJECT STATUS</text>
+  <text class="sub" x="36" y="68">Evidence-based snapshot · updated 21 Oct 2026 · local prototype</text>
+
+  <rect class="panel" x="32" y="88" width="1056" height="105" rx="10"/>
+  <rect x="48" y="103" width="318" height="74" rx="7" fill="#238636"/>
+  <rect x="48" y="103" width="318" height="74" rx="7" fill="url(#grid)"/>
+  <text class="label" x="66" y="126">AUTOMATED SUITE</text>
+  <text class="value" x="66" y="157">56 / 56 <tspan font-size="14">PASS</tspan></text>
+  <rect x="379" y="103" width="337" height="74" rx="7" fill="#da3633"/>
+  <rect x="379" y="103" width="337" height="74" rx="7" fill="url(#grid)"/>
+  <text class="label" x="397" y="126">MANUAL CEMU TRAVERSAL</text>
+  <text class="value" x="397" y="157">MOVEMENT FAILED</text>
+  <rect x="729" y="103" width="343" height="74" rx="7" fill="#9e6a03"/>
+  <rect x="729" y="103" width="343" height="74" rx="7" fill="url(#grid)"/>
+  <text class="label" x="747" y="126">CUSTOM TERRAIN</text>
+  <text class="value" x="747" y="157">EXPORT READY <tspan font-size="13">/ VISUAL QA OPEN</tspan></text>
+
+  <text class="label" x="38" y="224">IMPLEMENTED AND CHECKED OFFLINE</text>
+  <text class="label" x="568" y="224">PARTIAL OR NEEDS IN-GAME VERIFICATION</text>
+  <rect class="tile" x="32" y="236" width="514" height="133" rx="8" fill="#238636"/>
+  <rect x="32" y="236" width="514" height="133" rx="8" fill="url(#grid)"/>
+  <text class="label" x="50" y="262">RESOURCE PIPELINE</text>
+  <text class="copy" x="50" y="287">Yaz0 / SARC · World 1 CSV · BFRES readers</text>
+  <text class="copy" x="50" y="308">Loss-preserving patches · guarded exports · regression tests</text>
+  <text class="tiny" x="50" y="344">Verified by local tests and user-provided dump</text>
+
+  <rect class="tile" x="32" y="377" width="250" height="139" rx="8" fill="#238636"/>
+  <rect x="32" y="377" width="250" height="139" rx="8" fill="url(#grid)"/>
+  <text class="label" x="49" y="404">VISUAL EDITOR</text>
+  <text class="copy" x="49" y="431">3D-style viewport</text>
+  <text class="copy" x="49" y="451">Native point / route fields</text>
+  <text class="tiny" x="49" y="487">Unsupported exports blocked</text>
+
+  <rect class="tile" x="290" y="377" width="256" height="139" rx="8" fill="#9e6a03"/>
+  <rect x="290" y="377" width="256" height="139" rx="8" fill="url(#grid)"/>
+  <text class="label" x="307" y="404">TOPOLOGY PATCH</text>
+  <text class="copy" x="307" y="431">3-node route exported</text>
+  <text class="copy" x="307" y="451">Cemu movement currently fails</text>
+  <text class="tiny" x="307" y="487">Cause not diagnosed</text>
+
+  <rect class="tile" x="560" y="236" width="512" height="133" rx="8" fill="#9e6a03"/>
+  <rect x="560" y="236" width="512" height="133" rx="8" fill="url(#grid)"/>
+  <text class="label" x="578" y="262">GEOMETRY IMPORT</text>
+  <text class="copy" x="578" y="287">Rigid grass-shape OBJ exporter · UV / normal seams</text>
+  <text class="copy" x="578" y="308">Material and layout preserved; original shapes remain</text>
+  <text class="tiny" x="578" y="344">Cemu appearance not visually confirmed</text>
+
+  <rect class="tile" x="560" y="377" width="250" height="139" rx="8" fill="#9e6a03"/>
+  <rect x="560" y="377" width="250" height="139" rx="8" fill="url(#grid)"/>
+  <text class="label" x="577" y="404">CAMERA DATA</text>
+  <text class="copy" x="577" y="431">Parse / edit / round-trip</text>
+  <text class="copy" x="577" y="451">Runtime behavior unknown</text>
+  <text class="tiny" x="577" y="487">Banks not identified</text>
+
+  <rect class="tile" x="818" y="377" width="254" height="139" rx="8" fill="#484f58"/>
+  <rect x="818" y="377" width="254" height="139" rx="8" fill="url(#grid)"/>
+  <text class="label" x="835" y="404">EVENT INTEGRATION</text>
+  <text class="copy" x="835" y="431">Offline table round-trip</text>
+  <text class="copy" x="835" y="451">No game loader / runtime hook</text>
+  <text class="tiny" x="835" y="487">Implementation open</text>
+
+  <circle cx="42" cy="540" r="5" fill="#3fb950"/><text class="tiny" x="54" y="544">verified offline</text>
+  <circle cx="177" cy="540" r="5" fill="#d29922"/><text class="tiny" x="189" y="544">partial / runtime QA open</text>
+  <circle cx="373" cy="540" r="5" fill="#f85149"/><text class="tiny" x="385" y="544">manual failure</text>
+  <text class="tiny" x="1072" y="544" text-anchor="end">details: PROGRESS.md</text>
+</svg>
