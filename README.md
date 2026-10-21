@@ -47,6 +47,15 @@ All 72 point rows, including script-sensitive W1S0 and W1Item indices, stay in
 place. Other map points and game scripts remain present. Runtime traversal and
 clear-triggered progression must be verified before treating this as playable.
 
+An alternative `--direct-route` experiment renames the existing tower path
+node to W103 and rewires the final route segment. It preserves the tower CSV
+point and every row index, but the runtime behavior and any script dependence
+on the original bone name still need testing:
+
+```powershell
+python -m worldstudio demo --direct-route --out build/my-direct-route
+```
+
 To combine topology with the original test mesh:
 
 ```powershell
@@ -91,15 +100,22 @@ not proof of in-game movement, camera, saving or progression.
 
 Adding/deleting draft points does not create the corresponding model bones or
 remap executable/script indices; native export blocks those unsupported changes.
-Moving a node alone does not regenerate its walking paths. Camera binaries,
-animation and general event authoring are not implemented. New point/segment
-bones and executable patches require further verified reverse engineering.
+Moving a node alone does not regenerate its walking paths. The editor can read
+and edit bounded vectors in the discovered camera offset tables, but their bank
+roles and in-game camera effects remain unverified. Animation and general event
+authoring are not implemented. A local Cobra bridge can inspect and round-trip
+the existing event script table offline; it does not install a runtime loader.
+New point/segment bones and executable patches require further verified reverse
+engineering.
 
 ## Sources and licensing
 
 Primary-source links, pinned revisions, upstream licenses and address caveats
 are recorded in `docs/RESEARCH.md`; actual local observations and emulator schema
 evidence are in `docs/RESOURCE_FINDINGS.md`. Third-party clones stay ignored in
-`external/` and retain their own licenses. They are not copied into this code.
+`external/`. The BFRES dictionary trie logic is adapted from MIT-licensed
+BfresLibrary and its notice is in `worldstudio/bfres_names.py`. The optional
+Cobra encoder fix is separately documented and keeps Cobra's GPL-3.0 license in
+`patches/COPYING.Cobra`; neither upstream repository is copied into this code.
 No Nintendo assets/executables are committed. The original example OBJ assets
 are dedicated to CC0, as stated in their headers.

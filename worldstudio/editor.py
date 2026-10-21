@@ -222,14 +222,21 @@ class WorldStudio(ttk.Frame):
                 continue
             a, b = [self.project_point(tuple(nodes[name][k] for k in ("x", "y", "z")))
                     for name in (route["start"], route["end"])]
-            self.canvas.create_line(a[:2], b[:2], fill="#f2c65e", width=4, arrow="last")
-            self.canvas.create_text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 14,
-                                    text=route.get("unlock", route["id"]), fill="#f2deb3")
+            geometry = route.get("style") == "geometry"
+            self.canvas.create_line(a[:2], b[:2], fill="#65b9c6" if geometry else "#f2c65e",
+                                    width=2 if geometry else 4, arrow="none" if geometry else "last")
+            if not geometry:
+                self.canvas.create_text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 14,
+                                        text=route.get("unlock", route["id"]), fill="#f2deb3")
         for name, node in nodes.items():
             x, y, _ = self.project_point(tuple(node[k] for k in ("x", "y", "z")))
-            color = "#ffffff" if self.selected == ("node", name) else "#f1c75f"
-            self.canvas.create_oval(x - 8, y - 8, x + 8, y + 8, fill=color, outline="#102332", width=3)
-            self.canvas.create_text(x, y - 21, text=f"{name}  {node.get('level', '')}", fill="#ffffff", font=("Segoe UI", 10, "bold"))
+            auxiliary = node.get("style") == "geometry"
+            selected = self.selected == ("node", name)
+            color = "#ffffff" if selected else "#bc93e7" if node.get("fallback") else "#65b9c6" if auxiliary else "#f1c75f"
+            radius = 4 if auxiliary and not selected else 8
+            self.canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill=color, outline="#102332", width=2)
+            if not auxiliary or selected or node.get("fallback"):
+                self.canvas.create_text(x, y - 21, text=f"{name}  {node.get('level', '')}", fill="#ffffff", font=("Segoe UI", 10, "bold"))
             self.hit_points.append((x, y, name))
         self.canvas.create_text(15, 15, anchor="nw", fill="#bdd0dd", text="EDITOR PREVIEW / perspective projection", tags=("viewport_caption",))
 
@@ -461,35 +468,59 @@ class NativeStudio(WorldStudio):
         self.exporting = False
         self.export_results = queue.Queue()
         self.disabled_for_export = []
+        self.camera_window = None
         self.show_auxiliary = tk.BooleanVar(master, value=False)
         super().__init__(master, self.view_project())
         self.master.title("NSMBU World Studio — native world resources")
         self.status.set(f"Loaded {native.source.name} • coordinates: " +
-                        ("BFRES local XYZ where known; remaining points use editor layout" if native.positions else "editor layout only; game transforms unknown"))
+                        ("BFRES hierarchy-transformed rest pose; unsupported branches use labeled layouts" if native.positions else "editor layout only; game transforms unknown"))
         self.canvas.bind("<Map>", lambda event: self.fit(), add="+")
 
     def view_project(self):
         nodes, routes = [], []
         points = self.native.points.rows
-        for i, row in enumerate(points):
+        world = self.native.world_positions
+        point_names = [row[1] for row in points if len(row) > 1]
+        names = list(point_names)
+        if self.show_auxiliary.get():
+            for bone in self.native.skeletons.models[self.native.path_model]:
+                if len(bone.name) == 4 and bone.name[0] in "FK" and bone.name not in names:
+                    names.append(bone.name)
+        world_values = [world[name] for name in names if name in world]
+        fallback_x = max((v[0] for v in world_values), default=0) + 500
+        fallback_z = min((v[2] for v in world_values), default=0)
+        fallback_count = 0
+        for name in names:
+            if not self.show_auxiliary.get() and (not name.startswith("W") or name not in world):
+                continue
+            position = world.get(name)
+            fallback = position is None
+            if fallback:
+                position = self.native.layout.get(name)
+            if position is None:
+                # A separate labeled editor-layout area, never local XYZ posed
+                # as world coordinates when hierarchy evaluation is unsupported.
+                position = [fallback_x + (fallback_count % 4) * 180, 0, fallback_z + (fallback_count // 4) * 180]
+                fallback_count += 1
+            nodes.append(dict(id=name, x=position[0], y=position[1], z=position[2],
+                              level="[layout: unsupported transform]" if fallback else "",
+                              fallback=fallback, style="geometry" if not name.startswith("W") else "level"))
+        for row in points:
             if len(row) < 2:
                 continue
             name = row[1]
-            known = name in self.native.positions
-            if not self.show_auxiliary.get() and (not name.startswith("W") or not known):
-                continue
-            position = getattr(self.native, "world_positions", {}).get(name) or self.native.positions.get(name) or self.native.layout.get(name)
-            if position is None:
-                # Layout is explicitly non-game data, never written to CSV/BFRES.
-                angle = i * math.tau / max(1, len(points))
-                position = [math.cos(angle) * 220, 0, math.sin(angle) * 220]
-            nodes.append(dict(id=name, x=position[0], y=position[1], z=position[2], level="" if name in self.native.positions else "[layout]"))
             for column, route_column, kind in [(3, 4, "normal"), (6, 7, "secret")]:
                 if len(row) > route_column:
                     for destination in row[column].split(","):
                         if destination:
                             routes.append(dict(id=f"{name}:{kind}:{destination}", start=name,
                                                end=destination, unlock=kind))
+        if self.show_auxiliary.get():
+            for row in self.native.routes.rows:
+                if row and len(row[0]) == 9 and row[0].startswith("R"):
+                    start, end = row[0][1:5], row[0][5:9]
+                    if start in world and end in world:
+                        routes.append(dict(id=row[0], start=start, end=end, style="geometry"))
         return {"format": "native-view", "nodes": nodes, "routes": routes,
                 "camera": getattr(self, "project", {}).get("camera", {"yaw": -0.55, "pitch": 0.65, "scale": 1}),
                 "terrain": self.native.terrain}
@@ -510,17 +541,31 @@ class NativeStudio(WorldStudio):
         ttk.Button(bar, text="Open native world SZS", command=self.open_szs).pack(side="left", padx=2)
         ttk.Button(bar, text="Export validated SZS", command=self.export_szs).pack(side="left", padx=2)
         ttk.Button(bar, text="Use OBJ mesh (experimental)", command=self.use_obj_mesh).pack(side="left", padx=2)
-        ttk.Checkbutton(bar, text="Show auxiliary points / layouts", variable=self.show_auxiliary,
+        ttk.Checkbutton(bar, text="Show path geometry / auxiliary points", variable=self.show_auxiliary,
                         command=self.toggle_auxiliary).pack(side="left", padx=10)
+        extra_bar = ttk.Frame(self, padding=(8, 3))
+        extra_bar.pack(fill="x", before=self.winfo_children()[2])
+        ttk.Button(extra_bar, text="Camera data", command=self.open_camera_data).pack(side="left", padx=2)
+        ttk.Button(extra_bar, text="Direct 1-2 → 1-3 (experimental)", command=self.direct_route).pack(side="left", padx=2)
+        ttk.Label(extra_bar, text="Raw offset banks and direct-route traversal require in-game verification.").pack(side="left", padx=8)
 
     def refresh(self):
         self.project = self.view_project()
+        selection = self.tree.selection()
         self.tree.delete(*self.tree.get_children())
         for kind, rows in [("point", self.native.points.rows), ("segment", self.native.routes.rows)]:
             for index, row in enumerate(rows):
                 name = row[1] if kind == "point" and len(row) > 1 else row[0]
                 self.tree.insert("", "end", iid=f"{kind}:{index}", text=name, values=(kind,))
-        self.tree.yview_moveto(0)
+        point_names = {row[1] for row in self.native.points.rows if len(row) > 1}
+        for bone in self.native.skeletons.models[self.native.path_model]:
+            if bone.name in self.native.positions and bone.name not in point_names and bone.name.startswith(("K", "R", "F")):
+                self.tree.insert("", "end", iid=f"bone:{bone.name}", text=bone.name, values=("bone XYZ",))
+        if selection and self.tree.exists(selection[0]):
+            self.tree.selection_set(selection[0])
+            self.tree.see(selection[0])
+        else:
+            self.tree.yview_moveto(0)
         self.draw()
 
     def toggle_auxiliary(self):
@@ -530,9 +575,9 @@ class NativeStudio(WorldStudio):
     def draw(self):
         super().draw()
         if hasattr(self, "canvas"):
-            label = "NATIVE WORLD GRAPH / known W* bone positions"
+            label = "NATIVE WORLD GRAPH / hierarchy-transformed rest pose (no animations)"
             if self.show_auxiliary.get():
-                label += " / [layout] points are editor coordinates"
+                label += "\nGold = progression • cyan = path segments / F,K geometry • purple = editor layout"
             self.canvas.itemconfigure("viewport_caption", text=label)
 
     def select_tree(self, event=None):
@@ -541,7 +586,31 @@ class NativeStudio(WorldStudio):
         selection = self.tree.selection()
         if not selection:
             return
-        kind, index = selection[0].split(":")
+        kind, index = selection[0].split(":", 1)
+        if kind == "bone":
+            self.native_selection = kind, index
+            self.selected = ("route", index) if index.startswith("R") else ("node", index)
+            for child in self.form.winfo_children():
+                child.destroy()
+            self.properties, self.position_properties = {}, {}
+            bones = self.native.skeletons.models[self.native.path_model]
+            bone = next(bone for bone in bones if bone.name == index)
+            parent = next((f"{item.index}: {item.name}" for item in bones if item.index == bone.parent), "none (root)")
+            metadata = [("bone", index), ("model", bone.model), ("parent", parent)]
+            planned = next((rename["new"] for rename in getattr(self.native, "bone_renames", [])
+                            if rename.get("old") == index and rename.get("model") == bone.model), None)
+            if planned:
+                metadata.append(("export alias", planned))
+            for row_number, (key, value) in enumerate(metadata):
+                ttk.Label(self.form, text=key).grid(row=row_number, column=0, sticky="w", pady=3)
+                entry = ttk.Entry(self.form)
+                entry.insert(0, str(value))
+                entry.configure(state="readonly")
+                entry.grid(row=row_number, column=1, sticky="ew", padx=(5, 0), pady=3)
+            self.show_native_position(index, len(metadata))
+            self.form.columnconfigure(1, weight=1)
+            self.draw()
+            return
         rows = self.native.points.rows if kind == "point" else self.native.routes.rows
         row = rows[int(index)]
         self.native_selection = kind, int(index)
@@ -560,18 +629,22 @@ class NativeStudio(WorldStudio):
             if kind == "point" and i in (0, 1):
                 entry.configure(state="readonly")
         if kind == "point":
-            name = row[1]
-            actual = name in self.native.positions
-            position = self.native.positions.get(name) or self.native.layout.get(name) or [0, 0, 0]
-            caption = "BFRES local XYZ — paths must be adjusted separately" if actual else "Preview layout XYZ — does not change game transforms"
-            ttk.Label(self.form, text=caption, wraplength=290).grid(row=len(row), columnspan=2, sticky="w", pady=(8, 3))
-            for offset, key in enumerate(("x", "y", "z")):
-                ttk.Label(self.form, text=key).grid(row=len(row) + offset + 1, column=0, sticky="w")
-                var = tk.StringVar(value=str(position[offset]))
-                self.position_properties[key] = var
-                ttk.Entry(self.form, textvariable=var).grid(row=len(row) + offset + 1, column=1, sticky="ew", padx=(5, 0), pady=3)
+            self.show_native_position(row[1], len(row))
         self.form.columnconfigure(1, weight=1)
         self.draw()
+
+    def show_native_position(self, name, start):
+        actual = name in self.native.positions
+        position = self.native.positions.get(name) or self.native.layout.get(name) or [0, 0, 0]
+        caption = "BFRES local XYZ — child paths move with their parent" if actual else "Preview layout XYZ — does not change game transforms"
+        if actual and name not in self.native.world_positions:
+            caption += "; rest transform unsupported, displayed as layout"
+        ttk.Label(self.form, text=caption, wraplength=290).grid(row=start, columnspan=2, sticky="w", pady=(8, 3))
+        for offset, key in enumerate(("x", "y", "z")):
+            ttk.Label(self.form, text=key).grid(row=start + offset + 1, column=0, sticky="w")
+            var = tk.StringVar(value=str(position[offset]))
+            self.position_properties[key] = var
+            ttk.Entry(self.form, textvariable=var).grid(row=start + offset + 1, column=1, sticky="ew", padx=(5, 0), pady=3)
 
     def apply(self):
         if self.exporting:
@@ -580,14 +653,20 @@ class NativeStudio(WorldStudio):
         if selection is None:
             return
         kind, index = selection
-        rows = self.native.points.rows if kind == "point" else self.native.routes.rows
         try:
-            position = [float(self.position_properties[k].get()) for k in ("x", "y", "z")] if kind == "point" else None
+            position = [float(self.position_properties[k].get()) for k in ("x", "y", "z")] if kind in ("point", "bone") else None
             if position and not all(math.isfinite(value) for value in position):
                 raise ValueError("Coordinates must be finite")
         except ValueError as error:
             messagebox.showerror("Invalid coordinates", str(error), parent=self)
             return
+        if kind == "bone":
+            self.native.positions[index] = position
+            self.dirty = True
+            self.refresh()
+            self.status.set(f"Updated {index} local XYZ; hierarchy rest positions refreshed. Animation behavior remains unverified.")
+            return
+        rows = self.native.points.rows if kind == "point" else self.native.routes.rows
         rows[index] = [self.properties[i].get() for i in sorted(self.properties)]
         if position is not None:
             name = rows[index][1]
@@ -623,6 +702,9 @@ class NativeStudio(WorldStudio):
         if selection is None:
             return
         kind, index = selection
+        if kind == "bone":
+            self.status.set("Bone deletion is unsupported; edit local XYZ or select a CSV draft row instead.")
+            return
         rows = self.native.points.rows if kind == "point" else self.native.routes.rows
         del rows[index]
         self.native_selection = self.selected = None
@@ -636,9 +718,12 @@ class NativeStudio(WorldStudio):
         if self.drag and not self.drag[2]:
             for x, y, name in self.hit_points:
                 if (event.x - x) ** 2 + (event.y - y) ** 2 < 225:
-                    index = next(i for i, row in enumerate(self.native.points.rows) if row[1] == name)
-                    self.tree.selection_set(f"point:{index}")
-                    self.tree.see(f"point:{index}")
+                    index = next((i for i, row in enumerate(self.native.points.rows) if len(row) > 1 and row[1] == name), None)
+                    item = f"point:{index}" if index is not None else f"bone:{name}"
+                    if not self.tree.exists(item):
+                        break
+                    self.tree.selection_set(item)
+                    self.tree.see(item)
                     self.select_tree()
                     break
         self.drag = None
@@ -663,16 +748,20 @@ class NativeStudio(WorldStudio):
     def replace_native(self, native, project_path):
         if self.exporting:
             return
+        if self.camera_window is not None and self.camera_window.winfo_exists():
+            self.camera_window.destroy()
+        self.camera_window = None
         self.native, self.project_path = native, project_path
         self.native_selection = self.selected = None
         self.dirty = False
         self.project = self.view_project()
         self._load_mesh()
+        self.tree.selection_remove(*self.tree.selection())
         self.refresh()
         self.fit()
         for child in self.form.winfo_children():
             child.destroy()
-        self.status.set(f"Opened {native.source.name}; " + ("BFRES local XYZ where known; remaining points use editor layout" if native.positions else "editor layout; game coordinates unavailable"))
+        self.status.set(f"Opened {native.source.name}; " + ("hierarchy-transformed BFRES rest pose; purple points use editor layout" if native.positions else "editor layout; game coordinates unavailable"))
 
     def open(self):
         if not self.may_discard():
@@ -724,6 +813,41 @@ class NativeStudio(WorldStudio):
                 self.status.set("OBJ imported for preview only; experimental native mesh replacement is disabled.")
             except (OSError, ValueError) as error:
                 messagebox.showerror("Cannot import OBJ", str(error), parent=self)
+
+    def open_camera_data(self):
+        if self.exporting:
+            return
+        if self.camera_window is not None and self.camera_window.winfo_exists():
+            self.camera_window.lift()
+            return
+        if not getattr(self.native, "camera_tables", {}):
+            details = "\n".join(getattr(self.native, "camera_load_errors", []))
+            messagebox.showinfo("Camera data unavailable", "No supported companion offset tables were loaded.\n" + details, parent=self)
+            return
+        self.camera_window = CameraDataWindow(self)
+
+    def direct_route(self):
+        if self.exporting:
+            return
+        from .__main__ import direct_route_demo
+        points = copy.deepcopy(self.native.points.rows)
+        routes = copy.deepcopy(self.native.routes.rows)
+        renames = copy.deepcopy(getattr(self.native, "bone_renames", []))
+        try:
+            direct_route_demo(self.native)
+            generated = self.native.bone_renames
+            replaced = {(rename["model"], rename["old"]) for rename in generated}
+            self.native.bone_renames = [rename for rename in renames
+                                       if (rename.get("model"), rename.get("old")) not in replaced] + generated
+        except (ValueError, KeyError) as error:
+            self.native.points.rows = points
+            self.native.routes.rows = routes
+            self.native.bone_renames = renames
+            messagebox.showerror("Direct route unavailable", str(error), parent=self)
+            return
+        self.dirty = True
+        self.refresh()
+        self.status.set("Experimental direct 1-2 → 1-3 applied: overwrote 3 progression rows and one path/segment; other drafts retained. Save and export separately; traversal remains unverified.")
 
     def use_obj_mesh(self):
         if self.exporting:
@@ -801,6 +925,113 @@ class NativeStudio(WorldStudio):
                     self.export_results.put((False, str(error)))
             threading.Thread(target=worker, name="worldstudio-export", daemon=True).start()
             self.after(60, self.poll_export)
+
+
+class CameraDataWindow(tk.Toplevel):
+    """Raw numeric offset-table editor without guessed camera-state semantics."""
+
+    def __init__(self, studio, visible=True):
+        super().__init__(studio)
+        self.withdraw()
+        self.studio, self.native = studio, studio.native
+        self.title("Camera data — raw offset banks")
+        self.geometry("850x590")
+        self.protocol("WM_DELETE_WINDOW", self.close)
+        self.filename = tk.StringVar(value=next(iter(sorted(self.native.camera_tables))))
+        self.bank = tk.StringVar(value="0")
+        toolbar = ttk.Frame(self, padding=10)
+        toolbar.pack(fill="x")
+        ttk.Label(toolbar, text="Companion file").pack(side="left")
+        files = ttk.Combobox(toolbar, textvariable=self.filename, values=sorted(self.native.camera_tables), state="readonly", width=35)
+        files.pack(side="left", padx=8)
+        files.bind("<<ComboboxSelected>>", self.reload)
+        ttk.Label(toolbar, text="Bank").pack(side="left")
+        banks = ttk.Combobox(toolbar, textvariable=self.bank, values=("0", "1"), state="readonly", width=4)
+        banks.pack(side="left", padx=8)
+        banks.bind("<<ComboboxSelected>>", self.reload)
+        ttk.Label(self, wraplength=810, padding=(10, 0, 10, 10), text="These are raw offset vectors from companion files. Bank meanings and the final camera effect are unverified. Names and unknown_u32 remain read-only. The main editor camera sliders change only its viewport.").pack(fill="x")
+        records_frame = ttk.Frame(self, padding=(10, 0))
+        records_frame.pack(fill="both", expand=True)
+        columns = ("index", "name", "x", "y", "z", "unknown")
+        self.records = ttk.Treeview(records_frame, columns=columns, show="headings", selectmode="browse", height=15)
+        for column, caption, width in (("index", "Record", 60), ("name", "Name (raw)", 120), ("x", "X", 115), ("y", "Y", 115), ("z", "Z", 115), ("unknown", "unknown_u32", 150)):
+            self.records.heading(column, text=caption)
+            self.records.column(column, width=width, minwidth=50)
+        self.records.pack(side="left", fill="both", expand=True)
+        scroll = ttk.Scrollbar(records_frame, orient="vertical", command=self.records.yview)
+        scroll.pack(side="right", fill="y")
+        self.records.configure(yscrollcommand=scroll.set)
+        self.records.bind("<<TreeviewSelect>>", self.select_record)
+        form = ttk.Frame(self, padding=10)
+        form.pack(fill="x")
+        self.vector = {}
+        for column, key in enumerate(("x", "y", "z")):
+            ttk.Label(form, text=key.upper()).grid(row=0, column=column * 2, padx=(0, 6))
+            self.vector[key] = tk.StringVar()
+            ttk.Entry(form, textvariable=self.vector[key], width=20).grid(row=0, column=column * 2 + 1, padx=(0, 12))
+        ttk.Button(form, text="Apply XYZ to project", command=self.apply).grid(row=0, column=6)
+        self.status = tk.StringVar(value="Choose a raw record. Apply stores the vector in the project; Save/Export run from the main editor.")
+        ttk.Label(self, textvariable=self.status, padding=10, wraplength=810).pack(fill="x")
+        self.reload()
+        if visible:
+            self.deiconify()
+
+    def active(self):
+        if self.studio.exporting:
+            self.status.set("Export is running; offset edits and closing are locked until verification completes.")
+            return False
+        if self.studio.native is not self.native:
+            self.status.set("The source project changed. Reopen Camera data from the current project.")
+            return False
+        return True
+
+    def reload(self, event=None):
+        if not self.active():
+            return
+        selection = self.records.selection()
+        try:
+            table = self.native.camera_table(self.filename.get())
+            bank = int(self.bank.get())
+            self.records.delete(*self.records.get_children())
+            for index in range(table.per_bank):
+                record = table.record(bank, index)
+                name = repr(record.name_raw) if record.name_raw is not None else "—"
+                unknown = f"0x{record.unknown_u32:08X}" if record.unknown_u32 is not None else "—"
+                self.records.insert("", "end", iid=str(index), values=(index, name, *[repr(v) for v in record.vector], unknown))
+            target = selection[0] if selection and self.records.exists(selection[0]) else "0"
+            self.records.selection_set(target)
+            self.records.see(target)
+            self.select_record()
+        except (ValueError, KeyError, TypeError) as error:
+            self.status.set(f"Cannot load offset records: {error}")
+
+    def select_record(self, event=None):
+        if not self.active() or not self.records.selection():
+            return
+        try:
+            record = self.native.camera_table(self.filename.get()).record(int(self.bank.get()), int(self.records.selection()[0]))
+            for key, value in zip(("x", "y", "z"), record.vector):
+                self.vector[key].set(repr(value))
+        except (ValueError, TypeError) as error:
+            self.status.set(str(error))
+
+    def apply(self):
+        if not self.active() or not self.records.selection():
+            return
+        try:
+            index, bank = int(self.records.selection()[0]), int(self.bank.get())
+            vector = [float(self.vector[key].get()) for key in ("x", "y", "z")]
+            self.native.set_camera_vector(self.filename.get(), bank, index, vector)
+            self.studio.dirty = True
+            self.reload()
+            self.status.set(f"Applied {self.filename.get()} bank {bank}, record {index}. Final camera behavior remains unverified.")
+            self.studio.status.set("Camera raw vector draft updated. Save the project and export companion files to test it.")
+        except (ValueError, TypeError, KeyError) as error:
+            messagebox.showerror("Invalid offset vector", str(error), parent=self)
+
+    def close(self):
+        if self.active():
+            self.destroy()
 
 
 def main(argv=None):

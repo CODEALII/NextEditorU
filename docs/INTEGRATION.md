@@ -15,6 +15,11 @@
 - Existing local common save was copied to the isolated MLC to access traversal
   without completing levels using unreliable automated key taps. Its original
   was not modified. Fresh isolated save was retained in `local/evidence/`.
+- A separate isolated `build/cemu-island` instance also reached the World 1
+  map with the island geometry graphic pack active. It did not crash while
+  loading. In the observed view, broad dark green surfaces cover part of the
+  western plains. This could not be compared against a controlled baseline in
+  this run, so mesh rendering, materials and culling are **not verified**.
 - The original W1 input hash remains
   `d2547f5bfa9963d05916816301a0b53e8916ab62628210409be232228b117cf0`.
 
@@ -43,8 +48,9 @@ No crash stack or failing game function was identified.
 3. On a fresh save, clear 1-1 then 1-2. Confirm the intended new unlocks and
    restrictions without relying on already-cleared tower flags.
 4. Save/reload and check current node, completion and unlocking persistence.
-5. Test the original island mesh export in a separate run; verify the intended
-   mesh and its material/normals/culling. Other stock terrain remains by design.
+5. Compare the original island mesh export with a controlled baseline; identify
+   and fix the broad dark green surfaces, then verify material, normals and
+   culling. Other stock terrain remains by design.
 6. Check camera transitions, multiplayer movement, opening/ambush events and
    death/return behavior. No generic executable patch is currently supplied.
 

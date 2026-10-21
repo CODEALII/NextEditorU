@@ -5,7 +5,6 @@ Unknown fields, quoting and line endings survive unless that row is edited.
 """
 import csv
 import hashlib
-import io
 import json
 import os
 from pathlib import Path
@@ -88,15 +87,82 @@ class WorldProject:
         self.references = {n.rstrip('\x00') for n in self.references}
         self.skeletons = Skeletons(self.model)
         self.references.update(self.skeletons.bones)
-        self.positions = {name: list(b[0].position) for name, b in self.skeletons.bones.items()
-                          if len(b) == 1 and re.fullmatch(r'W[A-Za-z0-9]{3}', name)}
+        point_names = {r[1] for r in self.points.rows}
+        self.path_model = max(self.skeletons.models,
+            key=lambda m: sum(b.name in point_names for b in self.skeletons.models[m]))
+        self.positions = {b.name: list(b.position) for b in self.skeletons.models[self.path_model]
+                          if len(self.skeletons.bones[b.name]) == 1 and
+                          re.fullmatch(r'(?:[WFK][A-Za-z0-9]{3}|R[A-Za-z0-9]{8})', b.name)}
         self.layout = {}
         self.terrain = None
         self.geometry = None
+        self.bone_renames = []
+        self.camera_tables = {}
+        self.camera_original = {}
+        self.camera_edits = {}
+        self.camera_load_errors = []
+        from .camera import OffsetTable
+        world = re.search(r'pointW([1-9])', self.point_name)
+        if world:
+            for prefix, kind in (('Mario', 'mario'), ('Look', 'look')):
+                name = f'{prefix}OffsetDataW{world[1]}.bin'
+                companion = self.source.parent / name
+                if companion.is_file():
+                    raw = companion.read_bytes()
+                    try:
+                        self.camera_tables[name] = OffsetTable.parse(raw, kind)
+                        self.camera_original[name] = raw
+                    except ValueError as exc:
+                        self.camera_load_errors.append(f'{name}: {exc}')
         return self
+
+    @property
+    def world_positions(self):
+        return self.skeletons.world_positions(self.path_model, self.positions)
+
+    def camera_table(self, filename):
+        if filename not in self.camera_tables:
+            raise ValueError(f'Unknown or unsupported camera table: {filename}')
+        table = self.camera_tables[filename]
+        for key, vector in self.camera_edits.get(filename, {}).items():
+            try:
+                bank, index = map(int, key.split(':'))
+            except (ValueError, AttributeError) as exc:
+                raise ValueError(f'Invalid camera record identifier {key!r}') from exc
+            table = table.with_vector(bank, index, vector)
+        return table
+
+    def set_camera_vector(self, filename, bank, index, vector):
+        table = self.camera_table(filename).with_vector(bank, index, vector)
+        key = f'{bank}:{index}'
+        edits = self.camera_edits.setdefault(filename, {})
+        if table.record(bank, index).vector == self.camera_tables[filename].record(bank, index).vector:
+            edits.pop(key, None)
+        else:
+            edits[key] = list(table.record(bank, index).vector)
+        if not edits:
+            self.camera_edits.pop(filename, None)
 
     def validate(self):
         errors = []
+        for filename in self.camera_edits:
+            try:
+                self.camera_table(filename).build()
+            except (ValueError, TypeError) as exc:
+                errors.append(str(exc))
+        references = set(self.references)
+        rename_targets = set()
+        for rename in self.bone_renames:
+            model, old, new = rename.get('model'), rename.get('old'), rename.get('new')
+            if model not in self.skeletons.models or old not in {b.name for b in self.skeletons.models.get(model, [])}:
+                errors.append(f'Unknown source bone for rename: {model}/{old}')
+                continue
+            if not isinstance(new, str) or not new.isascii() or len(new) != len(old) or new in rename_targets or new in references:
+                errors.append(f'Invalid or colliding bone rename: {old} -> {new}')
+                continue
+            rename_targets.add(new)
+            references.discard(old)
+            references.add(new)
         seen = set()
         for i, r in enumerate(self.points.rows):
             if len(r) != 9:
@@ -108,7 +174,7 @@ class WorldProject:
             if name in seen:
                 errors.append(f'Duplicate point {name}')
             seen.add(name)
-            if name not in self.references:
+            if name not in references:
                 errors.append(f'{name}: missing model reference; CSV alone cannot create a bone')
             if i >= len(self.points.initial) or r[0:2] != self.points.initial[i][0:2]:
                 errors.append(f'Point row {i}: changing engine indices/names requires a verified script remap')
@@ -117,7 +183,7 @@ class WorldProject:
                 if i < len(self.points.initial) and r[col] == self.points.initial[i][col]:
                     continue
                 for dest in tokens(r[col]):
-                    if dest not in self.references and dest not in seen:
+                    if dest not in references and dest not in seen:
                         # Cross-world destinations may live in another archive.
                         if dest[:2] == name[:2]:
                             errors.append(f'{name}: unresolved local destination {dest}')
@@ -127,7 +193,7 @@ class WorldProject:
                 for route in tokens(r[col]):
                     if not re.fullmatch(r'R[A-Za-z0-9]{8}', route):
                         errors.append(f'{name}: malformed path {route}')
-                    elif route not in self.references:
+                    elif route not in references:
                         errors.append(f'{name}: missing BFRES macro-path bone {route}')
         if len(self.points.rows) != len(self.points.initial):
             errors.append('Point row count changed: engine/script index remapping not implemented')
@@ -145,24 +211,6 @@ class WorldProject:
                         errors.append(f'{r[0]}: missing endpoint bone {endpoint}')
         return sorted(set(errors))
 
-    def _connected(self, start, end):
-        edges = {}
-        for r in self.routes.rows:
-            if not r or len(r[0]) != 9:
-                continue
-            a, b = r[0][1:5], r[0][5:9]
-            edges.setdefault(a, set()).add(b)
-            edges.setdefault(b, set()).add(a)
-        visited, queue = set(), [start]
-        while queue:
-            node = queue.pop()
-            if node == end:
-                return True
-            if node not in visited:
-                visited.add(node)
-                queue.extend(edges.get(node, set()) - visited)
-        return False
-
     def save(self, path):
         path = Path(path).resolve()
         if path == self.game_root or self.game_root in path.parents:
@@ -171,7 +219,9 @@ class WorldProject:
             'source': str(self.source), 'source_sha256': self.source_sha256,
             'points': self.points.rows, 'routes': self.routes.rows,
             'layout': self.layout, 'positions': self.positions, 'terrain': self.terrain,
-            'geometry': self.geometry}, indent=2)
+            'geometry': self.geometry, 'bone_renames': self.bone_renames,
+            'camera_edits': self.camera_edits,
+            'camera_source_sha256': {n: sha(v) for n,v in self.camera_original.items()}}, indent=2)
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.worldstudio-')
         try:
@@ -193,9 +243,15 @@ class WorldProject:
         self.points.rows = data['points']
         self.routes.rows = data['routes']
         self.layout = data.get('layout', {})
-        self.positions = data.get('positions', self.positions)
+        self.positions.update(data.get('positions', {}))
         self.terrain = data.get('terrain')
         self.geometry = data.get('geometry')
+        self.bone_renames = data.get('bone_renames', [])
+        self.camera_edits = data.get('camera_edits', {})
+        for name in self.camera_edits:
+            expected = data.get('camera_source_sha256', {}).get(name)
+            if name not in self.camera_original or expected != sha(self.camera_original[name]):
+                raise ValueError(f'Camera source changed or is missing: {name}')
         return self
 
     def export(self, output):
@@ -207,7 +263,21 @@ class WorldProject:
         output = Path(output).resolve()
         if output == self.game_root or self.game_root in output.parents:
             raise ValueError('Export outside original game resources')
+        camera_outputs = {}
+        for name in self.camera_edits:
+            if sha((self.source.parent / name).read_bytes()) != sha(self.camera_original[name]):
+                raise ValueError(f'Camera source changed: {name}')
+            encoded = self.camera_table(name).build()
+            if encoded != self.camera_original[name]:
+                camera_outputs[name] = encoded
         patched_model = self.skeletons.patch_positions(self.positions)
+        rename_reports = []
+        if self.bone_renames:
+            from .bfres_names import rename_bone
+            for rename in self.bone_renames:
+                patched_model, report = rename_bone(patched_model,
+                    rename['model'], rename['old'], rename['new'])
+                rename_reports.append(report)
         geometry_report = None
         if self.geometry is not None:
             from .mesh import replace_rigid_mesh
@@ -229,10 +299,18 @@ class WorldProject:
             'output': str(output), 'changed_entries': [n for n,v in modified.items() if v != self.archive.read(n)],
             'bfres_unchanged': patched_model == self.model, 'game_tested': False,
             'terrain_exported': geometry_report is not None, 'geometry': geometry_report,
+            'bone_renames': rename_reports,
+            'camera_files': {n: {'source_sha256': sha(self.camera_original[n]), 'output_sha256': sha(v)}
+                             for n,v in camera_outputs.items()},
             'note': 'Local artifact contains user-owned resources. Do not redistribute.'}
         manifest_path = output.with_suffix(output.suffix + '.manifest.json')
-        if output.exists() or manifest_path.exists():
-            raise FileExistsError('Output or manifest already exists; choose a new export path')
+        paths = [output, manifest_path, *(output.parent / n for n in camera_outputs)]
+        if len(set(paths)) != len(paths):
+            raise ValueError('Archive and companion output paths collide')
+        if any(p.exists() for p in paths):
+            raise FileExistsError('Output, companion or manifest already exists; choose a new export path')
         write_new(output, blob)
+        for name, encoded in camera_outputs.items():
+            write_new(output.parent / name, encoded)
         write_new(manifest_path, json.dumps(manifest, indent=2).encode())
         return manifest

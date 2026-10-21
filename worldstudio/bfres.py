@@ -98,6 +98,77 @@ class Skeletons:
             raise ValueError(f'{name}: expected one bone, found {len(matches)}')
         return matches[0]
 
+    def world_positions(self, model, overrides=None):
+        """Rest-pose positions within one model, with hierarchy/rotation applied.
+
+        This does not evaluate animations, world-to-world placement or cameras.
+        Map path bones in the inspected resources have unit scale; reject other
+        scale modes rather than silently mishandling segment scale compensation.
+        Unsupported scaled branches are omitted from the returned preview map.
+        """
+        overrides = overrides or {}
+        bones = self.models[model]
+        by_index = {b.index: b for b in bones}
+        if len(by_index) != len(bones):
+            raise ValueError('Duplicate bone index')
+        matrices, visiting = {}, set()
+        unsupported = set()
+        class UnsupportedScale(ValueError):
+            pass
+        def multiply(a, b):
+            return [[sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+        def rotate(a, xyz):
+            return [sum(a[i][j] * xyz[j] for j in range(3)) for i in range(3)]
+        def evaluate(b):
+            if b.index in matrices:
+                return matrices[b.index]
+            if b.index in unsupported:
+                raise UnsupportedScale(b.name)
+            if b.index in visiting:
+                raise ValueError('Cyclic bone hierarchy')
+            visiting.add(b.index)
+            x, y, z, w = b.rotation
+            if b.flags & (1 << 12):
+                cx, cy, cz = math.cos(x), math.cos(y), math.cos(z)
+                sx, sy, sz = math.sin(x), math.sin(y), math.sin(z)
+                r = [[cz*cy, cz*sy*sx-sz*cx, cz*sy*cx+sz*sx],
+                     [sz*cy, sz*sy*sx+cz*cx, sz*sy*cx-cz*sx],
+                     [-sy, cy*sx, cy*cx]]
+            else:
+                norm = x*x + y*y + z*z + w*w
+                if abs(norm - 1) > .001:
+                    raise ValueError('Non-unit bone quaternion')
+                r = [[1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w)],
+                     [2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w)],
+                     [2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)]]
+            t = list(overrides.get(b.name, b.position))
+            # Only the path skeleton's unscaled rest pose is supported here.
+            if b.scale != (1., 1., 1.):
+                visiting.remove(b.index)
+                unsupported.add(b.index)
+                raise UnsupportedScale(b.name)
+            if b.parent != -1:
+                if b.parent not in by_index:
+                    raise ValueError('Missing parent bone')
+                try:
+                    pr, pt = evaluate(by_index[b.parent])
+                except UnsupportedScale:
+                    visiting.remove(b.index)
+                    unsupported.add(b.index)
+                    raise
+                t = [a+c for a,c in zip(rotate(pr, t), pt)]
+                r = multiply(pr, r)
+            visiting.remove(b.index)
+            matrices[b.index] = r, t
+            return r, t
+        result = {}
+        for b in bones:
+            try:
+                result[b.name] = evaluate(b)[1]
+            except UnsupportedScale:
+                continue
+        return result
+
     def patch_positions(self, changes):
         out = bytearray(self.data)
         for name, xyz in changes.items():

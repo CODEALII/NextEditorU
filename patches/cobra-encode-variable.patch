@@ -1,0 +1,52 @@
+diff --git a/encode.py b/encode.py
+index c6cd42a..d3e6462 100644
+--- a/encode.py
++++ b/encode.py
+@@ -149,12 +149,15 @@ def convert_to_low_level(high_level_scripts: dict, variant: game_variants.GameVa
+         Get the correct ID and info dict for a script name
+         """
+         this_variant = variant
++        renumber_layers = []
+         while this_variant:
+             for other_id, other_dict in this_variant.scripts.add.items():
+                 if name == other_dict.get('name'):
++                    for layer in reversed(renumber_layers):
++                        for ren in layer:
++                            other_id = ren.apply(other_id)
+                     return other_id, other_dict
+-            for ren in this_variant.scripts.renumber:
+-                id = ren.apply(id)
++            renumber_layers.append(this_variant.scripts.renumber)
+             this_variant = this_variant.parent
+ 
+         match = RE_SCRIPT_DEFAULT_NAME.fullmatch(name)
+@@ -168,12 +171,15 @@ def convert_to_low_level(high_level_scripts: dict, variant: game_variants.GameVa
+         Get the correct ID and info dict for a command name
+         """
+         this_variant = variant
++        renumber_layers = []
+         while this_variant:
+             for other_id, other_dict in this_variant.commands.add.items():
+                 if name == other_dict.get('name'):
++                    for layer in reversed(renumber_layers):
++                        for ren in layer:
++                            other_id = ren.apply(other_id)
+                     return other_id, other_dict
+-            for ren in this_variant.commands.renumber:
+-                id = ren.apply(id)
++            renumber_layers.append(this_variant.commands.renumber)
+             this_variant = this_variant.parent
+ 
+         match = RE_COMMAND_DEFAULT_NAME.fullmatch(name)
+@@ -228,7 +234,10 @@ def encode_wmsc(variant: game_variants.GameVariant, scripts: dict) -> bytes:
+ 
+     data += b'WMS0'
+     data += variant.game.letter().encode('ascii')
+-    data += variant.id.encode('ascii')
++    variant_tag = variant.id
++    if variant.game is common.Game.NSMBU:
++        variant_tag = {'1.0.0': '100', '1.1.0_1.2.0': '110', '1.3.0_NSLU': '130'}[variant.id]
++    data += variant_tag.encode('ascii')
+     assert len(data) == 0x8
+ 
+     # File size -- we'll go back and fill this in at the end

@@ -22,7 +22,7 @@ Completed:
 - Seven automated tests pass, including actual dump round-trip/export preservation,
   index/reference rejection and byte-range checks for bone patches.
 
-## Second milestone — editor, geometry subcase, emulator integration
+## 2026-10-20 — editor, geometry subcase, emulator integration
 
 - Native editor visually inspected and corrected: known level bones shown by
   default, optional auxiliary layout, fit view, scrolling property controls.
@@ -47,10 +47,33 @@ Completed:
   The loaded snapshot starts Mario at the tower. This is not fresh progression QA.
 - Automated key taps were not reliably observed by the game. Human movement test
   is in progress; no claim of a verified W102-to-W103 traversal yet.
-- Current full automated suite: **24 tests passed in 35.666 seconds**. This
-  includes actual local game resources and six isolated-launcher regressions.
+- The experimental island pack now loads to the World 1 map in a separate Cemu
+  instance. It does not crash during map load. The visible render has broad dark
+  green patches over the western plains; without a controlled baseline replay,
+  this is a warning, not a visual-pass result. Geometry and material/culling
+  behavior remain unverified.
 - Generated final quote-preserving island artifact is `build/island-quoted/`;
   SHA256 `4f356d954f48a6ffe1954b78c59a8d874c5c4867bc042b3a6f1dd90d25a39b81`.
+
+## 2026-10-21 — camera, event and route experiments
+
+- Added bounded parsers/editors for the actual World 1 Mario and look offset
+  tables. All 18 companion files round-trip byte-for-byte. Only their XYZ
+  vectors are editable; unknown fields and the effect of each bank remain
+  preserved or explicitly unverified.
+- Added a direct-route variant: the existing tower path bone is renamed for
+  W103 and the last native route segment is redirected. All original point rows
+  and indices remain. Export and project reload pass; in-game traversal and
+  scripts that may refer to the old bone name have not been tested.
+- Added a local Cobra bridge and verified export/unchanged encode against the
+  real RPX event table. Fixed two upstream encoder defects through a small
+  separately licensed patch. The resulting WMSC round-trip preserves all 121
+  IDs and 993 commands. No in-game event loader was installed or tested.
+- Implemented safe equal-length BFRES bone-name replacement by rebuilding the
+  existing name dictionary, retaining its entry order and offsets. This is
+  suitable for the direct-route experiment only after runtime validation.
+- Full local suite: **51 tests passed in 77.548 seconds**, including actual
+  resource checks and original-file protection. This does not verify gameplay.
 
 Not yet proven / outstanding:
 - Actual game traversal, level launch, clear-triggered unlock/save persistence,
@@ -60,10 +83,12 @@ Not yet proven / outstanding:
   rendering is not yet verified and other stock shapes remain.
 - New node/route bones and safe engine/script index remapping. Draft add/delete
   is allowed in the editor but export blocks unresolved references/index changes.
-- General events/camera binary editing, animation authoring, executable loader
-  disassembly, verified patches for engine limitations.
+- Runtime camera behavior and event integration, animation authoring, executable
+  loader integration, and verified patches for engine limitations. Bounded
+  camera-table editing and offline event-table conversion are implemented, but
+  they do not yet establish in-game behavior.
 
-Next steps: finish human traversal/launch test, render the bounded island patch,
-then verify fresh clear-triggered unlocks and save persistence; extend only after
-reproducible runtime evidence. No claimed completion of the full custom-overworld
-mission.
+Next steps: complete the pending human traversal/launch test, compare the island
+render against a controlled baseline and correct its broad dark patches, then
+verify fresh clear-triggered unlocks and save persistence. No claimed completion
+of the full custom-overworld mission.

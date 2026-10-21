@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from worldstudio.archive import Archive, compress, decompress
 from worldstudio.project import WorldProject, Table, sha
-from worldstudio.__main__ import chain_demo, DEFAULT_SOURCE
+from worldstudio.__main__ import chain_demo, direct_route_demo, DEFAULT_SOURCE
 
 
 def fixture():
@@ -115,6 +115,27 @@ class LocalIntegrationTests(unittest.TestCase):
             p.save(p.game_root / 'code' / 'do-not-write.json')
         with self.assertRaises(ValueError):
             p.export(p.game_root / 'content' / 'do-not-write.szs')
+
+    def test_direct_macro_route_export_and_project_roundtrip(self):
+        from worldstudio.bfres import Skeletons
+        p = direct_route_demo(WorldProject.open(DEFAULT_SOURCE))
+        self.assertEqual(p.validate(), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            p.save(folder / 'direct.json')
+            restored = WorldProject.load(folder / 'direct.json')
+            self.assertEqual(restored.bone_renames, p.bone_renames)
+            manifest = restored.export(folder / 'CS_W1.szs')
+            self.assertEqual(set(manifest['changed_entries']), {p.point_name, p.route_name, p.model_name})
+            a = Archive((folder / 'CS_W1.szs').read_bytes())
+            s = Skeletons(a.read(p.model_name))
+            self.assertIn('RW102W103', s.bones)
+            self.assertNotIn('RW102W1T0', s.bones)
+            self.assertIn('W1T0', s.bones)
+            self.assertEqual(Table(a.read(p.point_name)).rows[2][3:5], ['W103', 'RW102W103'])
+            self.assertIn(['RK02hW103', '坂', ''], Table(a.read(p.route_name)).rows)
+            self.assertEqual(s.unique('W101').index, p.skeletons.unique('W101').index)
+        self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
 
 
 if __name__ == '__main__':
