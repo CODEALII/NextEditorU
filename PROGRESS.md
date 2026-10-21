@@ -1132,6 +1132,8 @@ camera behavior and a fully playable custom world remain open.
   review threshold. The editor surfaces that warning; it is not visual QA.
 - Verification: **270 tests passed in 257.844 seconds**; the expanded twelve-
   world sampler/NPOT regression passed separately in 39.777 seconds. `compileall`
-  and `git diff --check` passed. The clean Cemu check remained at its title
-  prompt, so route movement, level launches, progression, and terrain
-  appearance remain unverified.
+  and `git diff --check` passed. Headless Chrome/SwiftShader loaded the W1 page
+  with 42 shapes and 20 albedos without an error overlay (ignored capture:
+  `local/evidence/preview-w1-wrap-sampler.png`). The clean Cemu check remained
+  at its title prompt, so route movement, level launches, progression, and
+  terrain appearance remain unverified.

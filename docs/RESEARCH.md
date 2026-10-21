@@ -138,6 +138,8 @@ Base-color preview textures now also use the `_a0` sampler's GX2 S/T wrap fields
 
 A read-only scan of all twelve supplied world models found 415 materials with supported albedo references. Seventy-six used at least one non-Repeat axis, and every such texture had power-of-two dimensions, so WebGL 1's NPOT wrap restriction does not invalidate these sampled wrap states. The local model regression now checks wrap metadata on every displayed albedo and enforces POT dimensions whenever either axis is non-Repeat. This is a completeness check for the supported preview subset, not proof of game sampling behavior.
 
+A fresh headless Chrome/SwiftShader render loaded the generated W1 page with all 42 shapes and 20 shared albedos; no WebGL error overlay appeared. The ignored capture is `local/evidence/preview-w1-wrap-sampler.png`. This confirms the software preview initializes with the attached wrap states, not that its textures match the game.
+
 ## Local W1 SHARCFB shader interfaces
 
 `python -m worldstudio inspect-shaders <source>` reads SHARCFB version 8 metadata directly or from an SZS/SARC member. It range-checks the archive, binary and program sections; validates program-to-binary stage ranges; and reports named variation, uniform, uniform-block, sampler and attribute symbols without copying or interpreting compiled GX2 instructions. Synthetic tests exercise both endian forms, variation combinations, stage ordering, malformed names and size bounds.
