@@ -1396,8 +1396,12 @@ class WorldStudio(ttk.Frame):
                 continue
             a, b = [projected[name] for name in (route["start"], route["end"])]
             geometry = route.get("style") == "geometry"
-            self.canvas.create_line(a[:2], b[:2], fill="#65b9c6" if geometry else "#f2c65e",
-                                    width=2 if geometry else 4, arrow="none" if geometry else "last")
+            selected_route = self.selected == ("route", route["id"])
+            color = "#38edb6" if selected_route else "#65b9c6" if geometry else "#f2c65e"
+            width = 5 if selected_route else 2 if geometry else 4
+            self.canvas.create_line(a[:2], b[:2], fill=color, width=width,
+                                    arrow="none" if geometry else "last",
+                                    tags=("route", f"route:{route['id']}"))
             if not geometry:
                 self.draw_clear_label(route.get("unlock", route["id"]),
                                       (a[0] + b[0]) / 2, (a[1] + b[1]) / 2,

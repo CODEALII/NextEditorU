@@ -1,5 +1,15 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Sync selected route styling across both graph views
+
+- Native route selection now highlights its corresponding segment in the 2D
+  graph with the same bright color used by the integrated 3D viewport. The
+  native geometry remains available through the existing Auxiliary visibility
+  control; selecting the CSV segment does not silently enable extra geometry.
+- A Tk regression checks the drawn route's tag, highlight color and width with
+  Auxiliary enabled. Together with the WebGL endpoint-overlay regression, all
+  74 editor/preview tests pass; `compileall` and `git diff --check` pass.
+
 ## 2026-10-22 — Make selected routes visible in the embedded viewport
 
 - Selecting a route already moved the viewport camera to its midpoint, but the

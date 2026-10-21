@@ -519,6 +519,16 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertTrue(road_type.instate(("readonly",)))
         self.assertEqual(road_type.cget("values"), ("road",))
 
+    def test_selected_route_is_highlighted_in_the_native_2d_graph(self):
+        self.app.show_auxiliary.set(True)
+        self.app.refresh()
+        self.app.tree.selection_set("segment:0")
+        self.app.select_tree()
+        route_items = self.app.canvas.find_withtag("route:RF001K001")
+        self.assertEqual(len(route_items), 1)
+        self.assertEqual(self.app.canvas.itemcget(route_items[0], "fill"), "#38edb6")
+        self.assertEqual(float(self.app.canvas.itemcget(route_items[0], "width")), 5.0)
+
     def test_loaded_scene_keeps_3d_and_graph_panes_visible(self):
         calls = []
         self.app._ensure_embedded_view = lambda: None
