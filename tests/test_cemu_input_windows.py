@@ -133,10 +133,35 @@ class CemuWindowSelectionTests(unittest.TestCase):
         with patch.object(self.cemu_input_test, "sys", SimpleNamespace(stdin=stdin, stdout=stdout)), \
                 patch.object(self.cemu_input_test, "msvcrt", keyboard), \
                 patch.object(self.cemu_input_test, "time") as clock:
-            self.cemu_input_test.wait_for_confirmation("confirm: ", pid=42, process=process)
+            confirmed = self.cemu_input_test.wait_for_confirmation(
+                "confirm: ", pid=42, process=process)
+        self.assertTrue(confirmed)
         process.poll.assert_called_once_with()
         stdout.write.assert_any_call("confirm: ")
         clock.sleep.assert_not_called()
+
+    def test_confirmation_returns_false_on_n_without_more_input(self):
+        stdin = SimpleNamespace(isatty=lambda: True)
+        stdout = SimpleNamespace(write=Mock(), flush=Mock())
+        process = Mock()
+        process.poll.return_value = None
+        keyboard = SimpleNamespace(kbhit=lambda: True, getwch=lambda: "n")
+        with patch.object(self.cemu_input_test, "sys", SimpleNamespace(stdin=stdin, stdout=stdout)), \
+                patch.object(self.cemu_input_test, "msvcrt", keyboard), \
+                patch.object(self.cemu_input_test, "time") as clock:
+            confirmed = self.cemu_input_test.wait_for_confirmation(
+                "confirm: ", pid=42, process=process)
+        self.assertFalse(confirmed)
+        stdout.write.assert_any_call("\nAborted at confirmation gate.\n")
+        clock.sleep.assert_not_called()
+
+    def test_non_tty_confirmation_can_abort_with_n(self):
+        stdin = SimpleNamespace(isatty=lambda: False)
+        stdout = SimpleNamespace(write=Mock(), flush=Mock())
+        with patch.object(self.cemu_input_test, "sys", SimpleNamespace(stdin=stdin, stdout=stdout)), \
+                patch.object(self.cemu_input_test, "input", return_value="n"):
+            confirmed = self.cemu_input_test.wait_for_confirmation("confirm: ", pid=42)
+        self.assertFalse(confirmed)
 
     def test_confirmation_fails_immediately_when_launched_cemu_exits(self):
         stdin = SimpleNamespace(isatty=lambda: True)

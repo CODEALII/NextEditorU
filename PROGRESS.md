@@ -16,6 +16,10 @@
   packaged archive hash, keyboard mapping, and optional matching save snapshot
   before process creation. A failing check writes a prelaunch result record and
   refuses to launch; 27 Cemu-runner/preflight tests pass.
+- Manual title, overworld, starting-node, step-review and level-entry gates
+  now accept `N`/`Esc` to abort before sending more input. The result records
+  the stopped gate and still inventories screenshots, saves and the game log;
+  attached Cemu stays open and runner-launched Cemu is closed normally.
 
 ## 2026-10-22 — Gate CLI export with an explicit graph profile
 

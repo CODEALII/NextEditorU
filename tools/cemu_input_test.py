@@ -288,10 +288,10 @@ def click_window_center(window):
 
 
 def wait_for_confirmation(prompt, *, pid, process=None):
-    """Wait for Enter while failing promptly if the tested Cemu exits."""
+    """Return True on Enter, False on N/Esc, or fail if the tested Cemu exits."""
     if not sys.stdin.isatty():
-        input(prompt)
-        return
+        answer = input(prompt).strip().casefold()
+        return answer not in {'n', 'no', 'q', 'quit'}
     sys.stdout.write(prompt)
     sys.stdout.flush()
     while True:
@@ -310,21 +310,38 @@ def wait_for_confirmation(prompt, *, pid, process=None):
             if key in ('\r', '\n'):
                 sys.stdout.write('\n')
                 sys.stdout.flush()
-                return
+                return True
+            if key.casefold() in ('n', 'q') or key == '\x1b':
+                sys.stdout.write('\nAborted at confirmation gate.\n')
+                sys.stdout.flush()
+                return False
         time.sleep(0.05)
+
+
+def confirm_or_abort(report, prompt, gate, *, pid, process=None):
+    """Record a manual gate and let the operator stop without sending more input."""
+    confirmed = wait_for_confirmation(prompt, pid=pid, process=process)
+    report['events'].append({'time': timestamp(),
+                             'action': 'manual_gate_confirmed' if confirmed else 'manual_gate_aborted',
+                             'gate': gate})
+    if not confirmed:
+        report['status'] = 'aborted'
+        report['abort_gate'] = gate
+    return confirmed
 
 
 def map_confirmation_prompt(start_label=None):
     if start_label:
         return (f'Inspect the saved map screenshot. Press Enter only if Mario is standing at '
-                f'{start_label!r}: ')
-    return 'Inspect the saved map screenshot. Press Enter only if the intended start node is visible: '
+                f'{start_label!r}; press N or Esc to abort: ')
+    return ('Inspect the saved map screenshot. Press Enter only if the intended start node is visible; '
+            'press N or Esc to abort: ')
 
 
 def step_review_prompt(case, index, key, next_key=None):
     next_step = f' Next direction is {next_key.upper()}.' if next_key else ' This was the final direction.'
     return (f'Inspect {case}-step-{index}-{key}-after.bmp. Confirm Mario reached the expected '
-            f'next node before continuing.{next_step} Press Enter to continue: ')
+            f'next node before continuing.{next_step} Press Enter to continue or N/Esc to stop: ')
 
 
 def capture_window(hwnd, path: Path):
@@ -532,9 +549,11 @@ def run(args):
                 report['events'].append({'time': timestamp(), 'action': 'title_a_ready_delay',
                                          'delay_ms': args.title_a_delay_ms})
             else:
-                wait_for_confirmation(
-                    'Inspect the exact Cemu window. When "Press A!" is visible, press Enter here: ',
-                    pid=pid, process=process)
+                if not confirm_or_abort(
+                        report,
+                        'Inspect the exact Cemu window. When "Press A!" is visible, press Enter here; N/Esc aborts: ',
+                        'title_screen', pid=pid, process=process):
+                    return
             foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
             key_event('z', True)
             time.sleep(args.title_key_hold_ms / 1000.)
@@ -548,22 +567,26 @@ def run(args):
             capture_window(window['hwnd'], title_advance)
             report['screenshots']['after_title_a'] = str(title_advance.resolve())
         if args.attach:
-            wait_for_confirmation(
-                'Verify the attached Cemu window shows the intended overworld, then press Enter: ',
-                pid=pid, process=process)
+            if not confirm_or_abort(
+                    report,
+                    'Verify the attached Cemu window shows the intended overworld; Enter continues, N/Esc aborts: ',
+                    'overworld_visible', pid=pid, process=process):
+                return
         else:
-            wait_for_confirmation(
-                'Pass the title/start screens in this Cemu window. When the intended overworld is visible, press Enter: ',
-                pid=pid, process=process)
+            if not confirm_or_abort(
+                    report,
+                    'Pass the title/start screens. When the intended overworld is visible, press Enter; N/Esc aborts: ',
+                    'overworld_visible', pid=pid, process=process):
+                return
         foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
         report['events'].append({'time': timestamp(), 'action': 'overworld_focus_verified',
                                  'foreground_hwnd': foreground, 'pid': pid})
         map_capture = args.screenshot_dir / f'{args.case}-map-check.bmp'
         capture_window(window['hwnd'], map_capture)
         report['screenshots']['map_check'] = str(map_capture.resolve())
-        wait_for_confirmation(
-            map_confirmation_prompt(args.start_label),
-            pid=pid, process=process)
+        if not confirm_or_abort(report, map_confirmation_prompt(args.start_label),
+                                'starting_node', pid=pid, process=process):
+            return
 
         before = args.screenshot_dir / f'{args.case}-before-{"".join(args.keys or args.key)}.bmp'
         foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
@@ -597,9 +620,10 @@ def run(args):
                 report['screenshots'][f'step_{index}_after'] = str(step_after.resolve())
                 if args.pause_after_each_step and index < len(keys):
                     next_key = keys[index] if index < len(keys) else None
-                    wait_for_confirmation(
-                        step_review_prompt(args.case, index, key, next_key),
-                        pid=pid, process=process)
+                    if not confirm_or_abort(
+                            report, step_review_prompt(args.case, index, key, next_key),
+                            f'step_{index}_{key}', pid=pid, process=process):
+                        return
                     report['events'].append({'time': timestamp(),
                                              'action': 'step_review_confirmed',
                                              'step': index, 'key': key,
@@ -621,9 +645,11 @@ def run(args):
             capture_window(window['hwnd'], after)
             report['screenshots']['after'] = str(after.resolve())
         if args.enter_level:
-            wait_for_confirmation(
-                'Verify Mario is on the intended course node. Press Enter to send Z/A once: ',
-                pid=pid, process=process)
+            if not confirm_or_abort(
+                    report,
+                    'Verify Mario is on the intended course node. Enter sends Z/A once; N/Esc aborts: ',
+                    'level_entry', pid=pid, process=process):
+                return
             foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
             key_event('z', True)
             time.sleep(args.level_key_hold_ms / 1000.)
@@ -638,6 +664,7 @@ def run(args):
         report['final_save_hashes'] = save_hashes(profile)
         report['game_log'] = str((profile / 'log.txt').resolve())
         report['game_log_sha256'] = sha256(profile / 'log.txt') if (profile / 'log.txt').is_file() else None
+        report.setdefault('status', 'completed')
     except (OSError, ValueError, RuntimeError) as error:
         report['failure'] = f'{type(error).__name__}: {error}'
         raise

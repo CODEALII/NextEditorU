@@ -541,6 +541,11 @@ the user, so no new emulator instance was started for this change.
   interpreting the following `D` result as a W102-to-W103 traversal. The
   runner independently enforces the profile/manifest/archive/save preflight
   before launching Cemu and saves any prelaunch rejection as a result JSON.
+  At each manual gate, press `N` or `Esc` to stop before another input is sent
+  (`N` also works when stdin is not an interactive terminal). The result JSON
+  records the aborted gate, screenshots, saves and log hashes; an isolated Cemu
+  started by the runner is closed normally, while an attached instance is left
+  running.
   The command sequence is a ready protocol, not a new gameplay result.
 
 ## Profile-provenance Cemu package — 2026-10-22
