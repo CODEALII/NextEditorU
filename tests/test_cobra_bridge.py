@@ -1,15 +1,22 @@
 import json
 from pathlib import Path
 import struct
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from tools.cobra_bridge import ROOT,run_bridge,validate_wmsc
+from tools.cobra_bridge import ROOT,command_ids_for_version,run_bridge,validate_wmsc,variant_command_ids
+
+
+def wmsc_commands(commands):
+    size=28+len(commands)*8
+    return (b'WMS0U130'+struct.pack('>II',size,1)+struct.pack('>III',7,128,28)+
+            b''.join(struct.pack('>II',command,argument) for command,argument in commands))
 
 
 def wmsc():
-    return b'WMS0U130'+struct.pack('>7I',36,1,7,128,28,344,0)
+    return wmsc_commands([(344,0)])
 
 
 class BridgeTests(unittest.TestCase):
@@ -59,11 +66,61 @@ class BridgeTests(unittest.TestCase):
         report=validate_wmsc(wmsc())
         self.assertEqual(report['script_ids'],[7])
         self.assertEqual(report['command_counts'],[1])
+        self.assertFalse(report['command_registry_checked'])
+        self.assertIsNone(report['unrecognized_command_ids'])
+        self.assertIsNone(report['command_registry_warning'])
         malformed=bytearray(wmsc());struct.pack_into('>I',malformed,24,10000)
         with self.assertRaisesRegex(ValueError,'offset'):validate_wmsc(malformed)
         malformed=bytearray(wmsc());struct.pack_into('>I',malformed,28,343)
         with self.assertRaisesRegex(ValueError,'terminator'):validate_wmsc(malformed)
         with self.assertRaisesRegex(ValueError,'header'):validate_wmsc(b'WMS0Xall'+wmsc()[8:])
+
+    def test_variant_command_registry_inherits_renumbered_ids(self):
+        variants={
+            'base':{'commands':{'add':{'2':{},'3':{}}}},
+            'middle':{'parent':'base','commands':{'renumber':{'3-*':'+2'},'add':{'3':{}}}},
+            'target':{'parent':'middle','commands':{'renumber':{'5-*':'+1'},'add':{'5':{}}}},
+        }
+        self.assertEqual(variant_command_ids(variants,'target'),{2,3,5,6})
+        self.assertIsNone(variant_command_ids(variants,'missing'))
+        self.assertIsNone(variant_command_ids(variants,''))
+        self.assertIsNone(variant_command_ids({'a':{'parent':'b'},'b':{'parent':'a'}},'a'))
+        self.assertIsNone(variant_command_ids({'a':{'commands':{'renumber':{3:'+1'}}}},'a'))
+
+    def test_real_cobra_variant_command_sets_apply_deletes_after_renumbering(self):
+        variants=json.loads((ROOT/'external/Cobra/data/nsmbu.json').read_text(encoding='utf-8'))
+        self.assertEqual(variant_command_ids(variants,'1.3.0_NSLU'),set(range(345)))
+        self.assertEqual(variant_command_ids(variants,'DX'),set(range(344))-{311})
+
+    def test_unknown_numeric_command_is_advisory_and_encode_succeeds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);cobra=root/'Cobra';(cobra/'data').mkdir(parents=True)
+            (cobra/'cobra.py').write_text('')
+            (cobra/'data/nsmbu.json').write_text(json.dumps({
+                'base':{'commands':{'add':{'344':{}}}},
+                'target':{'parent':'base','commands':{'add':{'1':{}}}},
+            }),encoding='utf-8')
+            inputs=root/'inputs';inputs.mkdir()
+            scripts=inputs/'scripts.txt';scripts.write_text('cmd_999\n',encoding='utf-8')
+            version=inputs/'version.json';version.write_text(json.dumps({
+                'game':'nsmbu','game_variant':'target',
+            }),encoding='utf-8')
+            encoded_bytes=wmsc_commands([(999,0),(344,0)])
+
+            def fake_encode(command,**kwargs):
+                Path(command[-1]).write_bytes(encoded_bytes)
+                return subprocess.CompletedProcess(command,0,'encoded','')
+
+            output=root/'encoded'
+            with patch('tools.cobra_bridge.upstream_commit',return_value='a'*40), \
+                    patch('tools.cobra_bridge.local_diff',return_value=b''), \
+                    patch('tools.cobra_bridge.subprocess.run',side_effect=fake_encode):
+                report=run_bridge('encode',[scripts,version],output,cobra)
+            self.assertTrue(report['success'])
+            self.assertTrue(report['wmsc']['command_registry_checked'])
+            self.assertEqual(report['wmsc']['unrecognized_command_ids'],[999])
+            self.assertIn('numeric IDs',report['wmsc']['command_registry_warning'])
+            self.assertEqual((output/'scripts.wmsc').read_bytes(),encoded_bytes)
 
 
 class LocalCobraTests(unittest.TestCase):
@@ -94,6 +151,9 @@ class LocalCobraTests(unittest.TestCase):
             self.assertEqual(summary['size'],9412)
             self.assertEqual(sum(summary['command_counts']),993)
             self.assertEqual(summary['sha256'],'fdb8c2d86ba0acb56d16a5d00a24304e263ad5ced55bc7293e693427f868b45d')
+            self.assertTrue(summary['command_registry_checked'])
+            self.assertEqual(summary['unrecognized_command_ids'],[])
+            self.assertIsNone(summary['command_registry_warning'])
             # Independently compare all exported command/argument pairs and priorities.
             scripts={};current=None
             for line in (base/'events/scripts.txt').read_text().splitlines():

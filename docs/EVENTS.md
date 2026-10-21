@@ -25,6 +25,8 @@ Evidence is preserved under ignored local directories:
 
 The unedited exported text encoded successfully to a 9,412-byte `WMS0U130` file with 121 script IDs, exactly 0 through 120, and 993 command/argument pairs. Its SHA-256 is `fdb8c2d86ba0acb56d16a5d00a24304e263ad5ced55bc7293e693427f868b45d`. Independent tests compare every encoded command, argument and priority to the exported text, verify command offsets/ranges, and check terminator 344. An additional encode using the inherited symbolic name `end` produces identical bytes.
 
+The post-encode report now also resolves command IDs from Cobra's local NSMBU variant registry, applying parent-to-child renumbering, additions and deletions. The detected local `1.3.0_NSLU` output has no IDs outside that registry. If an ID is absent, the report emits `command_registry_warning` and lists it under `unrecognized_command_ids`; it remains a numeric ID and the WMSC is still exported. If the variant or registry cannot be resolved, `command_registry_checked` is false and the unknown-ID list is `null`. This is an advisory compatibility lint, not proof that a command is valid in-game.
+
 This proves a local **RPX → event text → structurally validated WMSC** workflow. It is not an RPX byte roundtrip or an in-game event test. Exported original scripts and WMSC remain ignored local data; do not redistribute them as original tooling.
 
 ## Two reproducible upstream encoding defects and the local correction

@@ -842,3 +842,17 @@ camera behavior and a fully playable custom world remain open.
 - Synthetic cache tests and local W1 material/texture/shader checks passed.
   The full suite passed (**194 tests in 137.866 seconds**), with `compileall`
   and `git diff --check`.
+
+## 2026-10-21 — Lint encoded event command IDs
+
+- WMSC post-encode validation now resolves NSMBU command IDs through Cobra's
+  variant inheritance, applying renumbering, additions and deletions in order.
+  Unknown IDs are listed with a clear advisory; numeric fallback IDs remain
+  unchanged and encoding succeeds. An unknown/malformed registry is reported
+  as unchecked instead of blocking the export.
+- Tests cover synthetic inheritance, actual `1.3.0_NSLU` and `DX` command sets,
+  deletion after renumbering, malformed registry data, advisory behavior and
+  the local RPX event encode. The full suite passed (**221 tests in 147.539
+  seconds**), with `compileall` and `git diff --check`.
+- The check validates registry membership only. It does not prove that a
+  command is accepted by the game or that an event loader is installed.

@@ -24,8 +24,90 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def validate_wmsc(data):
-    """Independently validate the NSMBU v1.3 sparse big-endian WMSC format."""
+def variant_command_ids(variants, variant_name):
+    """Resolve command IDs through Cobra variant additions and renumbering."""
+    if (not isinstance(variants, dict) or not isinstance(variant_name, str) or
+            not variant_name or variant_name not in variants):
+        return None
+    lineage = []
+    seen = set()
+    current = variant_name
+    try:
+        while current:
+            if current in seen or current not in variants:
+                return None
+            seen.add(current)
+            info = variants[current]
+            if not isinstance(info, dict):
+                return None
+            lineage.append(info)
+            current = info.get('parent')
+            if current is not None and not isinstance(current, str):
+                return None
+
+        known = set()
+        for info in reversed(lineage):
+            commands = info.get('commands', {})
+            if not isinstance(commands, dict):
+                return None
+            renumber = commands.get('renumber', {})
+            additions = commands.get('add', {})
+            deletions = commands.get('delete', [])
+            if (not isinstance(renumber, dict) or not isinstance(additions, dict) or
+                    not isinstance(deletions, list)):
+                return None
+
+            renumber_ranges = []
+            for span, amount in renumber.items():
+                if not isinstance(span, str) or '-' not in span:
+                    return None
+                start_text, end_text = span.split('-', 1)
+                start = int(start_text)
+                end = None if end_text == '*' else int(end_text)
+                offset = int(amount)
+                if start < 0 or (end is not None and end < start):
+                    return None
+                renumber_ranges.append((start, end, offset))
+
+            transformed = set()
+            for command_id in known:
+                value = command_id
+                for start, end, offset in renumber_ranges:
+                    if start <= value and (end is None or value <= end):
+                        value += offset
+                if 0 <= value <= 0xFFFFFFFF:
+                    transformed.add(value)
+            known = transformed
+
+            for command_id in deletions:
+                if type(command_id) is not int or not 0 <= command_id <= 0xFFFFFFFF:
+                    return None
+                known.discard(command_id)
+            for command_id in additions:
+                value = int(command_id)
+                if not 0 <= value <= 0xFFFFFFFF:
+                    return None
+                known.add(value)
+        return known
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def command_ids_for_version(cobra_root, version_info):
+    """Load the local NSMBU command registry for a Cobra export variant."""
+    if not isinstance(version_info, dict) or version_info.get('game') != 'nsmbu':
+        return None
+    variant_name = version_info.get('game_variant')
+    try:
+        path = Path(cobra_root) / 'data/nsmbu.json'
+        variants = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError, TypeError):
+        return None
+    return variant_command_ids(variants, variant_name)
+
+
+def validate_wmsc(data, known_command_ids=None):
+    """Independently validate WMSC structure and optionally lint command IDs."""
     if len(data)<16 or data[:8]!=b'WMS0U130':
         raise ValueError('Expected NSMBU v1.3 WMS0U130 header')
     size,count=struct.unpack_from('>II',data,8)
@@ -43,16 +125,23 @@ def validate_wmsc(data):
         priorities.append(priority);starts.append(start)
     if starts!=sorted(set(starts)):
         raise ValueError('WMSC scripts must occupy separate ordered command ranges')
-    command_counts=[]
+    command_counts=[];command_ids=set()
     for start,end in zip(starts,starts[1:]+[size]):
         if end<=start or (end-start)%8:
             raise ValueError('Invalid WMSC command range')
         commands=[struct.unpack_from('>II',data,p) for p in range(start,end,8)]
         if commands[-1][0]!=344 or any(command==344 for command,_ in commands[:-1]):
             raise ValueError('WMSC script must end with the v1.3 terminator 344')
+        command_ids.update(command for command,_ in commands)
         command_counts.append(len(commands))
     return {'format':'WMS0U130','size':size,'script_count':count,'script_ids':ids,
             'priorities':priorities,'command_counts':command_counts,
+            'command_registry_checked':known_command_ids is not None,
+            'unrecognized_command_ids':(sorted(command_ids-known_command_ids)
+                                        if known_command_ids is not None else None),
+            'command_registry_warning':(
+                'Unrecognized command IDs remain encoded as numeric IDs; they were not changed.'
+                if known_command_ids is not None and command_ids-known_command_ids else None),
             'sha256':hashlib.sha256(data).hexdigest(),'game_verified':False}
 
 
@@ -117,7 +206,10 @@ def run_bridge(operation,inputs,output,cobra_root=DEFAULT_COBRA,timeout=120):
                 raise ValueError('Cobra export did not produce both expected files')
             metadata['analysis']=json.loads((output/'version.json').read_text(encoding='utf-8'))
         elif operation=='encode':
-            metadata['wmsc']=validate_wmsc((output/'scripts.wmsc').read_bytes())
+            version_info=json.loads(inputs[1].read_text(encoding='utf-8'))
+            known_command_ids=command_ids_for_version(cobra_root,version_info)
+            metadata['wmsc']=validate_wmsc((output/'scripts.wmsc').read_bytes(),
+                                           known_command_ids)
         if any(sha256(p)!=info['sha256'] for p,info in zip(inputs,source_info)):
             raise RuntimeError('Source file changed during Cobra invocation')
         metadata['outputs']={p.name:{'sha256':sha256(p),'size':p.stat().st_size}
