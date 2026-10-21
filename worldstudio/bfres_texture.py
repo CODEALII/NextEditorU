@@ -130,7 +130,7 @@ def _texture_context(data, model_name):
 
 
 def _extract_material_texture(data, model_name, material_name, texture_name, *, suffix,
-                              formats, kind, expected_slot=None):
+                              formats, kind, expected_slot=None, prefer_slot=None):
     """Return a supported raw GX2 texture referenced by one BFRES material.
 
     The supported surface is a single-slice 2D, one-sample, 2D Thin1 texture
@@ -147,11 +147,18 @@ def _extract_material_texture(data, model_name, material_name, texture_name, *, 
     reference_list = r.ptr(material + 40)
     r.bounds(reference_list, reference_count * 8)
     samplers = None
+
+    def load_samplers():
+        nonlocal samplers
+        if samplers is None:
+            sampler_count = data[material + 16]
+            samplers = r.dictionary(r.ptr(material + 48))
+            if sampler_count != reference_count or len(samplers) != reference_count:
+                raise ValueError(f'{material_name}: texture-reference and sampler counts do not match')
+        return samplers
+
     if expected_slot is not None:
-        sampler_count = data[material + 16]
-        samplers = r.dictionary(r.ptr(material + 48))
-        if sampler_count != reference_count or len(samplers) != reference_count:
-            raise ValueError(f'{material_name}: texture-reference and sampler counts do not match')
+        load_samplers()
     matches = []
     for index in range(reference_count):
         reference = reference_list + index * 8
@@ -164,11 +171,19 @@ def _extract_material_texture(data, model_name, material_name, texture_name, *, 
                 texture_name is None and suffix is None and expected_slot is not None and
                 samplers[index][0] == expected_slot):
             matches.append((index, name, texture))
+    if len(matches) > 1 and prefer_slot is not None:
+        sampler_values = load_samplers()
+        preferred = [match for match in matches
+                     if sampler_values[match[0]][0] == prefer_slot]
+        if len(preferred) == 1:
+            matches = preferred
     if len(matches) != 1:
         if texture_name is not None:
             expected = texture_name
         elif suffix is not None:
             expected = f'one *{suffix} reference'
+            if prefer_slot is not None:
+                expected += f' or one unambiguous {prefer_slot} sampler match'
         else:
             expected = f'one {expected_slot} sampler texture'
         raise ValueError(f'{material_name}: expected exactly {expected}, found {len(matches)}')
@@ -215,10 +230,15 @@ def _extract_material_texture(data, model_name, material_name, texture_name, *, 
 
 
 def extract_base_color_texture(data, model_name, material_name, texture_name=None):
-    """Return raw GX2 BC1/BC3 base-color metadata and bytes for a material."""
+    """Return raw GX2 BC1/BC3 base-color metadata and bytes for a material.
+
+    If multiple ``*_alb`` references exist, the observed ``_a0`` pairing is
+    used only when exactly one candidate occupies that sampler. A unique
+    suffix match keeps its existing behavior.
+    """
     return _extract_material_texture(data, model_name, material_name, texture_name,
                                      suffix="_alb", formats=_BASE_COLOR_FORMATS,
-                                     kind="base-color")
+                                     kind="base-color", prefer_slot="_a0")
 
 
 def extract_normal_map_texture(data, model_name, material_name, texture_name=None):

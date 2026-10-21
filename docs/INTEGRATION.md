@@ -1,5 +1,17 @@
 # Runtime evidence and test protocol
 
+## Ambiguous albedo references in local world models — 2026-10-22
+
+- For materials with multiple `*_alb` references, the preview now uses `_a0`
+  pairing only if exactly one candidate occupies that slot. A unique suffix
+  match is unchanged; if the pairing is still ambiguous or its format/layout is
+  unsupported, the shape keeps its labeled fallback color.
+- A read-only re-scan improved texture attachment from 51 to 53 shapes in W4,
+  73 to 74 in W5a, and 27 to 33 in W8b. The W8b regression confirms
+  `mtYamaPink` resolves to `Yama_Pink_alb`; the twelve-world test records
+  texture and shape coverage. This is local reference metadata, not proof of
+  shader meaning or game rendering.
+
 ## Terrain viewport matches topology-preserving export — 2026-10-22
 
 - With imported OBJ/GLB terrain, the embedded viewport now applies the same

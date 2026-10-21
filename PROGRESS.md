@@ -1,5 +1,17 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Resolve ambiguous local albedo references
+
+- Some course-select materials contain more than one `*_alb` reference. The
+  preview previously rejected all such materials and displayed fallback color.
+  It now selects the unique `_a0`-paired candidate only when that pairing
+  removes the ambiguity; unique suffix matches and unresolved cases keep their
+  prior behavior.
+- Re-scanned all twelve local world models: texture coverage increased from
+  51 to 53 shapes in W4, 73 to 74 in W5a, and 27 to 33 in W8b. Added a local
+  regression for `mtYamaPink` and an all-world coverage test. This resolves
+  references by observed local pairing, not shader interpretation.
+
 ## 2026-10-22 — Preview terrain as the exported BFRES projection
 
 - The imported OBJ/GLB was previously drawn directly in the world viewport even

@@ -12,7 +12,7 @@ Implemented offline subcase: static W1 extraction and the selected-mesh inspecto
 
 Implemented offline subcase: the native preview chooses the `<archive>_World` model matching the opened course-select archive. All twelve local models decode in the tested static subset: W1/W2a/W3/W4/W5a/W5b/W6a/W7/W8a/W8b/W9a/W9b produce 42/58/40/53/76/27/61/34/18/42/3/20 shapes. The decoder supports observed float16x4 positions with W=1 and rigid attachment to supported rest-pose bones, including rotation, translation and positive scale with inverse-transpose normal handling. Segment-scale compensation, camera-facing billboard branches and other vertex encodings remain unsupported. W7 produces 19 decoded BC1 base-color maps and W9a produces 2; their 3D geometry and graph nodes share the tested W7 coordinate bounds.
 
-The BC1/BC3 base-color path has also been checked against all twelve local world models. It attaches decoded maps to 42/42 W1 shapes, 58/58 W2a, 39/40 W3, 51/53 W4, 73/76 W5a, 27/27 W5b, 61/61 W6a, 33/34 W7, 17/18 W8a, 27/42 W8b, 3/3 W9a and 20/20 W9b shapes. Materials with ambiguous albedo references, unsupported formats/layouts or no supported albedo keep the fallback color; sampler meaning and game material behavior remain unresolved.
+The BC1/BC3 base-color path has also been checked against all twelve local world models. It attaches decoded maps to 42/42 W1 shapes, 58/58 W2a, 39/40 W3, 53/53 W4, 74/76 W5a, 27/27 W5b, 61/61 W6a, 33/34 W7, 17/18 W8a, 33/42 W8b, 3/3 W9a and 20/20 W9b shapes. When a material has multiple `*_alb` references, a unique `_a0` sampler match can disambiguate them; this does not establish general shader semantics. Unsupported formats/layouts or missing albedo references keep the fallback color.
 
 ## Next editing milestones
 

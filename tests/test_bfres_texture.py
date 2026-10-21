@@ -304,9 +304,9 @@ class LocalTextureReferenceTests(unittest.TestCase):
         folder = root / 'NSMBU Modding Project/content/Common/course_select'
         expected = {
             'W1': (42, 42, 20), 'W2a': (58, 58, 32), 'W3': (40, 39, 19),
-            'W4': (53, 51, 32), 'W5a': (76, 73, 27), 'W5b': (27, 27, 18),
+            'W4': (53, 53, 34), 'W5a': (76, 74, 28), 'W5b': (27, 27, 18),
             'W6a': (61, 61, 21), 'W7': (34, 33, 19), 'W8a': (18, 17, 16),
-            'W8b': (42, 27, 16), 'W9a': (3, 3, 2), 'W9b': (20, 20, 5),
+            'W8b': (42, 33, 22), 'W9a': (3, 3, 2), 'W9b': (20, 20, 5),
         }
         missing = [world for world in expected if not (folder / f'CS_{world}.szs').is_file()]
         if missing:
@@ -412,6 +412,53 @@ class LocalTextureReferenceTests(unittest.TestCase):
         self.assertEqual(sum(bool(shape.get('texture')) for shape in shapes), 42)
         self.assertEqual(len(textures), 20)
         self.assertFalse(failed)
+
+    def test_local_w8b_ambiguous_albedos_resolve_by_unique_a0_sampler(self):
+        from worldstudio.mesh import extract_rigid_model
+
+        root = Path(__file__).resolve().parents[1]
+        source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W8b.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W8b dump unavailable')
+        model = Archive(source.read_bytes()).read('CS_W8b.bfres')
+        texture = extract_base_color_texture(model, 'CS_W8b_World', 'mtYamaPink')
+        self.assertEqual(texture['name'], 'Yama_Pink_alb')
+
+        shapes = extract_rigid_model(model, 'CS_W8b_World')
+        textures, failed = attach_base_color_textures(
+            model, shapes, model_name='CS_W8b_World')
+        selected = [shape for shape in shapes if shape['material'] == 'mtYamaPink']
+        self.assertTrue(selected)
+        self.assertTrue(all(shape.get('texture') == 'Yama_Pink_alb' for shape in selected))
+        self.assertIn('Yama_Pink_alb', textures)
+        self.assertNotIn('mtYamaPink', failed)
+
+    def test_local_world_albedo_coverage_uses_unambiguous_a0_tiebreak(self):
+        from worldstudio.mesh import extract_rigid_model
+
+        root = Path(__file__).resolve().parents[1]
+        expected = {
+            'W1': (42, 20), 'W2a': (58, 32), 'W3': (39, 19), 'W4': (53, 34),
+            'W5a': (74, 28), 'W5b': (27, 18), 'W6a': (61, 21), 'W7': (33, 19),
+            'W8a': (17, 16), 'W8b': (33, 22), 'W9a': (3, 2), 'W9b': (20, 5),
+        }
+        sources = [root / 'NSMBU Modding Project/content/Common/course_select' /
+                   f'CS_{world}.szs' for world in expected]
+        if not all(source.is_file() for source in sources):
+            self.skipTest('Complete user-provided twelve-world dump unavailable')
+
+        for world, (expected_shapes, expected_textures) in expected.items():
+            with self.subTest(world=world):
+                archive = Archive((root / 'NSMBU Modding Project/content/Common/course_select' /
+                                   f'CS_{world}.szs').read_bytes())
+                model_name = f'CS_{world}_World'
+                model = archive.read(f'CS_{world}.bfres')
+                shapes = extract_rigid_model(model, model_name)
+                textures, _failed = attach_base_color_textures(
+                    model, shapes, model_name=model_name)
+                self.assertEqual(sum(bool(shape.get('texture')) for shape in shapes),
+                                 expected_shapes)
+                self.assertEqual(len(textures), expected_textures)
 
     def test_local_w1_normal_map_slots_are_bc5_snorm_and_decode(self):
         from worldstudio.bfres import Skeletons
