@@ -14,6 +14,7 @@ from .bfres import Skeletons
 
 DEFAULT_MODEL = 'CS_W1_World'
 DEFAULT_SHAPE = 'polySurface1489__mtGrass'
+MAX_FACE_CORNERS = 1024
 
 
 def extract_rigid_model(data, model=DEFAULT_MODEL):
@@ -173,6 +174,136 @@ def _nearest_uvs(points, source_points, source_uvs):
     return result
 
 
+def _triangulate_face(vertices, face):
+    """Triangulate a simple planar polygon without changing its winding.
+
+    Convex polygons retain the historical fan order. Concave polygons use
+    projected ear clipping so the triangles stay inside the source outline.
+    The returned values are indices into the original vertex list, preserving
+    each corner's UV and normal association.
+    """
+    if len(face) > MAX_FACE_CORNERS:
+        raise ValueError(f'OBJ polygon exceeds the {MAX_FACE_CORNERS}-corner triangulation limit')
+    if len(face) == 3:
+        return [tuple(face)]
+
+    points3 = [vertices[index] for index in face]
+    extent = max(max(point[axis] for point in points3) -
+                 min(point[axis] for point in points3) for axis in range(3))
+    scale = max(extent, 1.0)
+    length_tolerance = scale * 1e-9
+    area_tolerance = scale * scale * 1e-12
+
+    # Newell's method gives a stable plane normal for arbitrary polygon winding.
+    normal = [0.0, 0.0, 0.0]
+    for point, following in zip(points3, points3[1:] + points3[:1]):
+        normal[0] += (point[1] - following[1]) * (point[2] + following[2])
+        normal[1] += (point[2] - following[2]) * (point[0] + following[0])
+        normal[2] += (point[0] - following[0]) * (point[1] + following[1])
+    normal_length = math.sqrt(sum(value * value for value in normal))
+    if normal_length <= area_tolerance:
+        raise ValueError('Degenerate source polygon')
+    normal = [value / normal_length for value in normal]
+    plane_tolerance = max(1e-7, scale * 1e-6)
+    origin = points3[0]
+    if any(abs(sum((point[axis] - origin[axis]) * normal[axis]
+                   for axis in range(3))) > plane_tolerance for point in points3):
+        raise ValueError('Non-planar source polygon cannot be triangulated')
+
+    drop_axis = max(range(3), key=lambda axis: abs(normal[axis]))
+    axes = tuple(axis for axis in range(3) if axis != drop_axis)
+    points = [(point[axes[0]], point[axes[1]]) for point in points3]
+
+    def cross(a, b, c):
+        return ((b[0] - a[0]) * (c[1] - a[1]) -
+                (b[1] - a[1]) * (c[0] - a[0]))
+
+    def on_segment(point, start, end):
+        return (min(start[0], end[0]) - length_tolerance <= point[0] <=
+                max(start[0], end[0]) + length_tolerance and
+                min(start[1], end[1]) - length_tolerance <= point[1] <=
+                max(start[1], end[1]) + length_tolerance)
+
+    # Coincident corners make both the boundary and attribute association
+    # ambiguous. Reject them rather than silently dropping a corner.
+    for first in range(len(points)):
+        for second in range(first + 1, len(points)):
+            dx = points[first][0] - points[second][0]
+            dy = points[first][1] - points[second][1]
+            if dx * dx + dy * dy <= length_tolerance * length_tolerance:
+                raise ValueError('OBJ polygon has duplicate corners')
+
+    signed_area = sum(point[0] * following[1] - following[0] * point[1]
+                      for point, following in zip(points, points[1:] + points[:1])) * 0.5
+    if abs(signed_area) <= area_tolerance:
+        raise ValueError('Degenerate source polygon')
+    winding = 1.0 if signed_area > 0.0 else -1.0
+
+    # Non-adjacent edges crossing or touching mean the input boundary is not
+    # a simple polygon, so ear clipping has no well-defined result.
+    count = len(points)
+    for first in range(count):
+        a, b = points[first], points[(first + 1) % count]
+        for second in range(first + 1, count):
+            if second == first or second == (first + 1) % count or \
+                    (second + 1) % count == first:
+                continue
+            c, d = points[second], points[(second + 1) % count]
+            abc, abd = cross(a, b, c), cross(a, b, d)
+            cda, cdb = cross(c, d, a), cross(c, d, b)
+            intersects = (
+                ((abc > area_tolerance and abd < -area_tolerance) or
+                 (abc < -area_tolerance and abd > area_tolerance)) and
+                ((cda > area_tolerance and cdb < -area_tolerance) or
+                 (cda < -area_tolerance and cdb > area_tolerance)))
+            intersects = intersects or (abs(abc) <= area_tolerance and on_segment(c, a, b))
+            intersects = intersects or (abs(abd) <= area_tolerance and on_segment(d, a, b))
+            intersects = intersects or (abs(cda) <= area_tolerance and on_segment(a, c, d))
+            intersects = intersects or (abs(cdb) <= area_tolerance and on_segment(b, c, d))
+            if intersects:
+                raise ValueError('Self-intersecting OBJ polygon cannot be triangulated')
+
+    turns = [cross(points[(index - 1) % count], points[index], points[(index + 1) % count]) * winding
+             for index in range(count)]
+    if all(turn > area_tolerance for turn in turns):
+        return [(face[0], face[index], face[index + 1])
+                for index in range(1, len(face) - 1)]
+
+    remaining = list(range(count))
+    triangles = []
+    while len(remaining) > 3:
+        ear_found = False
+        for position, current in enumerate(remaining):
+            previous = remaining[position - 1]
+            following = remaining[(position + 1) % len(remaining)]
+            if cross(points[previous], points[current], points[following]) * winding <= area_tolerance:
+                continue
+            contains_corner = False
+            for candidate in remaining:
+                if candidate in (previous, current, following):
+                    continue
+                sides = (cross(points[previous], points[current], points[candidate]) * winding,
+                         cross(points[current], points[following], points[candidate]) * winding,
+                         cross(points[following], points[previous], points[candidate]) * winding)
+                if all(side >= -area_tolerance for side in sides):
+                    contains_corner = True
+                    break
+            if contains_corner:
+                continue
+            triangles.append((face[previous], face[current], face[following]))
+            del remaining[position]
+            ear_found = True
+            break
+        if not ear_found:
+            raise ValueError('OBJ polygon cannot be triangulated safely')
+
+    final = tuple(face[index] for index in remaining)
+    if cross(*(points[index] for index in remaining)) * winding <= area_tolerance:
+        raise ValueError('Degenerate source polygon')
+    triangles.append(final)
+    return triangles
+
+
 def _geometry(vertices, faces, uvs=None, imported_normals=None):
     if not vertices or not faces or len(vertices) > 65535:
         raise ValueError('Mesh needs 1..65535 vertices and polygon faces')
@@ -191,9 +322,7 @@ def _geometry(vertices, faces, uvs=None, imported_normals=None):
     for face in faces:
         if len(face) < 3 or any(type(i) is not int or not 0 <= i < len(vertices) for i in face):
             raise ValueError('Invalid mesh face')
-        # Fan triangulation supports convex polygons; concave faces must be triangulated by the author.
-        for j in range(1, len(face) - 1):
-            tri = face[0], face[j], face[j + 1]
+        for tri in _triangulate_face(vertices, face):
             a, b, c = [vertices[i] for i in tri]
             ab = [b[k] - a[k] for k in range(3)]
             ac = [c[k] - a[k] for k in range(3)]

@@ -4,7 +4,7 @@ import hashlib
 import math
 from pathlib import Path
 
-from worldstudio.mesh import DEFAULT_SHAPE, extract_rigid_model, replace_rigid_mesh
+from worldstudio.mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model, replace_rigid_mesh
 from worldstudio.archive import Archive
 from worldstudio.bfres import Skeletons
 
@@ -119,6 +119,39 @@ class MeshTests(unittest.TestCase):
             replace_rigid_mesh(fixture(),self.vertices,[(0,1,99)])
         with self.assertRaisesRegex(ValueError,'Degenerate'):
             replace_rigid_mesh(fixture(),self.vertices,[(0,0,0)])
+
+    def test_concave_obj_polygon_triangulates_inside_outline_and_preserves_winding(self):
+        # A C-shaped polygon with area 7; a fan from vertex zero crosses the notch.
+        vertices = [(0,0,0),(3,0,0),(3,1,0),(1,1,0),
+                    (1,2,0),(3,2,0),(3,3,0),(0,3,0)]
+        uvs = [(i / 8, i / 16) for i in range(len(vertices))]
+        for face, expected_sign in ((tuple(range(8)), 1), (tuple(reversed(range(8))), -1)):
+            _, indices, _, result_uvs = _geometry(vertices, [face], uvs=uvs)
+            triangles = [indices[i:i+3] for i in range(0, len(indices), 3)]
+            areas = []
+            for a, b, c in triangles:
+                pa, pb, pc = (vertices[index] for index in (a,b,c))
+                areas.append(((pb[0]-pa[0])*(pc[1]-pa[1]) -
+                              (pb[1]-pa[1])*(pc[0]-pa[0])) / 2)
+            self.assertEqual(len(triangles), len(vertices)-2)
+            self.assertTrue(all(area * expected_sign > 0 for area in areas), areas)
+            self.assertAlmostEqual(sum(abs(area) for area in areas), 7.0)
+            self.assertEqual(set(indices), set(range(len(vertices))))
+            self.assertEqual(result_uvs, uvs)
+
+    def test_rejects_non_planar_and_self_intersecting_obj_polygons(self):
+        non_planar = [(0,0,0),(3,0,0),(3,2,0),(1,1,0.1),(0,2,0)]
+        with self.assertRaisesRegex(ValueError, 'Non-planar'):
+            _geometry(non_planar, [tuple(range(len(non_planar)))])
+        crossing = [(0,0,0),(3,3,0),(0,3,0),(3,0,0),(4,1,0)]
+        with self.assertRaisesRegex(ValueError, 'Self-intersecting'):
+            _geometry(crossing, [tuple(range(len(crossing)))])
+
+    def test_rejects_polygon_above_triangulation_corner_limit(self):
+        vertices = [(float(index), 0.0, 0.0) for index in range(1025)]
+        face = tuple(range(len(vertices)))
+        with self.assertRaisesRegex(ValueError, '1024-corner triangulation limit'):
+            _geometry(vertices, [face])
 
     def test_rejects_unknown_formats_and_skinning(self):
         data=bytearray(fixture());struct.pack_into('>I',data,0x408,123)

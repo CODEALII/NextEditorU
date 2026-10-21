@@ -41,6 +41,15 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertNotIn("</script><script>alert(1)", page)
         self.assertIn("<\\/script>", page)
 
+    def test_webgl_startup_failures_show_an_obvious_viewer_fallback(self):
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
+        self.assertIn("function showError(message){error.textContent=message;error.style.display='grid'}", script)
+        self.assertIn("try{gl=canvas.getContext('webgl'", script)
+        self.assertIn("if(!gl)showError('WebGL is unavailable in this browser.", script)
+        self.assertIn("catch(e){showError('Could not initialize the WebGL renderer:", script)
+        self.assertIn("#error{display:none;position:absolute;inset:0;z-index:4", page)
+
     def test_viewer_accepts_embedded_base_texture_without_remote_resources(self):
         page = build_document({"shapes": [{"name": "grass", "uvs": [[0, 0]],
                                            "texture": {"name": "Grass_alb", "width": 1,

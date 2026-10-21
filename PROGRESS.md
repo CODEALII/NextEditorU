@@ -177,3 +177,29 @@ Next steps: reproduce the reported movement failure with the current Cemu input
 state, compare the corrected main-grass island render against a controlled
 baseline, then verify level launch, fresh clear-triggered unlocks and save
 persistence. No claimed completion of the full custom-overworld mission.
+
+## 2026-10-21 - topology, OBJ and viewer safety checks
+
+- OBJ polygon import now keeps the original fan order for convex faces and uses
+  ear clipping for simple planar concave faces. Non-planar, self-intersecting,
+  duplicate-corner and faces above 1,024 corners fail with explicit errors.
+  Tests cover both windings, area, UV-corner association and rejection paths.
+- Native graph validation now checks changed same-world destinations against
+  directed route-segment chains when the supplied baseline inventories are
+  complete and locally resolvable. It skips partial inventories and cross-world
+  links. The W1 graph and both route demo variants still validate cleanly.
+- WebGL context, shader/program and mesh initialization failures now leave a
+  high-contrast viewer error overlay instead of an empty canvas.
+- Full suite: **99 tests passed in 94.045 seconds**. `compileall`, inline viewer
+  JavaScript `node --check`, the SVG parser and the W1 `validate-graph` command
+  passed.
+- The isolated `cemu-island-mainlight` log confirms `World Studio Chain` and
+  `Title Screen Crash Fix` activate. A fresh test save was created in its own
+  MLC, SpotPass was declined, and the game reached its title screen. Route
+  movement is still unverified: computer-use key taps did not pass the title
+  prompt, so no traversal result can be inferred from this boot.
+
+Next: run the patched map with an input source Cemu actually accepts, record the
+stock route as a control, then retest Mario's movement and the corrected terrain
+against the same known Cemu profile. Level start, progression, persistence,
+camera behavior and a fully playable custom world remain open.
