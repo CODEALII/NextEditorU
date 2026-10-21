@@ -11,6 +11,7 @@ import json
 import math
 import queue
 import re
+import tempfile
 import threading
 from pathlib import Path
 import tkinter as tk
@@ -21,6 +22,7 @@ from .graph_validation import (
     native_macro_path_choices,
     native_macro_path_chain_reaches,
     native_point_path_route_ids,
+    native_road_type_choices,
     native_route_segment_choices,
 )
 from .mesh import MAX_FACE_CORNERS, transform_obj_geometry
@@ -403,6 +405,18 @@ class WorldStudio(ttk.Frame):
         self.drag = None
         self.center = (0, 0, 0)
         self.status = tk.StringVar(value="Editor preview • game behavior has not been verified")
+        self.preview_scene = None
+        self.preview_widget = None
+        self._preview_update_after = None
+        self._preview_poll_after = None
+        self._preview_open_after = None
+        self._preview_building = False
+        self._webview_error = None
+        self._preview_geometry_signature = None
+        self._embedded_preview_dir = None
+        self._embedded_preview_revision = 0
+        self._webview_host = None
+        self._runtime_cleanup_done = False
         self._build()
         self._load_mesh()
         self.refresh()
@@ -453,7 +467,7 @@ class WorldStudio(ttk.Frame):
                               ("Save project", self.save), ("Import OBJ/GLB", self.import_obj),
                               ("Add node", self.add_node), ("Add route", self.add_route),
                               ("Delete selected", self.delete), ("Validate", self.validate),
-                              ("3D model preview", self.open_3d_preview), ("Fit view", self.fit)]:
+                              ("Refresh 3D", self.open_3d_preview), ("Fit view", self.fit)]:
             button = ttk.Button(bar, text=title, command=action)
             button.pack(side="left", padx=2)
             if title == "Recent":
@@ -464,13 +478,30 @@ class WorldStudio(ttk.Frame):
         self.undo_button.pack(side="left", padx=2)
         self.redo_button = ttk.Button(history_bar, text="Redo  Ctrl+Y", command=self.redo, state="disabled")
         self.redo_button.pack(side="left", padx=2)
-        self.viewport_hint = ttk.Label(self, text="Graph editor preview: drag to orbit · wheel to zoom · click a node to edit. "
-                  "Use 3D model preview for depth-tested world geometry.", padding=(10, 5), foreground="#9fb4c7")
+        self.viewport_hint = ttk.Label(self, text="3D world viewport · drag to orbit · right-drag to pan · wheel to zoom · select points in the viewport or list.", padding=(10, 5), foreground="#9fb4c7")
         self.viewport_hint.pack(fill="x")
         body = ttk.Panedwindow(self, orient="horizontal")
         body.pack(fill="both", expand=True, padx=8)
-        self.canvas = tk.Canvas(body, background="#101d29", highlightthickness=0)
-        body.add(self.canvas, weight=4)
+        # Keep WebGL and the editable graph visible together. A Notebook made
+        # the primary viewport easy to leave behind and hid graph context;
+        # this nested splitter makes the 3D world a persistent editor pane.
+        self.view_split = ttk.Panedwindow(body, orient="horizontal")
+        self.viewport_pane = ttk.Frame(self.view_split)
+        self.graph_frame = ttk.Frame(self.view_split)
+        ttk.Label(self.viewport_pane, text="3D WORLD", padding=(8, 5),
+                  foreground="#9fb4c7").pack(fill="x")
+        ttk.Label(self.graph_frame, text="GRAPH EDITOR", padding=(8, 5),
+                  foreground="#9fb4c7").pack(fill="x")
+        self.viewport_frame = ttk.Frame(self.viewport_pane)
+        self.viewport_frame.pack(fill="both", expand=True)
+        self.canvas = tk.Canvas(self.graph_frame, background="#101d29", highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
+        self._build_embedded_viewport()
+        self.view_split.add(self.viewport_pane, weight=3)
+        self.view_split.add(self.graph_frame, weight=2)
+        self._view_split_positioned = False
+        self.view_split.bind("<Map>", self._position_initial_view_split, add="+")
+        body.add(self.view_split, weight=4)
         sidebar = ttk.Frame(body, width=370)
         body.add(sidebar, weight=1)
         sidebar_canvas = tk.Canvas(sidebar, width=350, highlightthickness=0, background="#0f1720")
@@ -508,7 +539,7 @@ class WorldStudio(ttk.Frame):
         self.form = ttk.Frame(panel)
         self.form.pack(fill="x")
         ttk.Button(panel, text="Apply selected properties", command=self.apply).pack(fill="x", pady=8)
-        ttk.Label(panel, text="Camera (editor preview)", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(12, 4))
+        ttk.Label(panel, text="Graph camera", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(12, 4))
         for key, start, stop in [("yaw", -math.pi, math.pi), ("pitch", -1.3, 1.3)]:
             ttk.Label(panel, text=key.title()).pack(anchor="w")
             slider = ttk.Scale(panel, from_=start, to=stop,
@@ -525,9 +556,219 @@ class WorldStudio(ttk.Frame):
         self.canvas.bind("<ButtonRelease-1>", self.release)
         self.canvas.bind("<MouseWheel>", self.zoom)
 
+    def _position_initial_view_split(self, _event=None):
+        if self._view_split_positioned:
+            return
+        self._view_split_positioned = True
+        self.after_idle(self._set_initial_view_split)
+
+    def _set_initial_view_split(self):
+        width = self.view_split.winfo_width()
+        if width > 1:
+            try:
+                self.view_split.sashpos(0, int(width * 0.64))
+            except tk.TclError:
+                pass
+
     def clear_tree_filter(self):
         self.tree_filter_var.set("")
         self.refresh()
+
+    def _build_embedded_viewport(self):
+        """Reserve a persistent viewport and create WebView2 only when shown."""
+        self.viewport_frame.configure(style="TFrame")
+        self._viewport_placeholder = ttk.Label(
+            self.viewport_frame, text="Preparing the local 3D world viewport…",
+            justify="center", anchor="center")
+        self._viewport_placeholder.pack(fill="both", expand=True)
+        self.viewport_frame.bind("<Map>", self._on_viewport_mapped, add="+")
+
+    def _ensure_embedded_view(self):
+        if self.preview_widget or self._webview_error:
+            return
+        try:
+            from tkwry import WebView
+        except ImportError:
+            self._webview_error = "tkwry is not installed"
+            self._viewport_placeholder.configure(text=(
+                "Embedded 3D needs the optional tkwry WebView2 host.\n"
+                "Install it with: python -m pip install -r requirements.txt\n"
+                "The renderer stays available through Open external preview."),
+            )
+            return
+        self._viewport_placeholder.destroy()
+        self._embedded_preview_dir = tempfile.TemporaryDirectory(prefix="nsmbu-worldstudio-view-")
+        preview_dir = Path(self._embedded_preview_dir.name)
+        (preview_dir / "index.html").write_text(
+            "<!doctype html><html><body style='margin:0;background:#101923;color:#b8c9d7;font:14px Segoe UI'>Loading world viewport…</body></html>",
+            encoding="utf-8")
+        # tkwry.pack() manages its host frame. Isolate it in a child frame so
+        # it cannot replace the viewport pane's geometry manager.
+        self._webview_host = ttk.Frame(self.viewport_frame)
+        self._webview_host.pack(fill="both", expand=True)
+        self.preview_widget = WebView(
+            self._webview_host,
+            app=preview_dir, width=640, height=480, ephemeral=True, default_context_menus=False,
+            on_new_window=lambda _event: __import__("tkwry").NewWindowResponse.Deny)
+        self.preview_widget.pack(fill="both", expand=True)
+        self.preview_widget.when_failed(self._embedded_view_failed)
+        self.preview_widget.rpc("select_item", run_in="main")(self._on_viewport_select)
+        self.preview_widget.rpc("move_item", run_in="main")(self._on_viewport_move)
+
+    def _on_viewport_mapped(self, _event=None):
+        self._ensure_embedded_view()
+        if hasattr(self, "native") and self.preview_scene is None and not self._preview_building:
+            self._schedule_embedded_preview_build()
+
+    def _schedule_embedded_preview_build(self):
+        if self._preview_open_after is None and not self._runtime_cleanup_done:
+            self._preview_open_after = self.after_idle(self._run_scheduled_preview_build)
+
+    def _run_scheduled_preview_build(self):
+        self._preview_open_after = None
+        if not self._runtime_cleanup_done:
+            self.open_3d_preview()
+
+    def _embedded_view_failed(self, error):
+        self._webview_error = str(error)
+        self.status.set(f"Embedded viewport unavailable: {error}")
+        if self.preview_widget:
+            try:
+                self.preview_widget.destroy()
+            except Exception:
+                pass
+            self.preview_widget = None
+        if self._webview_host:
+            try:
+                self._webview_host.destroy()
+            except tk.TclError:
+                pass
+            self._webview_host = None
+        ttk.Label(
+            self.viewport_frame,
+            text=("The embedded WebView2 viewport could not start.\n"
+                  "The external WebGL preview remains available from the toolbar.\n\n"
+                  f"{error}"),
+            justify="center", anchor="center", wraplength=640).pack(fill="both", expand=True)
+
+    def _on_viewport_select(self, payload):
+        """Route a WebGL click back through the same editor selection model."""
+        if not isinstance(payload, dict):
+            return
+        iid = payload.get("editorId")
+        if not isinstance(iid, str) or not self.tree.exists(iid):
+            return
+        self.tree.selection_set(iid)
+        self.tree.see(iid)
+        self.select_tree()
+
+    def _on_viewport_move(self, payload):
+        """Commit one 3D point drag through the native world/local edit model."""
+        if getattr(self, "exporting", False) or not isinstance(payload, dict):
+            return False
+        editor_id = payload.get("editorId")
+        position = payload.get("position")
+        if (not isinstance(editor_id, str) or not editor_id.startswith("point:") or
+                not isinstance(position, (list, tuple)) or len(position) != 3):
+            return False
+        try:
+            index = int(editor_id.partition(":")[2])
+            rows = self.native.points.rows
+            if index < 0 or index >= len(rows) or len(rows[index]) < 2:
+                return False
+            target = [float(value) for value in position]
+            if not all(math.isfinite(value) and abs(value) <= 1e7 for value in target):
+                raise ValueError("Dragged world coordinates must be finite and within ±10,000,000")
+            name = rows[index][1]
+            node = next((item for item in self.project["nodes"] if item["id"] == name), None)
+            preview_only = bool(node and node.get("fallback")) or name not in self.native.positions
+            if preview_only:
+                self.native.layout[name] = target
+                mode = "editor layout only"
+            else:
+                converter = getattr(self.native.skeletons, "local_position_for_world", None)
+                if converter is not None:
+                    local = converter(self.native.path_model, name, target,
+                                      overrides=self.native.positions)
+                else:
+                    bone = next((item for item in self.native.skeletons.models[self.native.path_model]
+                                 if item.name == name), None)
+                    if bone is None or bone.parent != -1:
+                        raise ValueError("This point's hierarchy transform cannot be inverted safely")
+                    local = target
+                local = [float(value) for value in local]
+                if not all(math.isfinite(value) and abs(value) <= 1e7 for value in local):
+                    raise ValueError("Converted BFRES local coordinates exceed the supported range")
+                self.native.positions[name] = local
+                mode = "BFRES local XYZ"
+            self._auto_fit = False
+            self.dirty = True
+            self._record_edit()
+            self.refresh()
+            iid = f"point:{index}"
+            if self.tree.exists(iid):
+                self.tree.selection_set(iid)
+                self.tree.see(iid)
+                self.select_tree()
+            self.status.set(f"Moved {name} in the 3D viewport · {mode}; undo is available")
+            return True
+        except (ValueError, KeyError, TypeError, OverflowError, IndexError) as error:
+            # WebGL applies a drag optimistically while the pointer is down.
+            # If native validation rejects the committed world/local transform,
+            # rebuild its overlays from the authoritative editor model so the
+            # embedded viewport cannot remain visually ahead of the document.
+            self._schedule_viewport_overlay_update()
+            self.status.set(f"Cannot move 3D point: {error}")
+            return False
+
+    def _sync_viewport_selection(self):
+        if not self.preview_widget or not self.preview_widget.ready:
+            return
+        selection = self.tree.selection()
+        iid = selection[0] if selection else ""
+        self.preview_widget.eval_js(
+            "window.worldStudioView && window.worldStudioView.selectEditorItem(" +
+            json.dumps(iid) + ");")
+
+    def _schedule_viewport_overlay_update(self):
+        if not getattr(self, "native", None) or not self.preview_scene or not self.preview_widget:
+            return
+        if self._preview_update_after is not None:
+            try:
+                self.after_cancel(self._preview_update_after)
+            except tk.TclError:
+                pass
+        self._preview_update_after = self.after(35, self._update_viewport_overlays)
+
+    def _update_viewport_overlays(self):
+        self._preview_update_after = None
+        if not self.preview_scene or not self.preview_widget or not self.preview_widget.ready:
+            return
+        graph = self.view_project()
+        nodes = []
+        point_index = {row[1]: i for i, row in enumerate(self.native.points.rows) if len(row) > 1}
+        for node in graph["nodes"]:
+            if node.get("fallback"):
+                continue
+            item = {key: node[key] for key in ("id", "x", "y", "z")}
+            index = point_index.get(node["id"])
+            item["editorId"] = f"point:{index}" if index is not None else f"bone:{node['id']}"
+            nodes.append(item)
+        routes = []
+        route_by_pair = {}
+        for index, row in enumerate(self.native.routes.rows):
+            if row and len(row[0]) == 9 and row[0].startswith("R"):
+                route_by_pair[(row[0][1:5], row[0][5:9])] = (f"segment:{index}", row[0])
+        for route in graph["routes"]:
+            route_copy = dict(route)
+            route_copy["editorId"] = route.get("editorId", "")
+            match = route_by_pair.get((route.get("start"), route.get("end")))
+            if match:
+                route_copy["editorId"], route_copy["id"] = match
+            routes.append(route_copy)
+        payload = json.dumps({"nodes": nodes, "routes": routes}, ensure_ascii=True, separators=(",", ":"))
+        self.preview_widget.eval_js("window.worldStudioView && window.worldStudioView.updateOverlays(" + payload + ");")
+        self._sync_viewport_selection()
 
     def _tree_filter_matches(self, name, kind):
         query = self.tree_filter_var.get().strip().casefold()
@@ -803,17 +1044,18 @@ class WorldStudio(ttk.Frame):
                 self.status.set(f"Terrain unavailable: {error}")
 
     def open_3d_preview(self):
-        """Build the offline preview in a worker so Tk remains responsive."""
+        """Build/update the embedded world view without blocking Tk."""
+        if getattr(self, "exporting", False) or getattr(self, "_preview_building", False):
+            return
+        self._ensure_embedded_view()
         if not hasattr(self, "native"):
-            # The lightweight OBJ editor has no shared native state or export
-            # worker lifecycle. Keep its existing direct preview path intact.
             try:
-                self.status.set(self._build_3d_preview(None))
+                self.preview_scene = self._build_3d_preview(None)
+                self._show_embedded_scene(self.preview_scene)
+                self.status.set("3D world ready · imported preview geometry")
             except (OSError, ValueError, KeyError, TypeError, OverflowError) as error:
                 self.status.set(f"3D preview unavailable: {error}")
                 messagebox.showerror("3D preview unavailable", str(error), parent=self)
-            return
-        if getattr(self, "exporting", False):
             return
         try:
             # view_project reads Tk variables, so capture its detached graph on
@@ -823,8 +1065,8 @@ class WorldStudio(ttk.Frame):
             self.status.set(f"3D preview unavailable: {error}")
             messagebox.showerror("3D preview unavailable", str(error), parent=self)
             return
-        self.set_export_busy(True)
-        self.status.set("Building the 3D preview in the background… editor controls are locked.")
+        self._preview_building = True
+        self.status.set("Building the 3D preview in the background… editor remains available.")
 
         def worker():
             try:
@@ -837,24 +1079,64 @@ class WorldStudio(ttk.Frame):
                 self.preview_results.put((False, str(error)))
 
         threading.Thread(target=worker, name="worldstudio-preview", daemon=True).start()
-        self.after(60, self.poll_preview)
+        self._preview_poll_after = self.after(60, self.poll_preview)
+
+    def open_external_preview(self):
+        """Open the same scene in a browser for renderer debugging."""
+        if not self.preview_scene:
+            self.open_3d_preview()
+            self.status.set("Building the world first; use Open external preview again when the viewport is ready.")
+            return
+        from .preview3d import open_preview
+        try:
+            path = open_preview(self.preview_scene)
+            self.status.set(f"External WebGL preview opened for debugging: {path}")
+        except (OSError, ValueError, TypeError) as error:
+            messagebox.showerror("External preview unavailable", str(error), parent=self)
 
     def poll_preview(self):
         try:
             succeeded, result = self.preview_results.get_nowait()
         except queue.Empty:
-            self.after(60, self.poll_preview)
+            self._preview_poll_after = self.after(60, self.poll_preview)
             return
         if succeeded is None:
             self.status.set(result)
-            self.after(60, self.poll_preview)
+            self._preview_poll_after = self.after(60, self.poll_preview)
             return
-        self.set_export_busy(False)
+        self._preview_building = False
         if succeeded:
-            self.status.set(result)
+            self.preview_scene = result
+            self._show_embedded_scene(result)
+            self.status.set(f"3D world ready · {len(result.get('shapes', []))} shapes · "
+                            f"{result.get('stats', {}).get('triangles', 0):,} triangles")
         else:
             self.status.set(f"3D preview failed: {result}")
             messagebox.showerror("3D preview unavailable", str(result), parent=self)
+
+    def _show_embedded_scene(self, scene):
+        self._ensure_embedded_view()
+        if not self.preview_widget:
+            self.status.set("Embedded viewport needs tkwry; use Open external preview or install requirements.txt")
+            return
+        from .preview3d import build_document
+        self._embedded_preview_revision += 1
+        page = Path(self._embedded_preview_dir.name) / "index.html"
+        page.write_text(build_document(scene, embedded=True), encoding="utf-8")
+        self.preview_widget.load_url(
+            f"https://tkwry.localhost/index.html?revision={self._embedded_preview_revision}")
+        if hasattr(self, "native"):
+            self._preview_geometry_signature = (self.native.terrain, id(self.native.geometry))
+        self.preview_widget.when_ready(self._on_embedded_view_ready)
+
+    def _on_embedded_view_ready(self):
+        """Apply current list selection after the embedded page navigates."""
+        self._sync_viewport_selection()
+
+    def _export_scene_to_external(self):
+        if self.preview_scene:
+            from .preview3d import open_preview
+            open_preview(self.preview_scene)
 
     def _build_3d_preview(self, graph, progress=None):
         """Build and open a preview using the locked editor's read-only state."""
@@ -982,11 +1264,16 @@ class WorldStudio(ttk.Frame):
                             break
                 visible_nodes = {n["id"]: n for n in graph["nodes"]
                                  if not n.get("fallback") and all(type(n.get(k)) in (int, float) for k in ("x", "y", "z"))}
-                nodes = [{"id": n["id"], "x": float(n["x"]), "y": float(n["y"]), "z": float(n["z"])}
+                point_index = {row[1]: index for index, row in enumerate(self.native.points.rows) if len(row) > 1}
+                nodes = [{"id": n["id"], "editorId": (f"point:{point_index[n['id']]}" if n["id"] in point_index else f"bone:{n['id']}"),
+                          "x": float(n["x"]), "y": float(n["y"]), "z": float(n["z"])}
                          for n in visible_nodes.values()]
+                route_index = {row[0]: index for index, row in enumerate(self.native.routes.rows) if row}
                 for route in graph["routes"]:
                     if route.get("start") in visible_nodes and route.get("end") in visible_nodes:
-                        routes.append({"start": route["start"], "end": route["end"],
+                        routes.append({"id": route.get("id", ""),
+                                       "editorId": f"segment:{route_index[route['id']]}" if route.get("id") in route_index else "",
+                                       "start": route["start"], "end": route["end"],
                                        "kind": "secret" if route.get("unlock") == "secret" else "normal"})
                 world_label = preview_model_name.removesuffix("_World")
                 title = f"{self.native.source.name} · {world_label} world"
@@ -1012,8 +1299,7 @@ class WorldStudio(ttk.Frame):
                 title = f"World Studio · imported {source_format} mesh"
                 model_name = f"{source_format} • 3D mesh preview"
                 badges = [f"{source_format} source", "Read-only preview"]
-            from .preview3d import open_preview
-            report("Preview: packing geometry and opening the WebGL page…")
+            report("Preview: packing geometry for the embedded WebGL viewport…")
             all_points = [p for shape in shapes for p in shape["positions"]]
             all_points.extend((n["x"], n["y"], n["z"]) for n in nodes)
             low = [min(p[i] for p in all_points) for i in range(3)]
@@ -1035,8 +1321,7 @@ class WorldStudio(ttk.Frame):
                 scene["diagnosticTextures"] = diagnostic_textures
                 scene["maskTextureNotice"] = mask_texture_notice
                 scene["maskTextures"] = mask_textures
-            open_preview(scene)
-            return f"3D preview opened · {len(shapes)} shapes · {triangle_count:,} triangles"
+            return scene
         except (OSError, ValueError, KeyError, TypeError, OverflowError):
             raise
 
@@ -1459,6 +1744,32 @@ class WorldStudio(ttk.Frame):
         if self.may_discard():
             self.master.destroy()
 
+    def _cleanup_runtime_resources(self):
+        if self._runtime_cleanup_done:
+            return
+        self._runtime_cleanup_done = True
+        for callback_name in ("_preview_poll_after", "_preview_update_after", "_preview_open_after",
+                              "_fit_after_id"):
+            callback_id = getattr(self, callback_name, None)
+            if callback_id is not None:
+                try:
+                    self.after_cancel(callback_id)
+                except tk.TclError:
+                    pass
+        if self.preview_widget:
+            try:
+                self.preview_widget.destroy()
+            except Exception:
+                pass
+            self.preview_widget = None
+        if self._embedded_preview_dir:
+            self._embedded_preview_dir.cleanup()
+            self._embedded_preview_dir = None
+
+    def destroy(self):
+        self._cleanup_runtime_resources()
+        super().destroy()
+
 
 class NativeStudio(WorldStudio):
     """Edit native point/route tables while preserving unsupported columns."""
@@ -1481,7 +1792,7 @@ class NativeStudio(WorldStudio):
         self.canvas.bind("<Map>", self._schedule_auto_fit, add="+")
         self.canvas.bind("<Configure>",
                          lambda event: self._schedule_auto_fit(event, delay_ms=90), add="+")
-        self.after_idle(self._schedule_auto_fit)
+        self._fit_after_id = self.after_idle(self._schedule_auto_fit)
         self._set_recovery_context(self.project_path or native.source, offer=True)
         recent_path = self.project_path or Path(native.source)
         if recent_path.is_file():
@@ -1541,10 +1852,10 @@ class NativeStudio(WorldStudio):
 
     def _build(self):
         super()._build()
-        self.viewport_hint.configure(text="Graph editor: drag a point to move it in the camera plane · drag empty space to orbit · wheel to zoom · click a point to edit. Open 3D model preview for depth-tested BFRES geometry.")
+        self.viewport_hint.configure(text="3D World is the main view · drag a point to move it · drag empty space to orbit · right-drag to pan · wheel to zoom. Click points or routes to edit them.")
         self.description.configure(text="Native point/segment fields are saved to CSV and exported in the SZS archive. "
             "Known bone XYZ edits modify BFRES; model names and engine indices remain protected. "
-            "Camera controls affect this viewport only. Import OBJ or static GLB to preview terrain. Use OBJ/GLB mesh replaces one existing grass mesh experimentally; other terrain remains.")
+            "Camera controls affect this viewport only. OBJ/GLB terrain import projects the upper surface onto existing grass vertices, preserving source topology and UVs; collision and in-game appearance still need Cemu testing.")
         toolbar = self.winfo_children()[0]
         replacements = {"New preview": "Reload source", "Add node": "Add draft point", "Add route": "Add segment"}
         for child in toolbar.winfo_children():
@@ -1555,6 +1866,7 @@ class NativeStudio(WorldStudio):
         ttk.Button(bar, text="Open native world SZS", command=self.open_szs).pack(side="left", padx=2)
         ttk.Button(bar, text="Export validated SZS", command=self.export_szs).pack(side="left", padx=2)
         ttk.Button(bar, text="Use OBJ/GLB mesh (experimental)", command=self.use_obj_mesh).pack(side="left", padx=2)
+        ttk.Button(bar, text="Open external preview", command=self.open_external_preview).pack(side="left", padx=2)
         ttk.Checkbutton(bar, text="Show path geometry / auxiliary points", variable=self.show_auxiliary,
                         command=self.toggle_auxiliary).pack(side="left", padx=10)
         extra_bar = ttk.Frame(self, padding=(8, 3))
@@ -1584,6 +1896,8 @@ class NativeStudio(WorldStudio):
     def fit(self):
         self._auto_fit = True
         super().fit()
+        if self.preview_widget and self.preview_widget.ready:
+            self.preview_widget.eval_js("window.worldStudioView && window.worldStudioView.fitView();")
 
     def zoom(self, event):
         self._auto_fit = False
@@ -1614,6 +1928,10 @@ class NativeStudio(WorldStudio):
         if not selection or not self.tree.selection():
             self.tree.yview_moveto(0)
         self.draw()
+        if self.preview_scene and self._preview_geometry_signature != (self.native.terrain, id(self.native.geometry)):
+            self._schedule_embedded_preview_build()
+        else:
+            self._schedule_viewport_overlay_update()
 
     def toggle_auxiliary(self):
         self.refresh()
@@ -1756,6 +2074,7 @@ class NativeStudio(WorldStudio):
         selection = self.tree.selection()
         if not selection:
             return
+        self._sync_viewport_selection()
         kind, index = selection[0].split(":", 1)
         if kind == "bone":
             self.native_selection = kind, index
@@ -1794,7 +2113,14 @@ class NativeStudio(WorldStudio):
             ttk.Label(self.form, text=labels[i] if i < len(labels) else f"column {i}").grid(row=i, column=0, sticky="w", pady=3)
             var = tk.StringVar(value=value)
             self.properties[i] = var
-            entry = ttk.Entry(self.form, textvariable=var)
+            if kind == "segment" and i == 1:
+                road_types = native_road_type_choices(self.native.routes.initial)
+                if value and value not in road_types:
+                    road_types.insert(0, value)  # Preserve an unknown stock value until explicitly changed.
+                entry = ttk.Combobox(self.form, textvariable=var, values=road_types,
+                                     state="readonly")
+            else:
+                entry = ttk.Entry(self.form, textvariable=var)
             entry.grid(row=i, column=1, sticky="ew", padx=(5, 0), pady=3)
             if kind == "point" and i in (4, 7):
                 ttk.Button(
@@ -1968,11 +2294,7 @@ class NativeStudio(WorldStudio):
             )
             return
 
-        route_types = list(dict.fromkeys(
-            row[1] for row in self.native.routes.rows
-            if (isinstance(row, (list, tuple)) and len(row) == 3 and
-                isinstance(row[1], str) and row[1].strip())
-        ))
+        route_types = native_road_type_choices(self.native.routes.initial)
         if not route_types:
             messagebox.showerror(
                 "Cannot add route segment",
@@ -2247,9 +2569,9 @@ class NativeStudio(WorldStudio):
                 self.refresh()
                 self.fit()
                 source_format = Path(path).suffix.upper().lstrip(".")
-                self.status.set(f"Experimental {source_format} candidate · {obj_geometry_summary(vertices, faces)} · "
-                                f"{obj_transform_summary(transform.result)}. Replaces one existing grass mesh; "
-                                "capacity and layout checks run during export."
+                self.status.set(f"Experimental {source_format} terrain patch · {obj_geometry_summary(vertices, faces)} · "
+                                f"{obj_transform_summary(transform.result)}. Projects the upper surface onto "
+                                "existing grass vertices while preserving topology and UVs; export validates overlap."
                                 + (" Compatibility: " + "; ".join(compatibility_warnings) + "."
                                    if compatibility_warnings else ""))
             except (OSError, ValueError) as error:

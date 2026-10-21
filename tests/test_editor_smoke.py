@@ -1,6 +1,6 @@
 """Hidden Tk regression checks for bone edits and world/local separation."""
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 import tkinter as tk
 from tkinter import ttk
 import threading
@@ -27,7 +27,8 @@ class NativeFixture:
             ["1", "W102", "", "", "", "", "", "", ""],
             ["2", "F001", "", "", "", "", "", "", ""],
             ["3", "Fbad", "", "", "", "", "", "", ""]])
-        self.routes = SimpleNamespace(rows=[["RF001K001", "road", ""]])
+        self.routes = SimpleNamespace(rows=[["RF001K001", "road", ""]],
+                                       initial=[["RF001K001", "road", ""]])
         self.path_model = "Primary"
         names = ["W101", "W102", "F001", "K001", "RF001K001", "Fbad"]
         self.skeletons = SimpleNamespace(models={"Primary": [
@@ -101,7 +102,11 @@ class EditorSmokeTests(unittest.TestCase):
 
     def tearDown(self):
         if hasattr(self, "root"):
-            self.root.destroy()
+            if hasattr(self, "app"):
+                self.app.may_discard = lambda: True
+                self.app.close()
+            else:
+                self.root.destroy()
         if hasattr(self, "recent_tmp"):
             self.recent_tmp.cleanup()
 
@@ -448,6 +453,112 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertEqual(self.app.position_properties, {})
         self.assertEqual(self.app.form.winfo_children(), [])
 
+    def test_embedded_viewport_selection_bridge_uses_existing_tree_selection(self):
+        self.app._on_viewport_select({"editorId": "point:0"})
+        self.assertEqual(self.app.tree.selection(), ("point:0",))
+        self.assertEqual(self.app.native_selection, ("point", 0))
+        self.app._on_viewport_select({"editorId": "segment:0"})
+        self.assertEqual(self.app.tree.selection(), ("segment:0",))
+        self.assertEqual(self.app.native_selection, ("segment", 0))
+        self.assertEqual(self.app.selected, ("route", "RF001K001"))
+        self.app._on_viewport_select({"editorId": "missing:99"})
+        self.assertEqual(self.app.tree.selection(), ("segment:0",))
+
+    def test_route_road_type_editor_uses_existing_source_types(self):
+        self.app.tree.selection_set("segment:0")
+        self.app.select_tree()
+        road_type = next(widget for widget in self.app.form.winfo_children()
+                         if isinstance(widget, ttk.Combobox))
+        self.assertTrue(road_type.instate(("readonly",)))
+        self.assertEqual(road_type.cget("values"), ("road",))
+
+    def test_loaded_scene_keeps_3d_and_graph_panes_visible(self):
+        calls = []
+        self.app._ensure_embedded_view = lambda: None
+        self.app._embedded_preview_dir = self.recent_tmp
+        self.app.preview_widget = SimpleNamespace(
+            load_url=lambda url: calls.append(("load", url)),
+            when_ready=lambda callback: calls.append(("ready", callback)),
+            ready=False)
+        with patch("worldstudio.preview3d.build_document", return_value="<!doctype html>") as build_document:
+            self.app._show_embedded_scene({"shapes": [], "nodes": [], "routes": []})
+        build_document.assert_called_once_with(
+            {"shapes": [], "nodes": [], "routes": []}, embedded=True)
+
+        panes = self.app.view_split.panes()
+        self.assertIn(str(self.app.viewport_pane), panes)
+        self.assertIn(str(self.app.graph_frame), panes)
+        self.assertEqual([kind for kind, _ in calls], ["load", "ready"])
+        ready_callback = calls[-1][1]
+        ready_callback()
+
+    def test_webview_host_frame_keeps_viewport_pane_managed(self):
+        class FakeWebView:
+            def __init__(self, frame, **_kwargs):
+                self.frame = frame
+
+            def pack(self, **kwargs):
+                self.frame.pack(**kwargs)
+
+            def when_failed(self, _callback):
+                pass
+
+            def rpc(self, *_args, **_kwargs):
+                return lambda callback: callback
+
+        fake_tkwry = ModuleType("tkwry")
+        fake_tkwry.WebView = FakeWebView
+        fake_tkwry.NewWindowResponse = SimpleNamespace(Deny="deny")
+        with patch.dict("sys.modules", {"tkwry": fake_tkwry}):
+            self.app._ensure_embedded_view()
+
+        self.assertIn(str(self.app.viewport_pane), self.app.view_split.panes())
+        self.assertEqual(self.app.preview_widget.frame.master, self.app.viewport_frame)
+
+    def test_editor_selection_and_point_edits_update_webgl_without_scene_reload(self):
+        scripts = []
+        self.app.preview_scene = {"shapes": [{"name": "existing BFRES geometry"}]}
+        self.app.preview_widget = SimpleNamespace(ready=True, eval_js=scripts.append)
+        self.app.tree.selection_set("point:0")
+        self.app.select_tree()
+        self.assertTrue(any("selectEditorItem(\"point:0\")" in script for script in scripts))
+
+        scripts.clear()
+        self.native.positions["W101"][0] = 155
+        self.app._update_viewport_overlays()
+
+        self.assertEqual(len(scripts), 2)  # Overlay buffers, then selected-item focus.
+        prefix = "window.worldStudioView && window.worldStudioView.updateOverlays("
+        self.assertTrue(scripts[0].startswith(prefix))
+        payload = json.loads(scripts[0][len(prefix):-2])
+        point = next(node for node in payload["nodes"] if node["id"] == "W101")
+        self.assertEqual(point["x"], 155)
+        self.assertEqual(point["editorId"], "point:0")
+        self.assertTrue(any("selectEditorItem(\"point:0\")" in script for script in scripts[1:]))
+
+    def test_embedded_3d_drag_updates_bfres_local_point_and_supports_undo(self):
+        self.app.preview_scene = {"shapes": []}
+        self.app.preview_widget = SimpleNamespace(ready=True, eval_js=lambda _script: None)
+        before = list(self.native.positions["W101"])
+
+        self.assertTrue(self.app._on_viewport_move({
+            "editorId": "point:0", "position": [125, 15, 5]}))
+
+        self.assertEqual(self.native.positions["W101"], [125, 15, 5])
+        self.assertEqual(self.app.tree.selection(), ("point:0",))
+        self.assertTrue(self.app.dirty)
+        self.app.undo()
+        self.assertEqual(self.native.positions["W101"], before)
+
+    def test_embedded_3d_drag_rejects_noninvertible_child_transform(self):
+        before = list(self.native.positions["W102"])
+        with patch.object(self.app, "_schedule_viewport_overlay_update") as refresh:
+            self.assertFalse(self.app._on_viewport_move({
+                "editorId": "point:1", "position": [325, 0, 0]}))
+        refresh.assert_called_once_with()
+        self.assertEqual(self.native.positions["W102"], before)
+        self.assertIn("cannot be inverted safely", self.app.status.get())
+
     def test_bone_edit_does_not_touch_csv_and_selection_survives(self):
         before = [row[:] for row in self.native.points.rows]
         segments = [row[:] for row in self.native.routes.rows]
@@ -518,11 +629,13 @@ class EditorSmokeTests(unittest.TestCase):
                 progress("Preview: reading test geometry…")
             started.set()
             release.wait(2)
-            return "3D preview opened · 1 shape · 1 triangle"
+            return {"shapes": [{}], "stats": {"triangles": 1}, "nodes": [], "routes": []}
 
         self.app._build_3d_preview = build
+        self.app._ensure_embedded_view = lambda: None
+        self.app._show_embedded_scene = lambda scene: None
         self.app.open_3d_preview()
-        self.assertTrue(self.app.exporting)
+        self.assertTrue(self.app._preview_building)
         self.assertTrue(started.wait(1))
         callbacks = []
         self.root.after(0, lambda: callbacks.append("responsive"))
@@ -538,11 +651,11 @@ class EditorSmokeTests(unittest.TestCase):
 
         release.set()
         deadline = time.monotonic() + 2
-        while self.app.exporting and time.monotonic() < deadline:
+        while self.app._preview_building and time.monotonic() < deadline:
             self.root.update()
             time.sleep(0.01)
-        self.assertFalse(self.app.exporting)
-        self.assertIn("3D preview opened", self.app.status.get())
+        self.assertFalse(self.app._preview_building)
+        self.assertIn("3D world ready", self.app.status.get())
 
     def test_static_preview_loads_a_supported_non_w1_world_model(self):
         root = Path(__file__).resolve().parents[1]
@@ -554,14 +667,8 @@ class EditorSmokeTests(unittest.TestCase):
         top = tk.Toplevel(self.root)
         top.withdraw()
         studio = NativeStudio(top, WorldProject.open(source_copy))
-        opened = []
         try:
-            with patch("worldstudio.preview3d.open_preview", side_effect=opened.append):
-                result = studio._build_3d_preview(studio.view_project())
-
-            self.assertIn("34 shapes", result)
-            self.assertEqual(len(opened), 1)
-            scene = opened[0]
+            scene = studio._build_3d_preview(studio.view_project())
             self.assertEqual(scene["model"], "CS_W7_World • native BFRES static geometry")
             self.assertEqual(len(scene["shapes"]), 34)
             self.assertEqual(len(scene["textures"]), 19)
@@ -569,6 +676,8 @@ class EditorSmokeTests(unittest.TestCase):
             self.assertTrue(all(texture["format"] == 0x31 for texture in scene["textures"].values()))
             self.assertTrue(all("shaderMetadata" not in shape for shape in scene["shapes"]))
             self.assertTrue(scene["nodes"])
+            self.assertTrue(all(node.get("editorId", "").startswith(("point:", "bone:"))
+                                for node in scene["nodes"]))
             positions = [point for shape in scene["shapes"] for point in shape["positions"]]
             low = [min(point[axis] for point in positions) for axis in range(3)]
             high = [max(point[axis] for point in positions) for axis in range(3)]
@@ -582,11 +691,15 @@ class EditorSmokeTests(unittest.TestCase):
         studio = object.__new__(WorldStudio)
         status = SimpleNamespace(set=lambda value: setattr(status, "value", value))
         studio.status = status
-        studio._build_3d_preview = lambda graph: "3D preview opened · imported OBJ"
+        studio._preview_building = False
+        studio._ensure_embedded_view = lambda: None
+        studio.preview_widget = None
+        studio._build_3d_preview = lambda graph: {"shapes": [], "stats": {"triangles": 0}}
+        studio._show_embedded_scene = lambda scene: None
 
         studio.open_3d_preview()
 
-        self.assertEqual(status.value, "3D preview opened · imported OBJ")
+        self.assertEqual(status.value, "3D world ready · imported preview geometry")
 
     def test_lightweight_preview_save_keeps_the_previous_project_and_reports_it(self):
         with tempfile.TemporaryDirectory() as folder:

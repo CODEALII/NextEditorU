@@ -5,6 +5,7 @@ from worldstudio.graph_validation import (
     native_macro_path_choices,
     native_macro_path_chain_reaches,
     native_point_path_route_ids,
+    native_road_type_choices,
     native_route_segment_choices,
     validate_native_world,
 )
@@ -63,6 +64,12 @@ class NativeGraphValidationTests(unittest.TestCase):
                 ["1", "W102"]]
         self.assertEqual(native_point_path_route_ids(rows),
                          ["RW101W102", "RW101W103"])
+
+    def test_road_type_choices_preserve_source_order_and_ignore_empty_values(self):
+        self.assertEqual(native_road_type_choices([
+            ["RW101W102", "道", ""], ["RW102W103", "坂", ""],
+            ["RW103W104", "道", ""], ["bad", " ", ""], ["bad2", None, ""],
+        ]), ["道", "坂"])
 
     def test_builds_row_from_an_available_existing_bfres_route_id(self):
         row = build_native_route_row(

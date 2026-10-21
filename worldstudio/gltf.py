@@ -1,8 +1,8 @@
 """Bounded static-mesh reader for embedded Binary glTF (GLB) geometry.
 
-This imports geometry for preview/OBJ-style replacement only. It does not
-insert new BFRES meshes or evaluate materials, animation, skinning, or nodes
-with non-identity transforms.
+This imports geometry for preview and topology-preserving terrain projection.
+It does not insert new BFRES meshes or evaluate materials, animation, skinning,
+or nodes with non-identity transforms.
 """
 from __future__ import annotations
 

@@ -11,7 +11,7 @@ import re
 import xml.etree.ElementTree as ET
 
 
-LEFT_STICK_KEYS = {17: 87, 18: 83, 19: 65, 20: 68}  # W, S, A, D virtual keys
+LEFT_STICK_KEYS_CEMU_126 = {18: 87, 19: 83, 20: 65, 21: 68}
 GAMEPAD_A_KEY = 90  # Z virtual key, per generated Cemu test profiles
 TARGET_MODULE = re.compile(r"Loaded module 'red-pro2' with checksum 0x6caea914")
 PACK_LINE = re.compile(r"Activate graphic pack: (.+)$", re.MULTILINE)
@@ -119,9 +119,10 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
     else:
         controller = {}
     keyboard_profile = (controller.get('api', '').casefold() == 'keyboard' and
-                        controller.get('emulate', '').casefold() == 'wii u gamepad')
+                        controller.get('emulate', '').casefold() in
+                        {'wii u gamepad', 'wii u pro controller'})
     left_stick = {mapping: controller.get(mapping) == f'key_{key}'
-                  for mapping, key in LEFT_STICK_KEYS.items()}
+                  for mapping, key in LEFT_STICK_KEYS_CEMU_126.items()}
     keyboard_left_stick = keyboard_profile and all(left_stick.values())
     gamepad_a_key = controller.get(1)
     gamepad_a_configured = keyboard_profile and gamepad_a_key == f'key_{GAMEPAD_A_KEY}'

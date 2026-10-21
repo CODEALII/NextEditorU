@@ -15,6 +15,55 @@ from worldstudio.project import resolve_project_path, store_project_path
 
 
 class PreviewSafetyTests(unittest.TestCase):
+    def test_embedded_preview_hides_inspector_by_default_and_exposes_toggle(self):
+        scene = {"shapes": [], "nodes": [], "routes": []}
+        embedded_page = build_document(scene, embedded=True)
+        external_page = build_document(scene)
+
+        self.assertIn('<body class="embedded">', embedded_page)
+        self.assertIn('id="controls-toggle"', embedded_page)
+        self.assertIn(".embedded .side{display:none}", embedded_page)
+        self.assertIn("panel.classList.toggle('open')", embedded_page)
+        self.assertIn('<body class="">', external_page)
+        self.assertNotIn('id="controls-toggle"', external_page)
+
+    def test_embedded_viewport_has_selection_and_incremental_overlay_api(self):
+        page = build_document({"shapes": [], "nodes": [{"id": "W101", "editorId": "point:0",
+                                                         "x": 0, "y": 0, "z": 0}],
+                               "routes": [{"id": "RW101W102", "editorId": "segment:0",
+                                           "start": "W101", "end": "W102"}]})
+        self.assertIn("window.worldStudioView", page)
+        self.assertIn("updateOverlays(data)", page)
+        self.assertIn("selectEditorItem", page)
+        self.assertIn("invoke('select_item'", page)
+        self.assertIn("invoke('move_item'", page)
+        self.assertIn("pickWorldNode", page)
+        self.assertIn("units=2*depth*Math.tan", page)
+        self.assertIn("lastAppliedX:e.clientX", page)
+        self.assertIn("const movedNow=drag.moved||Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)>3", page)
+
+    def test_embedded_drag_camera_plane_delta_tracks_screen_motion(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise viewer drag projection")
+        page = build_document({"shapes": [], "nodes": [], "routes": []}, embedded=True)
+        start = page.index("function cameraPlaneWorldDelta(")
+        end = page.index("\n", start)
+        helper = page[start:end]
+        probe = helper + r"""
+const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+const yaw90=[0,0,-1,0,0,1,0,0,1,0,0,0,0,0,0,1];
+console.log(JSON.stringify([
+  cameraPlaneWorldDelta(10,10,identity,100,0,100),
+  cameraPlaneWorldDelta(10,0,yaw90,100,0,100)
+]));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        horizontal, rotated = json.loads(result.stdout)
+        self.assertAlmostEqual(horizontal[0], 8.284271, places=5)
+        self.assertAlmostEqual(horizontal[1], -8.284271, places=5)
+        self.assertAlmostEqual(rotated[2], 8.284271, places=5)
+
     def test_malformed_json_shapes_return_diagnostics(self):
         self.assertIn("Project must be a JSON object", validate_preview([]))
         project = {"nodes": [
@@ -417,7 +466,8 @@ console.log(JSON.stringify([point,edge,meshIndexFromPixel([0,0,0,255])]));
         self.assertIn("gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0)", page)
         self.assertIn("selectMesh(meshes[index])", page)
         self.assertIn("previous.button===0&&Math.hypot(e.clientX-previous.startX,e.clientY-previous.startY)<4", page)
-        self.assertIn("Click a shape to select", page)
+        self.assertIn("Drag a native world point to move", page)
+        self.assertIn("pickMeshAt", page)
 
     def test_focus_mesh_centers_the_camera_and_uses_mesh_radius(self):
         node = shutil.which("node")
@@ -550,7 +600,7 @@ console.log(JSON.stringify({direction:Array.from(previewLightDirection),intensit
                  "normalTextures": {"Normal_nml": {"name": "Normal_nml", "width": 1,
                                                        "height": 1, "rgbaBase64": "AAAAAA=="}},
                  "nodes": [], "routes": []}
-        page = build_document(scene)
+        page = build_document(scene, embedded=True)
         script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
         subprocess.run([node, "--check", "-"], input=script, check=True,
                        capture_output=True, text=True, encoding="utf-8")

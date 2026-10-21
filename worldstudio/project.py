@@ -356,6 +356,8 @@ class WorldProject:
         if not isinstance(route_rows, (list, tuple)):
             errors.append('Route table must be a list of rows')
             route_rows = []
+        from .graph_validation import native_road_type_choices
+        valid_road_types = set(native_road_type_choices(getattr(self.routes, 'initial', ())))
         route_rows_valid = True
         route_seen = set()
         for i, r in enumerate(route_rows):
@@ -378,6 +380,16 @@ class WorldProject:
             if r[0] in route_seen:
                 errors.append(f'Duplicate route segment {r[0]}')
             route_seen.add(r[0])
+            route_initial = self.routes.initial[i] if i < len(self.routes.initial) else None
+            road_type_changed = (
+                not isinstance(route_initial, (list, tuple)) or len(route_initial) < 2 or
+                not isinstance(route_initial[1], str) or r[1] != route_initial[1])
+            if road_type_changed:
+                if not r[1].strip():
+                    errors.append(f'Route row {i}: road type cannot be empty')
+                elif r[1] not in valid_road_types:
+                    errors.append(
+                        f'Route row {i}: unknown road type {r[1]!r}; choose a type used by the source table')
             if i >= len(self.routes.initial) or r != self.routes.initial[i]:
                 for endpoint in (r[0][1:5], r[0][5:9]):
                     if (world_prefix and endpoint.startswith('W') and
@@ -489,7 +501,8 @@ class WorldProject:
             patched_model, geometry_report = replace_rigid_mesh(patched_model,
                 self.geometry['vertices'], self.geometry['faces'],
                 uvs=self.geometry.get('uvs'),
-                imported_normals=self.geometry.get('normals'))
+                imported_normals=self.geometry.get('normals'),
+                preserve_topology=True)
         modified = {self.point_name: self.points.encode(), self.route_name: self.routes.encode(),
                     self.model_name: patched_model}
         blob = self.archive.replace(modified)

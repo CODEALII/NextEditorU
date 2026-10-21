@@ -9,6 +9,7 @@ from unittest.mock import patch
 from worldstudio.archive import Archive, compress, decompress
 from worldstudio.project import WorldProject, Table, sha
 from worldstudio.__main__ import chain_demo, direct_route_demo, DEFAULT_SOURCE
+from worldstudio.graph_validation import native_macro_path_chain_reaches
 
 
 def fixture():
@@ -99,6 +100,19 @@ class LocalIntegrationTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 loaded.export(out / 'CS_W1.szs')
         self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
+
+    def test_chain_patch_targets_the_w102_to_w103_macro_path(self):
+        project = WorldProject.open(DEFAULT_SOURCE)
+        stock = next(row for row in project.points.rows if row[1] == 'W102')
+        self.assertEqual(stock[3:5], ['W1T0,W1K1', 'RW102W1T0'])
+        self.assertIsNone(native_macro_path_chain_reaches(
+            stock[4], stock[1], stock[3], project.references))
+
+        chain_demo(project)
+        chain = next(row for row in project.points.rows if row[1] == 'W102')
+        self.assertEqual(chain[3:5], ['W103', 'RW102W1T0,RW1T0W103'])
+        self.assertTrue(native_macro_path_chain_reaches(
+            chain[4], chain[1], chain[3], project.references))
 
     def test_overwriting_project_creates_openable_previous_version_backup(self):
         project = WorldProject.open(DEFAULT_SOURCE)
@@ -239,9 +253,12 @@ class LocalIntegrationTests(unittest.TestCase):
             manifest = restored.export(output)
             self.assertTrue(manifest['terrain_exported'])
             self.assertEqual(manifest['geometry']['shape'], DEFAULT_SHAPE)
-            self.assertEqual(manifest['geometry']['vertices'], len(vertices))
-            self.assertEqual(manifest['geometry']['triangles'], len(_geometry(
+            self.assertEqual(manifest['geometry']['import_vertices'], len(vertices))
+            self.assertEqual(manifest['geometry']['import_triangles'], len(_geometry(
                 vertices, faces, uvs, normals)[1]) // 3)
+            self.assertTrue(manifest['geometry']['topology_preserved'])
+            self.assertTrue(manifest['geometry']['indices_preserved'])
+            self.assertGreater(manifest['geometry']['vertices_displaced'], 0)
             self.assertEqual(manifest['changed_entries'], [restored.model_name])
             self.assertFalse(manifest['game_tested'])
 
@@ -251,16 +268,16 @@ class LocalIntegrationTests(unittest.TestCase):
                 if name != restored.model_name:
                     self.assertEqual(exported.read(name), original, name)
 
+            source_target = next(shape for shape in extract_rigid_model(
+                source_entries[restored.model_name]) if shape['name'] == DEFAULT_SHAPE)
             target = next(shape for shape in extract_rigid_model(
                 exported.read(restored.model_name)) if shape['name'] == DEFAULT_SHAPE)
-            triangulated_vertices, triangulated_indices, _, _ = _geometry(
-                vertices, faces, uvs, normals)
-            self.assertGreaterEqual(len(target['positions']), len(triangulated_vertices))
-            for actual, expected in zip(target['positions'], triangulated_vertices):
-                for actual_axis, expected_axis in zip(actual, expected):
-                    self.assertAlmostEqual(actual_axis, expected_axis, places=4)
-            self.assertEqual(target['indices'][:len(triangulated_indices)], triangulated_indices)
-            self.assertTrue(all(index == 0 for index in target['indices'][len(triangulated_indices):]))
+            self.assertEqual(target['indices'], source_target['indices'])
+            self.assertEqual(target['uvs'], source_target['uvs'])
+            self.assertEqual(len(target['positions']), len(source_target['positions']))
+            self.assertTrue(any(abs(actual[1] - original[1]) > 1e-5
+                                for actual, original in zip(target['positions'],
+                                                           source_target['positions'])))
 
         self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
 
@@ -310,6 +327,17 @@ class LocalIntegrationTests(unittest.TestCase):
 
 
 class ProjectGraphValidationTests(unittest.TestCase):
+    def test_unknown_route_road_type_blocks_real_archive_export_without_touching_source(self):
+        original = DEFAULT_SOURCE.read_bytes()
+        project = WorldProject.open(DEFAULT_SOURCE)
+        project.routes.rows[0][1] = 'made-up'
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'invalid-road-type.szs'
+            with self.assertRaisesRegex(ValueError, 'unknown road type'):
+                project.export(output)
+            self.assertFalse(output.exists())
+        self.assertEqual(DEFAULT_SOURCE.read_bytes(), original)
+
     def test_route_only_disconnect_blocks_project_export(self):
         point_rows = [
             ['0', 'W101', '', 'W102', 'RW101W102', '', '', '', ''],
@@ -360,7 +388,7 @@ class ProjectGraphValidationTests(unittest.TestCase):
         )
         project.routes = SimpleNamespace(
             rows=[['RW101W201', 'road', '']],
-            initial=[],
+            initial=[['RW101W201', 'road', '']],
         )
         project.point_name = 'pointW1.csv'
 
@@ -387,6 +415,35 @@ class ProjectMalformedDataTests(unittest.TestCase):
         project.routes = SimpleNamespace(rows=[], initial=[])
         project.point_name = 'pointW1.csv'
         return project
+
+    def test_changed_route_road_type_must_come_from_source_table(self):
+        for value, fragment in (('', 'road type cannot be empty'),
+                                ('made-up', 'unknown road type')):
+            with self.subTest(value=value):
+                project = self.project()
+                project.references.update({'W102', 'RW101W102'})
+                project.skeletons.bones.update({
+                    'W102': [SimpleNamespace(name='W102')],
+                    'RW101W102': [SimpleNamespace(name='RW101W102')],
+                })
+                original = ['RW101W102', 'road', '']
+                project.routes.initial = [original[:]]
+                project.routes.rows = [['RW101W102', value, '']]
+
+                self.assertTrue(any(fragment in issue for issue in project.validate()))
+
+    def test_existing_source_road_type_remains_editable_and_valid(self):
+        project = self.project()
+        project.references.update({'W102', 'RW101W102'})
+        project.skeletons.bones.update({
+            'W102': [SimpleNamespace(name='W102')],
+            'RW101W102': [SimpleNamespace(name='RW101W102')],
+        })
+        project.routes.initial = [
+            ['RW101W102', 'road', ''], ['RW102W103', 'slope', '']]
+        project.routes.rows = [['RW101W102', 'slope', '']]
+
+        self.assertEqual(project.validate(), [])
 
     def test_non_text_table_cells_are_reported_without_crashing(self):
         cases = (

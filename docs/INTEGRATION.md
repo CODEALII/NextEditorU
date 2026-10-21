@@ -1,5 +1,116 @@
 # Runtime evidence and test protocol
 
+## Rejected embedded 3D drag refresh — 2026-10-22
+
+- WebGL previews supported point movement during a drag. When native world/local
+  transform validation rejects that move, the editor now schedules an
+  incremental overlay refresh from the unchanged project state, avoiding a
+  stale visual position.
+- Regression: a non-invertible child transform is rejected and the refresh is
+  queued. The combined editor/graph/WebGL safety suites pass (**89 tests**).
+  This is an automated editor-state check, not an interactive mouse or Cemu
+  gameplay verification.
+
+## Route road-type edit validation — 2026-10-22
+
+- The native route inspector now uses a read-only selector populated from the
+  source archive's existing road-type values. The add-segment dialog uses the
+  same source whitelist. This prevents free-text typos from reaching the CSV.
+- Export validation rejects empty or unknown values on changed/new route rows,
+  while leaving unchanged legacy values intact. The local W1 table contains
+  five observed values; this does not establish the engine meaning of any type.
+- GUI, project, and graph regressions pass (**75 tests**); the full repository
+  suite passes (**336 tests**). A separate test changed a road type in the real
+  local W1 project, confirmed export created no output, and compared the source
+  SZS byte-for-byte before/after. This is static data validation only; route
+  movement in Cemu remains unverified.
+
+## Embedded editor viewport smoke check — 2026-10-21
+
+- Opened the local World 1 `CS_W1.szs` in a fresh Tk editor window on Windows
+  with tkwry 0.1.9 and WebView2. The local WebGL page reached ready state and
+  rendered 42 static BFRES shapes (70,193 vertices; 106,736 triangles), with
+  path/node overlays inside the application. The main editing area keeps the
+  3D viewport and native 2D graph visible side-by-side in an adjustable split,
+  with the nodes/routes list and property controls alongside them. Preview
+  lighting, camera, filters, and shape inspector are available in a collapsible
+  Controls drawer so they do not cover the model at the initial embedded width.
+- A screenshot review caught that passing the WebView host directly to the
+  viewport pane let its geometry manager displace the parent. The WebView now
+  lives in a dedicated child frame. A later live W1 screenshot confirmed both
+  the 3D model and graph remain visible with the editor sidebar. Selecting W102
+  in the list focused it in the viewport and graph; clicking W104 in 3D selected
+  its row and properties. That scene contained 42 shapes, 70,193 vertices and
+  106,736 triangles.
+- GUI regression tests cover split-pane persistence, WebView host containment,
+  viewport-to-editor selection, and incremental point/route overlay refresh
+  without rebuilding BFRES geometry. Items without a world-map overlay cannot
+  be selected from the 3D canvas; BFRES shape clicks remain in the renderer's
+  inspector. Full game rendering, animation and in-game behavior remain outside
+  this editor smoke check.
+
+- On 2026-10-22, relaunched the native World 1 editor and visually confirmed
+  the full island model and graph remain visible at startup, with the viewport
+  now receiving 64% of the editing split and only Fit view / Preview controls
+  overlaid. The Computer Use input bridge returned `foreground window did not
+  report a process id` for a drawer click, so opening the drawer was not visually
+  confirmed in this run. Its embedded HTML/CSS and generated JavaScript are
+  covered by tests; this desktop screenshot does not validate 3D dragging.
+
+## Embedded 3D point editing — 2026-10-22
+
+- In the native editor, left-dragging a visible world point now moves its 3D
+  overlay in the camera plane and commits the final world position through the
+  existing hierarchy-aware world-to-local converter. The selection bridge
+  updates the inspector; the edit enters shared Undo history, and the existing
+  overlay refresh sends the committed position back without rebuilding BFRES
+  geometry. Preview-only point IDs do not enable this native drag path.
+- Safety checks reject malformed/out-of-range coordinates and child transforms
+  whose inverse is unavailable. The synthetic regression verifies a root point
+  move, selection, dirty state and Undo; another confirms an unsupported child
+  transform stays unchanged. Renderer tests cover drag/RPC wiring. These tests
+  do not replace a live visual drag check in the editor or a Cemu gameplay test.
+
+## Embedded 3D drag input validation — 2026-10-22
+
+- The renderer now waits until a left drag exceeds three screen pixels before
+  moving a point. It applies the full accumulated pointer delta on that first
+  move, so sub-threshold cursor jitter cannot leave the WebGL overlay slightly
+  out of sync with the native editor.
+- A Node regression executes the production camera-plane conversion for an
+  identity and a rotated view; editor tests separately verify local-coordinate
+  conversion, Undo and safe rejection. Full suite: **333 tests passed**.
+- The Computer Use input bridge still failed before a real 3D mouse drag could
+  be tested. Renderer math and synthetic editor wiring are verified; an actual
+  visible drag and Cemu runtime effects remain unverified.
+
+## Prepared topology-preserving terrain retest — 2026-10-21
+
+- Exported a new local-only `CS_W1.szs` from the checked-in island OBJ using the
+  topology-preserving projection and a 128-unit edge blend. Archive SHA-256:
+  `92a9c5db7cad1f16726f3e5e7df45cf4cdbe03d47bdb8077374ddea066a6af52`.
+- The export displaced 2,451 vertices of the existing 22,236-vertex main grass
+  mesh; 417 are blended across the patch edge. All 32,374 triangles, material,
+  diffuse UVs and baked-light UVs remain unchanged. The manifest reports
+  `game_verified:false`.
+- Prepared isolated profile `build/cemu-terrain-projection-20261021-v2`; its
+  preflight is ready, its packaged archive hash matches the generated patch, and
+  WASD plus Z=A mappings are configured. It has not been booted yet, so no Cemu
+  appearance or collision result is established.
+- A later preflight found that this profile's saved controller map had drifted
+  to the wrong WASD IDs and its isolated MLC had no NSMBU saves. The old
+  controller files are preserved under
+  `local/evidence/cemu-input-test/terrain-profile-repair-20261021`; the profile
+  now uses the same runtime-confirmed keyboard mapping and Clean save snapshot.
+  Recheck passes with identical personal/common save hashes and the expected
+  terrain archive hash
+  `92a9c5db7cad1f16726f3e5e7df45cf4cdbe03d47bdb8077374ddea066a6af52`. It
+  remains unbooted; no visual or collision conclusion follows.
+- Launch after a compatible NSMBU RPX is available with:
+  `& .\build\cemu-terrain-projection-20261021-v2\launch.ps1 -GameRpx '<absolute path to red-pro2.rpx>'`.
+  Then rerun `tools/cemu_preflight.py` with `--require-run` and compare the map
+  against the stock-looking route-only Chain profile.
+
 ## Latest controlled retest — 2026-10-21
 
 - Used three isolated Cemu 1.26.2f profiles with separate MLC folders and the
@@ -240,3 +351,114 @@ reused save is only for movement comparison, not a fresh-save progression test.
 Local logs are evidence of configuration/boot, not proof of traversal. The JSON
 export manifests intentionally retain `game_tested:false`; human observations
 belong in this document and PROGRESS.md with their exact scope.
+
+## Controlled sustained-input baseline and Chain attempt — 2026-10-21
+
+- A fresh isolated Clean run (`clean-gamepad-input-v3-direction-matrix-final2`)
+  reached the World 1 map at Crushing-Cogs Tower. Cemu PID 24744 / HWND
+  196740416 was focused and verified before each two-second key hold. The
+  profile enabled only CrashFix; WorldStudioChain was absent. The configured
+  GamePad profile SHA-256 was
+  `7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b`.
+- Comparing each before/after screenshot: W left Mario at the tower. A moved
+  him to the black course node to the right. S moved him onward to the lower
+  path junction. D produced no further visible node movement in this sample.
+  This verifies that the process-bound two-second hold runner can produce
+  visible overworld movement on the clean baseline; it does not identify the
+  destination point ID or test level entry.
+- Personal and common save files were unchanged. Their SHA-256 values remained
+  `5de5ecae3f91c13841ac5a16f0511b7af765ff63628cb95ce65bde721689c9df` (8
+  bytes) and `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`
+  (45,364 bytes). The run log SHA-256 was
+  `32b60977ba1afbffe5d1811980e63e5808f0f296ea16a32c6853286fcef736d1`.
+  Screenshots and per-key timestamps are retained in
+  `local/evidence/cemu-input-test/clean-gamepad-input-v3-direction-matrix-final2-*`.
+- The matching Chain profile passed its boot/pack checks: the active
+  `WorldStudioChain` archive and profile copy both hash to
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`; the
+  controller hash and initial save hashes match Clean. The intended W/A/S/D
+  comparison did not run. A held Z/A input crossed the controller/story start
+  screens and reached the world map before the explicit map-confirmation gate;
+  the map screenshot showed Mario already moving, so that state cannot be
+  treated as the same start point. The Cemu process then exited normally
+  (exit code 0) before the map gate was confirmed. This is not evidence of a
+  route failure or a Cemu crash. See
+  `chain-gamepad-input-v3-controller-confirm-result.json` and
+  `chain-gamepad-input-v3-direction-matrix-final2-result.json` alongside their
+  screenshots.
+- The exact static edit is on point row `W102` (engine row 2). Stock lists
+  destinations `W1T0,W1K1` with macro path `RW102W1T0`; Chain lists destination
+  `W103` with `RW102W1T0,RW1T0W103`. The local route-chain validator returns
+  `True` for Chain's ordered W102-to-W103 macro path and `None` for stock's
+  fan-out row. This identifies the route to measure, but does not show that
+  Cemu traverses either segment at runtime. The normal route-graph reachability
+  check passes on both archives, so it cannot substitute for the movement test.
+- Next comparison must start the Chain profile at the confirmed tower and then
+  run the identical W/A/S/D two-second sequence, capturing a clean map-check
+  screenshot before input. Until that is completed, the Chain route behavior
+  remains unverified.
+- A subsequent retry (`chain-gamepad-input-v3-direction-matrix-retry`) did not
+  reach game input: process-bound focus verification timed out after 120 seconds
+  because Brave PID 19680 was foreground instead of the launched Cemu PID 24848.
+  The runner closed its own Cemu process and wrote the failed result; no gameplay
+  observation was made. The next attempt must activate the returned Cemu window
+  promptly or use a permitted non-Computer-Use focus path before sending input.
+- The test runner now polls the launched child process or exact attached Cemu
+  PID at interactive checkpoints. If the game exits while the operator is
+  confirming the map or destination, it reports that exit immediately and saves
+  the partial run record instead of blocking indefinitely. Focused tests cover
+  live Enter confirmation and both process-exit paths.
+
+## Cemu test-profile repair and latest focus-blocked run — 2026-10-21
+
+- Fresh preflight found that the isolated Clean and Chain profiles had drifted
+  from the currently verified keyboard map: both stored WASD on IDs 17–20,
+  while Cemu 1.26.2f uses IDs 18–21 for left-stick up/down/left/right. Their
+  saves also differed: Clean common save SHA-256
+  `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`, Chain
+  common save SHA-256
+  `7397c8582c406fe0a60b7e2d19fca5658093da4dbc30f92334ba035e6a0e931e`. The
+  previous Chain controller files and complete user-save tree were preserved
+  under `local/evidence/cemu-input-test/profile-repair-20261021` before repair.
+- Regenerated both controller profiles from the repository's tested Cemu
+  serializer and copied the Clean save snapshot to Chain. Both profiles now
+  preflight with the same controller hash
+  `7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b`, WASD
+  mapped to IDs 18–21, Z mapped to GamePad A, and identical personal/common
+  save hashes. The Chain archive and enabled profile copy remain byte-identical
+  at SHA-256
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`.
+- The process-bound runner now selects the main game-title HWND if Cemu also
+  exposes an auxiliary GamePad window, refuses ambiguous main windows, and
+  records a first screenshot before requesting focus. Its focused runner,
+  profile-preflight and profile-preparation suites pass (**33 tests**); the
+  complete repository suite passes (**327 tests**). Early failures record the
+  reason, final save hashes and Cemu log hash. Editor teardown also releases
+  its embedded WebView and pending viewport/auto-fit callbacks.
+- The latest attempt (`chain-route-focus-wait-20261021`) started from no active
+  Cemu process and launched the expected isolated executable as PID 19124,
+  HWND 51185206. Foreground stayed on Brave PID 19680 throughout the 300-second
+  focus window. The runner sent no keys, closed its own Cemu with exit code 0,
+  and saved a white pre-focus capture plus result JSON. The current Cemu log
+  SHA-256 is
+  `9c085d323653a63364614d8fe41919eb297869c4747cfb59672b9d82778e8703`. The
+  white capture is not a view of the intended game state; no movement result
+  can be inferred. `chain-route-focus-wait-20261021-result.json` and its BMP
+  are in ignored `local/evidence/cemu-input-test/`.
+- Remaining action for a controlled comparison: activate the exact isolated
+  Cemu window during a live runner focus wait, then confirm the overworld
+  starting point before the same two-second W/A/S/D sequence. The Clean baseline
+  was previously verified with this same controller-profile hash, but the
+  modified Chain route still has no new traversal evidence.
+
+## Cemu node-by-node movement confirmation
+
+The process-bound runner supports `--start-label "Crushing-Cogs Tower"` to
+show the expected map starting point in its explicit screenshot confirmation.
+For ordered movement tests, `--sequence w a s d --pause-after-each-step` captures
+before/after images around each held direction and pauses between steps for an
+operator to confirm the visible next node before continuing. The runner records
+each confirmation and re-verifies the exact Cemu window focus before the next key.
+This makes the test result easier to reproduce and interpret; it does not add
+new in-game movement evidence by itself. The next Cemu retest was deferred by
+the user, so no new emulator instance was started for this change.

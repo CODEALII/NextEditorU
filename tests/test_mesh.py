@@ -138,6 +138,45 @@ class MeshTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from('>I',after,0x600+12)[0],511<<20)
         self.assertTrue(report['imported_normals'])
 
+    def test_topology_preserving_patch_keeps_source_indices_and_uv_channels(self):
+        before = fixture()
+        patch_vertices = [(0., 10., 0.), (0., 10., 2.), (2., 10., 0.)]
+        before_diffuse_uv = before[0x600 + 16:0x600 + 24]
+        before_light_uv = before[0x600 + 24:0x600 + 28]
+
+        after, report = replace_rigid_mesh(
+            before, patch_vertices, self.faces, preserve_topology=True,
+            edge_blend_distance=0)
+
+        self.assertEqual(struct.unpack_from('>6H', after, 0x800), (0, 1, 2, 0, 0, 0))
+        self.assertEqual(after[0x600 + 16:0x600 + 24], before_diffuse_uv)
+        self.assertEqual(after[0x600 + 24:0x600 + 28], before_light_uv)
+        self.assertEqual([struct.unpack_from('>3f', after, 0x600 + index * 28)[1]
+                          for index in range(4)], [10., 10., 10., 10.])
+        self.assertTrue(report['topology_preserved'])
+        self.assertTrue(report['indices_preserved'])
+        self.assertTrue(report['diffuse_uvs_preserved'])
+        self.assertTrue(report['baked_light_uvs_preserved'])
+        self.assertEqual(report['vertices_displaced'], 4)
+
+    def test_topology_preserving_patch_rejects_nonoverlapping_surface(self):
+        far_patch = [(100., 10., 100.), (100., 10., 102.), (102., 10., 100.)]
+
+        with self.assertRaisesRegex(ValueError, 'does not overlap'):
+            replace_rigid_mesh(fixture(), far_patch, self.faces, preserve_topology=True)
+
+    def test_topology_preserving_patch_blends_to_source_terrain_at_boundary(self):
+        patch_vertices = [(-2., 10., -2.), (-2., 10., 10.), (10., 10., -2.)]
+
+        after, report = replace_rigid_mesh(
+            fixture(), patch_vertices, self.faces, preserve_topology=True)
+
+        heights = [struct.unpack_from('>3f', after, 0x600 + index * 28)[1]
+                   for index in range(4)]
+        self.assertTrue(all(0. < height < 10. for height in heights), heights)
+        self.assertEqual(report['vertices_edge_blended'], 4)
+        self.assertEqual(report['edge_blend_distance'], 128.)
+
     def test_static_model_geometry_round_trips_from_supported_layout(self):
         shapes = extract_rigid_model(fixture())
         self.assertEqual(len(shapes), 1)

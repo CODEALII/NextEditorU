@@ -21,7 +21,7 @@ class CemuPreflightTests(unittest.TestCase):
             pack_entry + '"/></GraphicPack></content>', encoding='utf-8')
         (profile / 'controllerProfiles/controller0.txt').write_text(
             f'[General]\nemulate = Wii U GamePad\napi = {api}\n[Controller]\n'
-            '17 = key_87\n18 = key_83\n19 = key_65\n20 = ' + mapping + '\n',
+            '18 = key_87\n19 = key_83\n20 = key_65\n21 = ' + mapping + '\n',
             encoding='utf-8')
         active_line = ('Activate graphic pack: New Super Mario Bros. U/Mods/World Studio Chain\n'
                        if active else '')
@@ -69,7 +69,7 @@ class CemuPreflightTests(unittest.TestCase):
             (profile / 'controllerProfiles/controller0.txt').unlink()
             entries = ''.join(
                 f'<entry><mapping>{mapping}</mapping><button>{key}</button></entry>'
-                for mapping, key in ((1, 90), (17, 87), (18, 83), (19, 65), (20, 68)))
+                for mapping, key in ((1, 90), (18, 87), (19, 83), (20, 65), (21, 68)))
             (profile / 'controllerProfiles/controller0.xml').write_text(
                 '<emulated_controller><type>Wii U GamePad</type><controller>'
                 '<api>Keyboard</api><mappings>' + entries +

@@ -81,6 +81,19 @@ def native_point_path_route_ids(point_rows):
     return sorted(route_ids)
 
 
+def native_road_type_choices(route_rows):
+    """Return distinct nonempty road-type values from the source route table."""
+    result = []
+    seen = set()
+    for row in route_rows:
+        if (not isinstance(row, (list, tuple)) or len(row) != 3 or
+                not isinstance(row[1], str) or not row[1].strip() or row[1] in seen):
+            continue
+        seen.add(row[1])
+        result.append(row[1])
+    return result
+
+
 def native_route_segment_choices(route_rows, known_references, known_bones,
                                  world_prefix=None, point_rows=()):
     """Return unused BFRES route IDs whose local endpoint bones resolve."""

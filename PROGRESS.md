@@ -1,5 +1,191 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Keep rejected 3D point drags synchronized
+
+- The embedded viewport previews point movement while dragging. If the native
+  editor rejects the committed transform, its overlays now refresh from the
+  authoritative project state instead of leaving an uncommitted position on
+  screen.
+- Added a GUI regression for the rejected-child-transform refresh path.
+  Embedded editor, graph validation, and WebGL safety suites pass (**89 tests**).
+  This verifies editor synchronization only; mouse interaction in the running
+  window and gameplay in Cemu remain unverified.
+
+## 2026-10-22 — Guard native route movement-type edits
+
+- The route inspector accepted arbitrary free text for its road-type column,
+  and project export validation checked only that the cell was text. Changed
+  the editor to a read-only selector backed by the source archive's distinct
+  nonempty values; the add-segment dialog uses the same source values.
+- Export validation now rejects empty or new unknown types on changed/appended
+  rows, but allows untouched source values to remain. The local W1 table has
+  five distinct values; no gameplay meaning is inferred from those strings.
+- Added source-order/empty-value helper tests, synthetic project validation for
+  invalid and permitted values, and a GUI control regression. The targeted
+  resource/graph/editor suites pass (**75 tests**); the full suite passes
+  (**336 tests in 208.160 seconds**). A separate real-W1 export-gate regression
+  also confirms a bad road type creates no output and leaves the source archive
+  byte-identical. `compileall` and `git diff --check` pass.
+
+## 2026-10-22 — Give the embedded model unobstructed space
+
+- A live screenshot of the running W1 editor showed that the WebGL inspector
+  covered nearly half of the 3D model at the actual split-pane width. Added an
+  embedded-only compact toolbar with Fit view and a Preview controls toggle;
+  the model, labels and map paths now use the whole viewport until controls are
+  requested. The external debug preview keeps its original full inspector.
+- Increased the initial 3D share of the editor/graph splitter from 58% to 64%.
+  The relaunched editor screenshot visually confirms the island and graph are
+  both visible with the new unobstructed default viewport.
+- The Computer Use input bridge failed with `foreground window did not report
+  a process id` while testing the controls toggle. Embedded document and
+  JavaScript syntax regressions pass. Opening that drawer and point dragging
+  were not verified interactively.
+
+## 2026-10-22 — Align 3D drag threshold with overlay motion
+
+- Fixed a small-input mismatch: pointer jitter below the 3-pixel drag threshold
+  no longer shifts the WebGL point without committing it to the editor. On the
+  first threshold-crossing event, the complete accumulated screen displacement
+  is applied, then later deltas continue from the last applied pointer position.
+- Extracted and tested the camera-plane screen-to-world delta for both an
+  identity and a rotated view. Existing synthetic editor tests cover committing
+  to BFRES local coordinates, Undo, and rejection of unsupported transforms.
+- Targeted regressions passed; the complete suite passes (**333 tests in
+  210.364 seconds**). Embedded JavaScript syntax, `compileall`, and
+  `git diff --check` pass. The drawer click and actual mouse-drag gesture still
+  need interactive confirmation; no Cemu behavior is inferred.
+
+## 2026-10-22 — Drag native points in the embedded 3D viewport
+
+- Added left-drag editing for native point overlays in the main WebGL viewport.
+  Pointer motion moves the point in the view plane; release commits through the
+  hierarchy-aware world-to-local transform and shared edit history. Tree
+  selection, property inspector, undo, and the incremental overlay refresh stay
+  synchronized; BFRES scene geometry is not rebuilt for a point move.
+- Renderer routes only native `point:<index>` IDs into the move bridge. The Tk
+  callback validates the point row and finite coordinate bounds, rejects
+  unsupported child transforms, and leaves preview-only IDs non-editable.
+- Added synthetic GUI regressions for root-bone drag/selection/undo and safe
+  rejection of an uninvertible child, plus renderer checks for drag and RPC
+  wiring. Editor/preview suite: **66 tests passed**; the full suite: **331
+  tests passed in 188.243 seconds**. `compileall` and `git diff --check` passed.
+  A live mouse-drag review and Cemu gameplay remain unverified.
+
+## 2026-10-21 — terrain retest profile made comparable
+
+- A fresh preflight found that the prepared topology-preserving terrain profile
+  still had an obsolete WASD mapping and no NSMBU save files. I preserved its
+  original controller profiles under
+  `local/evidence/cemu-input-test/terrain-profile-repair-20261021`, generated
+  the runtime-confirmed keyboard mappings, and copied the Clean save snapshot.
+- The terrain profile now passes preflight with WASD on IDs 18–21, Z=A, saves
+  byte-identical to Clean, and its packaged archive exactly matching the
+  exported terrain patch at SHA-256
+  `92a9c5db7cad1f16726f3e5e7df45cf4cdbe03d47bdb8077374ddea066a6af52`. Cemu
+  has not been booted with this profile; map appearance and collision remain
+  unverified.
+- Corrected stale integration documentation to describe the current persistent
+  split viewport rather than the earlier tab layout. Extended the GUI selection
+  regression to cover route segments as well as points; editor/preview tests
+  pass (**64 tests**).
+
+## 2026-10-21 — Cemu profile repair and process-bound window selection
+
+- A fresh read-only preflight caught drift in both isolated test profiles: the
+  saved keyboard profiles mapped WASD to obsolete IDs 17–20, and Chain's common
+  save no longer matched Clean. Before correction, I backed up both controller
+  profiles and the Chain save tree under ignored
+  `local/evidence/cemu-input-test/profile-repair-20261021`, regenerated the
+  keyboard mappings from the runtime-confirmed 18–21 template, and restored
+  Chain from the Clean save snapshot. Both Clean and Chain preflights now pass;
+  their personal/common save hashes match and the Chain archive hash remains
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`.
+- Updated the input runner to select Cemu's main game-title window when an
+  auxiliary GamePad window is present, reject multiple main windows, and save
+  an initial screenshot before requesting foreground focus. The focused Cemu
+  runner/preflight/preparation suites pass (**33 tests**); the full suite passes
+  (**327 tests**). Early failures also record their reason, final save hashes
+  and Cemu log hash. Editor teardown cancels pending viewport and auto-fit
+  callbacks and releases its embedded WebView resources.
+- The latest Chain attempt launched PID 19124 / HWND 51185206 with no other
+  Cemu process active. Focus remained on Brave PID 19680 for the full 300-second
+  wait, so the runner sent **no input** and closed its own Cemu normally. The
+  pre-focus screenshot is white and does not establish the game screen. The
+  current run log hash is
+  `9c085d323653a63364614d8fe41919eb297869c4747cfb59672b9d82778e8703`; the
+  run report and screenshot are `chain-route-focus-wait-20261021-*` under the
+  ignored evidence folder. Runtime traversal of the Chain route remains
+  unverified; the next run still needs the exact Cemu window activated.
+
+## 2026-10-21 — controlled Cemu sustained-input baseline
+
+- Added a process-bound, screenshot-backed Clean baseline movement result to
+  `docs/INTEGRATION.md`. Two-second A and S holds visibly moved Mario between
+  map nodes; W and D did not produce further visible node movement in this
+  sample. The isolated save hashes stayed unchanged.
+- The same-input Chain comparison is still pending. Its archive hash matched
+  the enabled profile, but a long Z/A hold crossed menu transitions and Mario
+  was already moving when the map appeared. The Cemu process subsequently
+  exited normally before the explicit map-confirmation gate, so that run is
+  excluded as movement evidence. The exact next test and local artifacts are
+  recorded in `docs/INTEGRATION.md`. A later retry failed its 120-second focus
+  check while Brave, rather than Cemu, was foreground; it sent no game input.
+- Hardened the Cemu test runner's manual gates: it now checks the launched or
+  attached Cemu PID while waiting for confirmation and reports an early exit
+  immediately. Three regression cases cover Enter, a launched-process exit,
+  and an attached PID disappearing.
+- Traced the intended custom link to point row W102: Chain encodes destination
+  W103 through the ordered existing macro bones `RW102W1T0,RW1T0W103`; stock
+  W102 fans out to W1T0/W1K1. Added a local-dump regression for this exact
+  target. This narrows the next game test, but does not confirm runtime travel.
+
+## 2026-10-21 — integrated 3D editor viewport
+
+- Moved the existing WebGL/BFRES page into a persistent Tk child WebView2 in the
+  main editor. The 3D viewport and 2D graph remain visible side by side in an
+  adjustable split, with the nodes/routes list and property controls alongside.
+- Added a local JavaScript↔Tk bridge for point and route selection. Viewport
+  clicks select the matching editor row, list selection highlights/focuses the
+  corresponding world point or route, and normal point/route edits update only
+  WebGL overlay buffers. BFRES and texture geometry are rebuilt only when the
+  imported terrain geometry changes. The external browser preview remains an
+  optional debugging action.
+- The embedded viewport requires the Windows WebView2 Runtime and the optional
+  pinned dependency in `requirements.txt`. The currently installed tkwry build
+  is 0.1.9. A live W1 WebView2 smoke check confirmed local page readiness,
+  viewport-to-tree selection through RPC, tree-to-viewport focus, and overlay
+  refresh without rebuilding BFRES geometry. A live screenshot review caught
+  and fixed the Tk embedding issue where the WebView could unmanage its parent
+  page. A later QA screenshot showed the Notebook still left the graph canvas
+  visible after WebGL loaded, so the editor now uses a persistent adjustable
+  split instead of tabs, initially allocating 58% of the editing area to the
+  3D pane. A post-split live W1 screenshot confirmed the embedded model and
+  graph are both visible with the nodes/properties sidebar; selecting W102 in
+  the list focused it in the viewport and graph, and clicking W104 in the 3D
+  view selected its row and properties. The viewer reports 42 shapes, 70,193
+  vertices, and 106,736 triangles.
+  Viewport-to-editor selection is limited to items with a world-map point or
+  route overlay; clicking a model shape continues to select it in the viewer.
+  Selection forwarding and incremental point edits also have focused GUI tests.
+
+## 2026-10-21 — topology-preserving terrain projection
+
+- Replaced the project export's destructive whole-shape path with an experimental
+  surface projection. Upward-facing OBJ/GLB triangles now displace intersecting
+  upward-facing vertices in the existing W1 main grass mesh; source triangle
+  indices, material, diffuse UVs and baked-light UVs stay intact. Normals and
+  bounds are recalculated from the retained topology. No mesh resolution or
+  collision data is added.
+- A real local W1 export moved 2,451 of 22,236 source vertices, with 417
+  vertices blended across the 128-unit patch edge, while retaining all 32,374
+  triangles and both UV channels. The manifest marks the result
+  `game_verified:false`; the earlier clipped-terrain screenshot belongs to the
+  old destructive exporter and is not evidence for this new patch.
+- Regression: all **36 mesh tests** pass, including a source-topology/UV
+  preservation fixture and the local W1 project export/reopen test. Cemu visual
+  validation of the new projected terrain remains outstanding.
+
 ## 2026-10-21 — controlled Cemu route follow-up
 
 - Loaded `build/cemu-chain-route-retest-20261021` with its matching isolated save.
@@ -19,14 +205,15 @@
   and clipped terrain. Its screenshot is `cemu-mainlight-terrain-observed.png`;
   this terrain export is not visually acceptable. The route-only Chain build
   showed stock-looking terrain in the displayed area.
-- Offline geometry comparison identifies a likely cause for that failed patch:
+- Offline geometry comparison identified the cause of that failed patch:
   the exported OBJ has only 29 vertices/54 triangles, while the selected
   `polySurface1489__mtGrass` source shape contains 22,236 vertices/32,374
   triangles. The current exporter replaces that entire shape allocation, so
   most of the original terrain is discarded and the broad low-poly faces become
   visible. This is a code-path diagnosis consistent with the screenshot, not a
-  verified Cemu rendering root cause. Do not export this terrain as a playable
-  map until the replacement preserves the source coverage or uses a safe overlay.
+  verified Cemu rendering root cause. The project exporter now preserves the
+  source topology through the surface-projection method documented above; the
+  patched result still requires Cemu visual validation.
 - Fixed Cemu preflight to parse XML-only controller profiles as well as the
   legacy text profile, and added an optional Z=A gate for level-start tests.
   The Chain profile passes both gates; Mainlight correctly fails the A-button
@@ -1508,3 +1695,16 @@ camera behavior and a fully playable custom world remain open.
   editor smoke tests passed; `compileall` and `git diff --check` passed. This
   verifies editor synchronization only; camera movement in Cemu remains
   unverified.
+
+## 2026-10-21 — Reproducible node-by-node Cemu movement checks
+
+- Extended `tools/cemu_input_test.py` with `--start-label` so the saved-map
+  confirmation names the expected Mario start node. Added optional
+  `--pause-after-each-step` for `--sequence`: the runner captures each held
+  direction, pauses for visual confirmation of the resulting node, records the
+  confirmation, and re-verifies focus before sending the next direction.
+- Added focused prompt tests and documented the invocation in
+  `docs/INTEGRATION.md`. This is test-runner quality work only; no additional
+  in-game movement behavior is claimed.
+- The user deferred the requested Cemu focus step (“Später”), so no new Cemu
+  instance was launched. The modified Chain route remains unverified in-game.

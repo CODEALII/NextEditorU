@@ -1,6 +1,6 @@
 # Original NSMBU World Studio game-space island. CC0.
 # Authored model-local coordinates for W1: plateau Y=60; hill at (90,300,-870).
-# Experimental replacement of one existing grass shape; other original terrain stays visible.
+# Experimental top-surface patch projected onto existing grass vertices; topology stays intact.
 # Route movement and collision are not generated from this mesh. Cemu appearance unverified.
 o StudioGameIsland
 v -500 60 -1400

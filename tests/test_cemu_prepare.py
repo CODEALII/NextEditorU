@@ -80,6 +80,47 @@ class PrepareCemuTests(unittest.TestCase):
         self.assertIn("-g $GameRpx", launcher)
         self.assertIn('-m "$PSScriptRoot/mlc01"', launcher)
 
+    def test_custom_pack_name_is_used_consistently(self):
+        result = prepare(self.source, self.patch, self.output, pack_name="WorldStudioDirect")
+        self.assertEqual(result["enabled_packs"], ["WorldStudioDirect", "CrashFix"])
+        settings = ET.parse(self.output / "settings.xml").getroot()
+        references = [entry.get("filename").replace("\\", "/")
+                      for entry in settings.findall("GraphicPack/Entry")]
+        self.assertIn("graphicPacks/WorldStudioDirect/rules.txt", references)
+        rules = (self.output / "graphicPacks/WorldStudioDirect/rules.txt").read_text()
+        self.assertIn("name = WorldStudioDirect", rules)
+        self.assertTrue((self.output / "graphicPacks/WorldStudioDirect/content/Common/course_select/CS_W1.szs").is_file())
+
+    def test_pro_controller_profile_keeps_keyboard_wasd_and_action_bindings(self):
+        result = prepare(self.source, self.patch, self.output,
+                         controller_type="Wii U Pro Controller")
+        self.assertFalse(result["launched"])
+        root = ET.parse(self.output / "controllerProfiles/controller0.xml").getroot()
+        self.assertEqual(root.findtext("type"), "Wii U Pro Controller")
+        xml = {int(e.findtext("mapping")): int(e.findtext("button"))
+               for e in root.findall("controller/mappings/entry")}
+        self.assertEqual({k: xml[k] for k in (1, 18, 19, 20, 21)},
+                         {1: 90, 18: 87, 19: 83, 20: 65, 21: 68})
+        legacy = configparser.ConfigParser()
+        legacy.read(self.output / "controllerProfiles/controller0.txt")
+        self.assertEqual({k: int(legacy["Controller"][str(k)][4:])
+                          for k in (18, 19, 20, 21)},
+                         {18: 87, 19: 83, 20: 65, 21: 68})
+        self.assertNotIn("17", legacy["Controller"])
+        profile = configparser.ConfigParser()
+        profile.read(self.output / "controllerProfiles/controller0.txt")
+        self.assertEqual(profile["General"]["emulate"], "Wii U Pro Controller")
+
+    def test_rejects_unsupported_controller_type_before_creating_output(self):
+        with self.assertRaisesRegex(ValueError, "Controller type"):
+            prepare(self.source, self.patch, self.output,
+                    controller_type="Unsupported Pad")
+        self.assertFalse(self.output.exists())
+
+    def test_pack_name_rejects_path_components(self):
+        with self.assertRaisesRegex(ValueError, "Graphic pack name"):
+            prepare(self.source, self.patch, self.output, pack_name="../WorldStudioDirect")
+
     def test_clean_baseline_requires_no_patch_and_disables_world_studio_chain(self):
         before_source = snapshot(self.source)
         result = prepare(self.source, None, self.output, baseline=True)
@@ -105,7 +146,7 @@ class PrepareCemuTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "separate from input"):
             prepare(self.source, None, self.source / "nested-baseline", baseline=True)
 
-    def test_legacy_ini_and_xml_have_same_usable_keyboard_bindings(self):
+    def test_legacy_ini_and_xml_use_installed_runtime_mapping_ids(self):
         self.run_prepare()
         profile = configparser.ConfigParser()
         profile.read(self.output / "controllerProfiles/controller0.txt")
@@ -121,13 +162,17 @@ class PrepareCemuTests(unittest.TestCase):
             if key.isdecimal():
                 self.assertTrue(value.startswith("key_"))
                 legacy[int(key)] = int(value[4:])
-        self.assertEqual(legacy, xml)
-        # Independently established VPAD IDs / Windows VKs prevent a shared
-        # erroneous constant from passing merely because both serializers agree.
+        self.assertEqual({key: legacy[key] for key in range(1, 11)},
+                         {key: xml[key] for key in range(1, 11)})
+        # Runtime-verified Cemu 1.26 IDs / Windows VKs prevent both serializers
+        # from passing solely because they share the same wrong constant.
         self.assertEqual({k: xml[k] for k in (1, 2, 9, 11, 12, 13, 14)},
                          {1: 90, 2: 88, 9: 13, 11: 38, 12: 40, 13: 37, 14: 39})
-        self.assertEqual({k: xml[k] for k in (17, 18, 19, 20)},
-                         {17: 87, 18: 83, 19: 65, 20: 68})
+        self.assertEqual({k: xml[k] for k in (18, 19, 20, 21)},
+                         {18: 87, 19: 83, 20: 65, 21: 68})
+        self.assertEqual({k: legacy[k] for k in (18, 19, 20, 21)},
+                         {18: 87, 19: 83, 20: 65, 21: 68})
+        self.assertEqual(legacy, xml)
 
     def test_refuses_existing_output_without_changing_anything(self):
         self.output.mkdir()

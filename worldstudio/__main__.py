@@ -111,7 +111,7 @@ def main():
     demo = sub.add_parser('demo', help='Build experimental three-level progression patch')
     demo.add_argument('--source', default=str(DEFAULT_SOURCE))
     demo.add_argument('--out', required=True, type=Path)
-    demo.add_argument('--island', type=Path, help='Experimental original OBJ replacement of one existing rigid grass mesh')
+    demo.add_argument('--island', type=Path, help='Experimental OBJ top-surface patch projected onto an existing rigid grass mesh')
     demo.add_argument('--direct-route', action='store_true', help='Experimental new W102-W103 macro edge, bypassing the tower endpoint')
     exp = sub.add_parser('export', help='Validate and export a saved project')
     exp.add_argument('project')
@@ -213,8 +213,9 @@ def main():
                 'Normal progression: W101 -> W102 -> W103; all other points remain.',
                 ('New macro edge RW102W103; final segment RK02hW103 uses existing waypoints.'
                  if args.direct_route else 'W102 uses existing RW102W1T0,RW1T0W103 macro paths.'),
-                ('One rigid grass shape replaced by original OBJ; other shapes retained.'
-                 if args.island else 'No mesh replacement selected.'),
+                ('Original OBJ surface projected onto the existing grass topology and UVs; '
+                 'terrain appearance and collision remain unverified.'
+                 if args.island else 'No terrain patch selected.'),
                 *[f'OBJ compatibility: {warning}.' for warning in obj_compatibility_warnings],
                 'Level files, cameras, scripts and saves unchanged.',
                 'Test on a separate game copy/profile. Contains user-owned resources; do not redistribute.']

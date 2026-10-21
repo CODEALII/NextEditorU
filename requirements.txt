@@ -1,0 +1,3 @@
+# Optional native child-WebView host for the embedded WebGL world viewport.
+# Windows requires the Microsoft Edge WebView2 Runtime.
+tkwry==0.1.9

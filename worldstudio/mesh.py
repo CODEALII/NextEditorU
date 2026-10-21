@@ -1,9 +1,11 @@
-"""Capacity-bounded rigid Wii U BFRES mesh replacement.
+"""Capacity-bounded rigid Wii U BFRES mesh editing.
 
 This is deliberately not a general BFRES converter. It preserves every pointer,
 material, allocation, vertex/index count and submesh partition. Unused triangles
-become degenerate. Only the tested rigid float-position/packed-normal grass
-layout is accepted. Layout researched against MIT BfresLibrary commit
+become degenerate only in the retained low-level whole-shape replacement mode.
+The project exporter can instead project a surface onto existing topology.
+Only the tested rigid float-position/packed-normal grass layout is accepted.
+Layout researched against MIT BfresLibrary commit
 65c005275deed1e085069e72fea523247f955b87; no Nintendo data is embedded here.
 """
 import math
@@ -15,6 +17,7 @@ from .bfres import Skeletons
 DEFAULT_MODEL = 'CS_W1_World'
 DEFAULT_SHAPE = 'polySurface1489__mtGrass'
 DEFAULT_LIGHTMAP_PROJECTION_WARNING_DISTANCE = 128.0
+DEFAULT_TERRAIN_EDGE_BLEND_DISTANCE = 128.0
 MAX_FACE_CORNERS = 1024
 _UV_ATTRIBUTE_BYTES = {0x80d: 8, 0x7: 4, 0x207: 4, 0x4: 2}
 _POSITION_ATTRIBUTE_BYTES = {0x811: 12, 0x80f: 8}
@@ -458,6 +461,155 @@ def _xz_distance_squared(point, source):
     return (point[0] - source[0]) ** 2 + (point[2] - source[2]) ** 2
 
 
+def _project_top_surface(vertices, indices):
+    """Return upward-facing triangle planes for a height-surface projection."""
+    triangles = []
+    edge_counts = {}
+    for offset in range(0, len(indices), 3):
+        vertex_ids = indices[offset:offset + 3]
+        a, b, c = (vertices[index] for index in vertex_ids)
+        ab = tuple(b[axis] - a[axis] for axis in range(3))
+        ac = tuple(c[axis] - a[axis] for axis in range(3))
+        normal = (ab[1] * ac[2] - ab[2] * ac[1],
+                  ab[2] * ac[0] - ab[0] * ac[2],
+                  ab[0] * ac[1] - ab[1] * ac[0])
+        length = math.sqrt(sum(value * value for value in normal))
+        if length <= 1e-12 or normal[1] / length < 0.5:
+            continue
+        area = (b[0] - a[0]) * (c[2] - a[2]) - (c[0] - a[0]) * (b[2] - a[2])
+        if abs(area) <= 1e-12:
+            continue
+        triangles.append((a, b, c, area,
+                          min(a[0], b[0], c[0]), max(a[0], b[0], c[0]),
+                          min(a[2], b[2], c[2]), max(a[2], b[2], c[2])))
+        for edge_start, edge_end in ((a, b), (b, c), (c, a)):
+            start_key = tuple(round(edge_start[axis], 5) for axis in range(3))
+            end_key = tuple(round(edge_end[axis], 5) for axis in range(3))
+            key = tuple(sorted((start_key, end_key)))
+            count, _ = edge_counts.get(key, (0, (edge_start, edge_end)))
+            edge_counts[key] = (count + 1, (edge_start, edge_end))
+    if not triangles:
+        raise ValueError('Terrain patch has no upward-facing surface triangles')
+    boundaries = [edge for count, edge in edge_counts.values() if count == 1]
+    return triangles, boundaries
+
+
+def _sample_top_surface(x, z, triangles, boundaries):
+    """Sample the highest upward-facing imported triangle at an XZ point."""
+    sampled_y = None
+    for a, b, c, area, min_x, max_x, min_z, max_z in triangles:
+        if x < min_x - 1e-7 or x > max_x + 1e-7 or z < min_z - 1e-7 or z > max_z + 1e-7:
+            continue
+        w_a = ((b[0] - x) * (c[2] - z) - (c[0] - x) * (b[2] - z)) / area
+        w_b = ((c[0] - x) * (a[2] - z) - (a[0] - x) * (c[2] - z)) / area
+        w_c = 1. - w_a - w_b
+        if min(w_a, w_b, w_c) < -1e-7:
+            continue
+        y = w_a * a[1] + w_b * b[1] + w_c * c[1]
+        sampled_y = y if sampled_y is None else max(sampled_y, y)
+    if sampled_y is None:
+        return None, None
+    boundary_distance = float('inf')
+    for start, end in boundaries:
+        dx, dz = end[0] - start[0], end[2] - start[2]
+        length_squared = dx * dx + dz * dz
+        if length_squared <= 1e-12:
+            continue
+        amount = max(0., min(1., ((x - start[0]) * dx + (z - start[2]) * dz) /
+                                  length_squared))
+        nearest_x, nearest_z = start[0] + amount * dx, start[2] + amount * dz
+        boundary_distance = min(boundary_distance,
+                                math.hypot(x - nearest_x, z - nearest_z))
+    return sampled_y, boundary_distance
+
+
+def _recompute_vertex_normals(vertices, indices, fallback_normals):
+    normals = [[0., 0., 0.] for _ in vertices]
+    for offset in range(0, len(indices), 3):
+        ia, ib, ic = indices[offset:offset + 3]
+        a, b, c = vertices[ia], vertices[ib], vertices[ic]
+        ab = [b[axis] - a[axis] for axis in range(3)]
+        ac = [c[axis] - a[axis] for axis in range(3)]
+        normal = [ab[1]*ac[2]-ab[2]*ac[1],
+                  ab[2]*ac[0]-ab[0]*ac[2],
+                  ab[0]*ac[1]-ab[1]*ac[0]]
+        if sum(value * value for value in normal) <= 1e-20:
+            continue
+        for index in (ia, ib, ic):
+            for axis in range(3):
+                normals[index][axis] += normal[axis]
+    result = []
+    for normal, fallback in zip(normals, fallback_normals):
+        length = math.sqrt(sum(value * value for value in normal))
+        result.append(tuple(value / length for value in normal) if length > 1e-12 else fallback)
+    return result
+
+
+def _apply_topology_preserving_patch(data, *, start, stride, capacity, position_offset,
+                                     normal_offset, indices, patch_triangles, source_points,
+                                     fallback_normals, shape_offset,
+                                     bounds_start, bounds_count, edge_blend_distance, report):
+    """Displace only existing upward-facing terrain vertices under the OBJ surface."""
+    normals = [tuple(normal) for normal in fallback_normals]
+    changed = 0
+    blended = 0
+    for index, point in enumerate(source_points):
+        if normals[index][1] < 0.35:
+            continue
+        height, boundary_distance = _sample_top_surface(
+            point[0], point[2], patch_triangles[0], patch_triangles[1])
+        if height is None:
+            continue
+        if edge_blend_distance:
+            factor = min(1., max(0., boundary_distance / edge_blend_distance))
+            factor = factor * factor * (3. - 2. * factor)
+        else:
+            factor = 1.
+        height = point[1] + (height - point[1]) * factor
+        if factor < 0.999:
+            blended += 1
+        if abs(point[1] - height) > 1e-5:
+            source_points[index] = (point[0], height, point[2])
+            changed += 1
+    if changed == 0:
+        raise ValueError('Terrain patch does not overlap upward-facing vertices in the target shape')
+
+    normals = _recompute_vertex_normals(source_points, indices, fallback_normals)
+    lo = [min(point[axis] for point in source_points) for axis in range(3)]
+    hi = [max(point[axis] for point in source_points) for axis in range(3)]
+    center = [(lo[axis] + hi[axis]) / 2 for axis in range(3)]
+    extent = [max((hi[axis] - lo[axis]) / 2, .01) for axis in range(3)]
+    out = bytearray(data)
+    for index, (point, normal) in enumerate(zip(source_points, normals)):
+        at = start + index * stride
+        struct.pack_into('>3f', out, at + position_offset, *point)
+        packed = sum((round(max(-1., min(1., normal[axis])) * 511) & 1023) << (10 * axis)
+                     for axis in range(3))
+        struct.pack_into('>I', out, at + normal_offset, packed)
+    for index in range(bounds_count):
+        struct.pack_into('>6f', out, bounds_start + index * 24, *(center + extent))
+    radius = max(math.sqrt(sum(value * value for value in point)) for point in source_points)
+    struct.pack_into('>f', out, shape_offset + 28, radius)
+    report.update({
+        'method': 'project upward-facing OBJ triangles onto existing terrain vertices',
+        'vertices': capacity,
+        'vertices_displaced': changed,
+        'vertices_edge_blended': blended,
+        'edge_blend_distance': edge_blend_distance,
+        'triangles': len(indices) // 3,
+        'vertex_capacity': capacity,
+        'index_capacity': len(indices),
+        'topology_preserved': True,
+        'indices_preserved': True,
+        'diffuse_uvs_preserved': True,
+        'baked_light_uvs_preserved': True,
+        'material_reused': True,
+        'unused_triangles': 0,
+        'game_verified': False,
+    })
+    return bytes(out), report
+
+
 def _triangulate_face(vertices, face):
     """Triangulate a simple planar polygon without changing its winding.
 
@@ -706,15 +858,17 @@ def _geometry(vertices, faces, uvs=None, imported_normals=None):
 
 def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT_SHAPE,
                        uvs=None, imported_normals=None,
-                       lightmap_projection_warning_distance=DEFAULT_LIGHTMAP_PROJECTION_WARNING_DISTANCE):
-    """Return (new_bfres, report), replacing exactly one existing rigid shape.
+                       lightmap_projection_warning_distance=DEFAULT_LIGHTMAP_PROJECTION_WARNING_DISTANCE,
+                       preserve_topology=False,
+                       edge_blend_distance=DEFAULT_TERRAIN_EDGE_BLEND_DISTANCE):
+    """Edit one existing rigid shape, returning the new BFRES bytes and report.
 
-    OBJ units are used directly as model-local game units. OBJ corner UVs and
-    normals are kept when supplied; positions are split at attribute seams
-    because BFRES stores one set of attributes per vertex. Existing terrain
-    elsewhere remains visible. OBJ vt/vn data is kept when
-    present; missing channels receive the documented planar/smooth defaults.
-    In-game appearance still needs Cemu QA.
+    With ``preserve_topology=True``, OBJ model-local coordinates describe a
+    height surface projected onto existing upward-facing source vertices.
+    Existing indices and material/UV channels remain unchanged; normals and
+    bounds are recomputed. The default low-level path is retained for synthetic
+    layout fixtures and replaces the entire shape. ``WorldProject.export`` uses
+    topology-preserving mode. In-game appearance and collision need Cemu QA.
     """
     try:
         lightmap_projection_warning_distance = float(lightmap_projection_warning_distance)
@@ -722,6 +876,12 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
         raise ValueError('Lightmap projection warning distance must be finite and nonnegative') from exc
     if not math.isfinite(lightmap_projection_warning_distance) or lightmap_projection_warning_distance < 0:
         raise ValueError('Lightmap projection warning distance must be finite and nonnegative')
+    try:
+        edge_blend_distance = float(edge_blend_distance)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError('Terrain edge blend distance must be finite and nonnegative') from exc
+    if not math.isfinite(edge_blend_distance) or edge_blend_distance < 0:
+        raise ValueError('Terrain edge blend distance must be finite and nonnegative')
     vertices, indices, normals, uvs = _geometry(vertices, faces, uvs, imported_normals)
     r = Skeletons(data)
     if r.version != 0x03000001:
@@ -793,18 +953,7 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
     r.bounds(index_start, r.u32(ib+4))
     source_points = [struct.unpack_from('>3f', data, start+i*stride+attrs['_p0'][0])
                      for i in range(capacity)]
-    source_uvs = [tuple(value/65535. for value in struct.unpack_from(
-        '>2H', data, start+i*stride+attrs['_u1'][0])) for i in range(capacity)]
     source_indices = struct.unpack_from('>' + str(index_capacity) + 'H', data, index_start)
-    lightmap_uvs, lightmap_projection_distances, lightmap_uv_fallback_count = (
-        _nearest_triangle_uvs(vertices, source_points, source_uvs, source_indices))
-    max_lightmap_projection_distance = max(lightmap_projection_distances, default=0.0)
-    lightmap_projection_warning = None
-    if max_lightmap_projection_distance > lightmap_projection_warning_distance:
-        lightmap_projection_warning = (
-            f'maximum XZ distance {max_lightmap_projection_distance:.3f} exceeds '
-            f'the {lightmap_projection_warning_distance:g}-unit review threshold; '
-            'baked-light UV projection needs visual review')
     sub = r.ptr(mesh+16)
     count = r.u16(mesh+12)
     r.bounds(sub, count*8)
@@ -821,6 +970,44 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
     if not bounds_count or not bounds_start:
         raise ValueError('Explicit existing bounding boxes required')
     r.bounds(bounds_start, bounds_count*24)
+    if preserve_topology:
+        fallback_normals = []
+        for index in range(capacity):
+            packed = struct.unpack_from('>I', data, start + index * stride + attrs['_n0'][0])[0]
+            def signed10(value):
+                value &= 0x3ff
+                return value - 0x400 if value & 0x200 else value
+            normal = tuple(signed10(packed >> shift) / 511. for shift in (0, 10, 20))
+            length = math.sqrt(sum(value * value for value in normal))
+            fallback_normals.append(tuple(value / length for value in normal)
+                                    if length > 1e-6 else (0., 1., 0.))
+        report = {
+            'model': model,
+            'shape': shape,
+            'import_vertices': len(vertices),
+            'import_triangles': len(indices) // 3,
+            'material': material_name,
+            'normals': 'recomputed from preserved target topology',
+            'edge_blend_distance': edge_blend_distance,
+        }
+        return _apply_topology_preserving_patch(
+            data, start=start, stride=stride, capacity=capacity,
+            position_offset=attrs['_p0'][0], normal_offset=attrs['_n0'][0],
+            indices=source_indices, patch_triangles=_project_top_surface(vertices, indices),
+            source_points=list(source_points), fallback_normals=fallback_normals,
+            shape_offset=s, bounds_start=bounds_start, bounds_count=bounds_count,
+            edge_blend_distance=edge_blend_distance, report=report)
+    source_uvs = [tuple(value/65535. for value in struct.unpack_from(
+        '>2H', data, start+i*stride+attrs['_u1'][0])) for i in range(capacity)]
+    lightmap_uvs, lightmap_projection_distances, lightmap_uv_fallback_count = (
+        _nearest_triangle_uvs(vertices, source_points, source_uvs, source_indices))
+    max_lightmap_projection_distance = max(lightmap_projection_distances, default=0.0)
+    lightmap_projection_warning = None
+    if max_lightmap_projection_distance > lightmap_projection_warning_distance:
+        lightmap_projection_warning = (
+            f'maximum XZ distance {max_lightmap_projection_distance:.3f} exceeds '
+            f'the {lightmap_projection_warning_distance:g}-unit review threshold; '
+            'baked-light UV projection needs visual review')
     lo = [min(p[k] for p in vertices) for k in range(3)]
     hi = [max(p[k] for p in vertices) for k in range(3)]
     center = [(lo[k]+hi[k])/2 for k in range(3)]
