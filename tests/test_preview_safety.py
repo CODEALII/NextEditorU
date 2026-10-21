@@ -167,6 +167,34 @@ console.log('mesh selection inspector ok');
         self.assertAlmostEqual(bounds["radius"], math.sqrt(12))
         self.assertEqual(empty, {"center": [0, 0, 0], "radius": 1})
 
+    def test_viewport_pick_ids_and_hidpi_pixel_coordinates(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise viewer picking helpers")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        start = page.index("function pickIdColor(")
+        end = page.index("\nfunction shapeBounds", start)
+        helper = page[start:end]
+        probe = helper + r"""
+const ids=[0,1,41,255,65535];
+for(const index of ids){const bytes=Array.from(pickIdColor(index),x=>Math.round(x*255));if(meshIndexFromPixel(bytes)!==index)throw Error('pick ID round trip failed: '+index)}
+const point=canvasPixel(160,80,{left:10,top:20,width:300,height:200},600,400);
+const edge=canvasPixel(0,0,{left:10,top:20,width:300,height:200},600,400);
+console.log(JSON.stringify([point,edge,meshIndexFromPixel([0,0,0,255])]));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        self.assertEqual(json.loads(result.stdout), [[300, 279], [0, 399], -1])
+
+    def test_viewport_picking_uses_depth_and_respects_texture_cutouts(self):
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        self.assertIn("pickProgram=program(", page)
+        self.assertIn("gl.readPixels(point[0],point[1],1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel)", page)
+        self.assertIn("texture2D(uTexture,vUv).a<0.5", page)
+        self.assertIn("gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0)", page)
+        self.assertIn("selectMesh(meshes[index])", page)
+        self.assertIn("previous.button===0&&Math.hypot(e.clientX-previous.startX,e.clientY-previous.startY)<4", page)
+        self.assertIn("Click a shape to select", page)
+
     def test_focus_mesh_centers_the_camera_and_uses_mesh_radius(self):
         node = shutil.which("node")
         if not node:

@@ -323,3 +323,16 @@ camera behavior and a fully playable custom world remain open.
   actual pointer interaction in a user's browser remains outstanding. Full
   regression: **125 tests passed in 99.005 seconds**; `compileall`,
   `git diff --check`, and local W1 graph validation passed.
+
+## 2026-10-21 — viewport mesh picking
+
+- Added a WebGL color-ID pass that selects the top visible mesh under a click,
+  respects depth and base-texture alpha cutouts, and maps high-DPI canvas pixels
+  back to the right identifier. Drag gestures still orbit or pan the camera.
+- Synthetic tests cover ID encoding/decoding, high-DPI mapping, texture-cutout
+  shader wiring, and click-versus-drag dispatch. A headless Chrome run against
+  the local 42-shape W1 BFRES selected `polySurface1489__mtGrass` at a projected
+  surface point and showed the mesh inspector. Evidence:
+  `local/evidence/preview-w1-pick-rAF.png` (ignored local evidence). Full
+  regression: **127 tests passed in 97.515 seconds**; `compileall`,
+  `git diff --check`, and local W1 graph validation passed.
