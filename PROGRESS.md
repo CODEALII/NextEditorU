@@ -991,3 +991,16 @@ camera behavior and a fully playable custom world remain open.
 - Targeted integration test: **1 passed in 40.178 seconds**. Full suite: **242
   tests passed in 247.342 seconds**; `compileall` and `git diff --check` passed.
   This is offline preview validation only.
+
+## 2026-10-21 — Cross-check paired macro paths on changed destinations
+
+- Graph validation now checks the paired BFRES macro-path references for a
+  changed, single local destination when the baseline and current local
+  inventories resolve. A stale W101→W102 path no longer passes after changing
+  its destination to W103; a matching direct or multi-hop macro path passes.
+- Ambiguous multi-destination legacy rows and cross-world/incomplete inventories
+  remain outside this added check. Runtime route behavior is still unverified.
+- Focused graph suite: **16 tests passed**; the stock W1 `validate-graph`
+  command reports no errors for W101→W103 reachability. Full suite: **244 tests
+  passed in 248.483 seconds**; `compileall` and `git diff --check` passed.
+  No runtime route result is inferred.

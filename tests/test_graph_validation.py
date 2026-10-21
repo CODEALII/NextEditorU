@@ -12,11 +12,12 @@ class NativeGraphValidationTests(unittest.TestCase):
         initial_points = [point(0, "W101"), point(1, "W102")]
         points = [row[:] for row in initial_points]
         points[0][3] = "W102"
+        points[0][4] = "RW101W102"
         routes = [["RW101W102", "road", ""]]
         issues = validate_native_world(
             points,
             routes,
-            known_references={"W101", "W102"},
+            known_references={"W101", "W102", "RW101W102"},
             initial_points=initial_points,
             initial_routes=[],
             world_prefix="W1",
@@ -29,17 +30,59 @@ class NativeGraphValidationTests(unittest.TestCase):
         initial_points = [point(0, "W101"), point(1, "W102")]
         points = [row[:] for row in initial_points]
         points[0][3] = "W102"
+        points[0][4] = "RW101K001,RK001W102"
         routes = [["RW101K001", "road", ""], ["RK001W102", "road", ""]]
         issues = validate_native_world(
             points,
             routes,
-            known_references={"W101", "W102", "K001"},
+            known_references={"W101", "W102", "K001", "RW101K001", "RK001W102"},
             initial_points=initial_points,
             initial_routes=[],
             world_prefix="W1",
             entry_points=("W101",),
             required_locations=("W102",),
         )
+        self.assertEqual(issues, [])
+
+    def test_changed_destination_rejects_stale_macro_path_chain(self):
+        initial_points = [point(0, "W101", "W102", "RW101W102"),
+                         point(1, "W102"), point(2, "W103")]
+        points = [row[:] for row in initial_points]
+        points[0][3] = "W103"
+        initial_routes = [["RW101W102", "road", ""]]
+        routes = [["RW101W103", "road", ""]]
+        references = {"W101", "W102", "W103", "RW101W102", "RW101W103"}
+
+        issues = validate_native_world(
+            points,
+            routes,
+            known_references=references,
+            initial_points=initial_points,
+            initial_routes=initial_routes,
+            world_prefix="W1",
+        )
+
+        self.assertIn("W101: BFRES macro-path chain does not reach W103", issues)
+
+    def test_changed_destination_accepts_matching_macro_path_chain(self):
+        initial_points = [point(0, "W101", "W102", "RW101W102"),
+                         point(1, "W102"), point(2, "W103")]
+        points = [row[:] for row in initial_points]
+        points[0][3] = "W103"
+        points[0][4] = "RW101W103"
+        initial_routes = [["RW101W102", "road", ""]]
+        routes = [["RW101W103", "road", ""]]
+        references = {"W101", "W102", "W103", "RW101W102", "RW101W103"}
+
+        issues = validate_native_world(
+            points,
+            routes,
+            known_references=references,
+            initial_points=initial_points,
+            initial_routes=initial_routes,
+            world_prefix="W1",
+        )
+
         self.assertEqual(issues, [])
 
     def test_changed_same_world_destination_rejects_missing_or_disconnected_route(self):

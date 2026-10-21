@@ -66,6 +66,16 @@ def _reachable(adjacency, start, target):
     return False
 
 
+def _macro_path_reaches(path_names, start, target):
+    """Check whether listed BFRES macro-path bones connect one local pair."""
+    adjacency = {}
+    for name in path_names:
+        if not _ROUTE_ID.fullmatch(name):
+            return None
+        adjacency.setdefault(name[1:5], set()).add(name[5:9])
+    return _reachable(adjacency, start, target)
+
+
 def _known_local_inventory(point_rows, route_rows, known_references, world_prefix):
     """Check local point and route row structure without rejecting old gaps."""
     if known_references is None or not world_prefix:
@@ -121,10 +131,12 @@ def validate_native_world(
 
     When both point and local route rows have valid, locally resolvable
     inventories, newly added same-world destinations must connect through
-    directed route segments. If route edges change, existing destinations are
-    rechecked only when the baseline already had a path, so pre-existing gaps
-    are not misreported. Cross-world destinations are excluded because their
-    route tables live in a different archive.
+    directed route segments. A changed single local destination is also checked
+    against its paired BFRES macro-path references when those references are
+    resolvable. Ambiguous multi-destination legacy rows and cross-world links
+    are excluded. If route edges change, existing destinations are rechecked
+    only when the baseline already had a path, so pre-existing gaps are not
+    misreported.
 
     Reachability follows point destination columns (normal and secret) as
     directed links. ``entry_points`` and ``required_locations`` are explicit
@@ -196,13 +208,18 @@ def validate_native_world(
                 issues.append(f"{name}: invalid destination list in column {column}")
                 continue
             changed_destination_list = _field_changed(row, initial_points, index, column)
-            previous_destinations = set()
+            previous_destination_list = []
             if (initial_points is not None and index < len(initial_points) and
                     isinstance(initial_points[index], (list, tuple)) and
                     len(initial_points[index]) == 9 and initial_points[index][1] == name and
                     isinstance(initial_points[index][column], str)):
-                previous_destinations = set(_tokens(initial_points[index][column]))
-            for destination in _tokens(row[column]):
+                previous_destination_list = _tokens(initial_points[index][column])
+            previous_destinations = set(previous_destination_list)
+            destinations = _tokens(row[column])
+            paired_path_column = column + 1
+            paired_path_changed = _field_changed(row, initial_points, index,
+                                                 paired_path_column)
+            for destination in destinations:
                 if not _POINT_ID.fullmatch(destination):
                     if changed_destination_list:
                         issues.append(f"{name}: malformed destination {destination}")
@@ -219,6 +236,16 @@ def validate_native_world(
                     must_recheck = newly_added or (route_topology_changed and had_baseline_path)
                     if must_recheck and not _reachable(route_adjacency, name, destination):
                         issues.append(f"{name}: no directed route-segment path to {destination}")
+                    if (len(destinations) == 1 and len(previous_destination_list) <= 1 and
+                            (changed_destination_list or paired_path_changed) and
+                            name.startswith(world_prefix) and destination in point_names):
+                        path_names = _tokens(row[paired_path_column])
+                        if not path_names:
+                            issues.append(f"{name}: missing BFRES macro-path chain to {destination}")
+                        elif all(path in references and _ROUTE_ID.fullmatch(path)
+                                 for path in path_names):
+                            if not _macro_path_reaches(path_names, name, destination):
+                                issues.append(f"{name}: BFRES macro-path chain does not reach {destination}")
         if references is not None:
             for column in (4, 7):
                 if not _field_changed(row, initial_points, index, column):

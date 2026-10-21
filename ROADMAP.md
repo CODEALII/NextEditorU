@@ -65,7 +65,7 @@ the game reaches the map and keyboard-to-left-stick input can be checked.
 
 ## Topology, events, and camera
 
-- Implemented: project, editor, and export validation require a directed segment chain for newly added same-world destinations. Route edits recheck baseline-connected destinations and block an export if an edit disconnects one; pre-existing gaps and cross-world links are not treated as new failures.
+- Implemented: project, editor, and export validation require a directed segment chain for newly added same-world destinations. Unambiguous changed local destinations are also checked against their paired BFRES macro-path references. Route edits recheck baseline-connected destinations and block an export if an edit disconnects one; ambiguous legacy rows, pre-existing gaps and cross-world links are preserved.
 - Implemented: a route segment may reference endpoints in another world without requiring those bones in the current BFRES. Local endpoints are still validated, and cross-world segments cannot satisfy local reachability checks.
 - Extend graph validation only as each native reference is identified: level destinations, event dependencies, and progression conditions.
 - Support route creation and node placement after safe bone naming, point indexes, and engine/script references are understood. Preserve unknown data and block unresolved exports.
