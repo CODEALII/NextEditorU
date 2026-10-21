@@ -323,5 +323,70 @@ class ProjectGraphValidationTests(unittest.TestCase):
         self.assertEqual(project.validate(), [])
 
 
+class ProjectMalformedDataTests(unittest.TestCase):
+    @staticmethod
+    def project():
+        bone = SimpleNamespace(name='W101')
+        project = object.__new__(WorldProject)
+        project.camera_edits = {}
+        project.bone_renames = []
+        project.geometry = None
+        project.references = {'W101'}
+        project.skeletons = SimpleNamespace(
+            models={'map': [bone]}, bones={'W101': [bone]},
+        )
+        project.path_model = 'map'
+        project.positions = {'W101': [0.0, 0.0, 0.0]}
+        rows = [['0', 'W101', '', '', '', '', '', '', '']]
+        project.points = SimpleNamespace(rows=[row[:] for row in rows],
+                                         initial=[row[:] for row in rows])
+        project.routes = SimpleNamespace(rows=[], initial=[])
+        project.point_name = 'pointW1.csv'
+        return project
+
+    def test_non_text_table_cells_are_reported_without_crashing(self):
+        cases = (
+            ('point destination', lambda p: p.points.rows[0].__setitem__(3, None),
+             'Point row 0: expected text in all 9 columns'),
+            ('point name', lambda p: p.points.rows[0].__setitem__(1, None),
+             'Point row 0: expected text in all 9 columns'),
+            ('route field', lambda p: p.routes.rows.append(['RW101W102', None, '']),
+             'Route row 0: expected text in all 3 columns'),
+            ('route name', lambda p: p.routes.rows.append([None, 'road', '']),
+             'Route row 0: expected text in all 3 columns'),
+        )
+        for label, corrupt, expected in cases:
+            with self.subTest(label=label):
+                project = self.project()
+                corrupt(project)
+                self.assertIn(expected, project.validate())
+                with tempfile.TemporaryDirectory() as tmp:
+                    output = Path(tmp) / 'invalid-project.szs'
+                    with self.assertRaisesRegex(ValueError, expected):
+                        project.export(output)
+                    self.assertFalse(output.exists())
+
+    def test_invalid_position_bone_and_coordinates_block_export(self):
+        cases = (
+            ({'W999': [0, 0, 0]}, 'Position \'W999\': bone is not unique'),
+            ({'W101': [0, 0]}, 'Position W101: expected three finite coordinates'),
+            ({'W101': [float('inf'), 0, 0]},
+             'Position W101: expected three finite coordinates'),
+            ({'W101': [1e7 + 1, 0, 0]},
+             'Position W101: expected three finite coordinates'),
+        )
+        for positions, expected in cases:
+            with self.subTest(positions=positions):
+                project = self.project()
+                project.positions.update(positions)
+                issues = project.validate()
+                self.assertTrue(any(expected in issue for issue in issues), issues)
+                with tempfile.TemporaryDirectory() as tmp:
+                    output = Path(tmp) / 'invalid-position.szs'
+                    with self.assertRaisesRegex(ValueError, expected):
+                        project.export(output)
+                    self.assertFalse(output.exists())
+
+
 if __name__ == '__main__':
     unittest.main()

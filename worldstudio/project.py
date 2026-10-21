@@ -6,6 +6,7 @@ Unknown fields, quoting and line endings survive unless that row is edited.
 import csv
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -159,7 +160,10 @@ class WorldProject:
         if filename not in self.camera_tables:
             raise ValueError(f'Unknown or unsupported camera table: {filename}')
         table = self.camera_tables[filename]
-        for key, vector in self.camera_edits.get(filename, {}).items():
+        edits = self.camera_edits.get(filename, {})
+        if not isinstance(edits, dict):
+            raise ValueError(f'Camera edits for {filename} must be an object')
+        for key, vector in edits.items():
             try:
                 bank, index = map(int, key.split(':'))
             except (ValueError, AttributeError) as exc:
@@ -200,15 +204,29 @@ class WorldProject:
                             imported_normals=self.geometry.get('normals'))
                     except (KeyError, TypeError, ValueError, OverflowError) as exc:
                         errors.append(f'Terrain geometry invalid: {exc}')
-        for filename in self.camera_edits:
+        camera_edits = getattr(self, 'camera_edits', {})
+        if not isinstance(camera_edits, dict):
+            errors.append('Camera edits must be an object')
+            camera_edits = {}
+        for filename in camera_edits:
             try:
                 self.camera_table(filename).build()
             except (ValueError, TypeError) as exc:
                 errors.append(str(exc))
         references = set(self.references)
         rename_targets = set()
-        for rename in self.bone_renames:
+        bone_renames = getattr(self, 'bone_renames', [])
+        if not isinstance(bone_renames, list):
+            errors.append('Bone renames must be a list')
+            bone_renames = []
+        for rename in bone_renames:
+            if not isinstance(rename, dict):
+                errors.append('Bone rename entries must be objects')
+                continue
             model, old, new = rename.get('model'), rename.get('old'), rename.get('new')
+            if not isinstance(model, str) or not isinstance(old, str):
+                errors.append(f'Invalid bone rename entry: {rename!r}')
+                continue
             if model not in self.skeletons.models or old not in {b.name for b in self.skeletons.models.get(model, [])}:
                 errors.append(f'Unknown source bone for rename: {model}/{old}')
                 continue
@@ -218,10 +236,51 @@ class WorldProject:
             rename_targets.add(new)
             references.discard(old)
             references.add(new)
+
+        positions = getattr(self, 'positions', {})
+        if not isinstance(positions, dict):
+            errors.append('Bone positions must be an object')
+            positions = {}
+        models = getattr(self.skeletons, 'models', {})
+        bones = getattr(self.skeletons, 'bones', {})
+        path_model = getattr(self, 'path_model', None)
+        supported_position_bones = {
+            bone.name for bone in models.get(path_model, [])
+            if (len(bones.get(bone.name, ())) == 1 and
+                re.fullmatch(r'(?:[WFK][A-Za-z0-9]{3}|R[A-Za-z0-9]{8})', bone.name))
+        }
+        for name, xyz in positions.items():
+            if not isinstance(name, str) or name not in supported_position_bones:
+                errors.append(f'Position {name!r}: bone is not unique in the supported path model')
+                continue
+            try:
+                if (not isinstance(xyz, (list, tuple)) or len(xyz) != 3 or
+                        any(isinstance(value, bool) for value in xyz)):
+                    raise ValueError
+                values = tuple(float(value) for value in xyz)
+                if not all(math.isfinite(value) and abs(value) <= 1e7 for value in values):
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                errors.append(f'Position {name}: expected three finite coordinates within +/-1e7')
+
+        point_rows = getattr(self.points, 'rows', None)
+        if not isinstance(point_rows, (list, tuple)):
+            errors.append('Point table must be a list of rows')
+            point_rows = []
+        point_rows_valid = True
         seen = set()
-        for i, r in enumerate(self.points.rows):
+        for i, r in enumerate(point_rows):
+            if not isinstance(r, (list, tuple)):
+                errors.append(f'Point row {i}: expected 9 text columns')
+                point_rows_valid = False
+                continue
             if len(r) != 9:
                 errors.append(f'Point row {i}: expected 9 columns')
+                point_rows_valid = False
+                continue
+            if any(not isinstance(value, str) for value in r):
+                errors.append(f'Point row {i}: expected text in all 9 columns')
+                point_rows_valid = False
                 continue
             name = r[1]
             if not re.fullmatch(r'[WF][A-Za-z0-9]{3}', name):
@@ -250,12 +309,30 @@ class WorldProject:
                         errors.append(f'{name}: malformed path {route}')
                     elif route not in references:
                         errors.append(f'{name}: missing BFRES macro-path bone {route}')
-        if len(self.points.rows) != len(self.points.initial):
+        if len(point_rows) != len(self.points.initial):
             errors.append('Point row count changed: engine/script index remapping not implemented')
+        route_rows = getattr(self.routes, 'rows', None)
+        if not isinstance(route_rows, (list, tuple)):
+            errors.append('Route table must be a list of rows')
+            route_rows = []
+        route_rows_valid = True
         route_seen = set()
-        for i, r in enumerate(self.routes.rows):
-            if len(r) != 3 or not re.fullmatch(r'R[A-Za-z0-9]{8}', r[0]):
+        for i, r in enumerate(route_rows):
+            if not isinstance(r, (list, tuple)):
+                errors.append(f'Route row {i}: expected 3 text columns')
+                route_rows_valid = False
+                continue
+            if len(r) != 3:
                 errors.append(f'Route row {i}: expected route name, road type, reserved column')
+                route_rows_valid = False
+                continue
+            if any(not isinstance(value, str) for value in r):
+                errors.append(f'Route row {i}: expected text in all 3 columns')
+                route_rows_valid = False
+                continue
+            if not re.fullmatch(r'R[A-Za-z0-9]{8}', r[0]):
+                errors.append(f'Route row {i}: expected route name, road type, reserved column')
+                route_rows_valid = False
                 continue
             if r[0] in route_seen:
                 errors.append(f'Duplicate route segment {r[0]}')
@@ -267,11 +344,11 @@ class WorldProject:
                         continue
                     if endpoint not in self.skeletons.bones:
                         errors.append(f'{r[0]}: missing endpoint bone {endpoint}')
-        if world:
+        if world and point_rows_valid and route_rows_valid:
             from .graph_validation import validate_native_world
             errors.extend(validate_native_world(
-                self.points.rows,
-                self.routes.rows,
+                point_rows,
+                route_rows,
                 known_references=references,
                 initial_points=self.points.initial,
                 initial_routes=self.routes.initial,
@@ -304,21 +381,47 @@ class WorldProject:
     @classmethod
     def load(cls, path):
         data = json.loads(Path(path).read_text(encoding='utf-8'))
+        if not isinstance(data, dict):
+            raise ValueError('Project file must contain a JSON object')
         if data.get('format') != 'nsmbu-world-studio' or data.get('version') != 1:
             raise ValueError('Unsupported project format')
-        self = cls.open(data['source'])
-        if self.source_sha256 != data['source_sha256']:
+        source = data.get('source')
+        if not isinstance(source, str) or not source:
+            raise ValueError('Project source must be a file path string')
+        source_sha256 = data.get('source_sha256')
+        if not isinstance(source_sha256, str) or not re.fullmatch(r'[0-9a-f]{64}', source_sha256):
+            raise ValueError('Project source hash must be a SHA-256 hex string')
+        positions = data.get('positions', {})
+        if not isinstance(positions, dict):
+            raise ValueError('Project positions must be an object')
+        layout = data.get('layout', {})
+        if not isinstance(layout, dict):
+            raise ValueError('Project layout must be an object')
+        bone_renames = data.get('bone_renames', [])
+        if not isinstance(bone_renames, list):
+            raise ValueError('Project bone renames must be a list')
+        camera_edits = data.get('camera_edits', {})
+        if not isinstance(camera_edits, dict):
+            raise ValueError('Project camera edits must be an object')
+        camera_source_sha256 = data.get('camera_source_sha256', {})
+        if not isinstance(camera_source_sha256, dict):
+            raise ValueError('Project camera source hashes must be an object')
+        terrain = data.get('terrain')
+        if terrain is not None and not isinstance(terrain, str):
+            raise ValueError('Project terrain path must be a string or null')
+        self = cls.open(source)
+        if self.source_sha256 != source_sha256:
             raise ValueError('Source archive changed since project creation')
-        self.points.rows = data['points']
-        self.routes.rows = data['routes']
-        self.layout = data.get('layout', {})
-        self.positions.update(data.get('positions', {}))
-        self.terrain = resolve_project_path(data.get('terrain'), path)
+        self.points.rows = data.get('points')
+        self.routes.rows = data.get('routes')
+        self.layout = layout
+        self.positions.update(positions)
+        self.terrain = resolve_project_path(terrain, path)
         self.geometry = data.get('geometry')
-        self.bone_renames = data.get('bone_renames', [])
-        self.camera_edits = data.get('camera_edits', {})
+        self.bone_renames = bone_renames
+        self.camera_edits = camera_edits
         for name in self.camera_edits:
-            expected = data.get('camera_source_sha256', {}).get(name)
+            expected = camera_source_sha256.get(name)
             if name not in self.camera_original or expected != sha(self.camera_original[name]):
                 raise ValueError(f'Camera source changed or is missing: {name}')
         return self

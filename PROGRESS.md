@@ -641,3 +641,20 @@ camera behavior and a fully playable custom world remain open.
 - Regression coverage checks missing fields and degenerate faces against a
   real local W1 source archive. The full suite passed (**186 tests in
   132.356 seconds**); `compileall` and `git diff --check` passed.
+
+## 2026-10-21 — Reject malformed saved edits before export
+
+- Hardened project validation against non-text point/route fields and malformed
+  table rows. Invalid rows now produce row-specific diagnostics instead of
+  raising type errors in name, destination, or route parsing.
+- Saved position edits are checked against unique supported path-model bones,
+  three finite numeric coordinates, and the BFRES patcher's +/-1e7 limit.
+  Invalid edits stop export before output creation. The project loader also
+  checks key container, path, and SHA-256 field types before applying saved
+  state.
+- Regression tests reproduce malformed point/route cells, an unknown bone,
+  short/non-finite/out-of-range position vectors, and assert that no export is
+  created. The full suite passed (**188 tests in 134.533 seconds**), with
+  `compileall`, `git diff --check`, and W101 → W102/W103 reachability passing.
+- No in-game findings changed: route movement, terrain appearance, level
+  launches, progression, and save behavior remain unverified.
