@@ -12,8 +12,9 @@ Computer Use detected external user input at that time, so the movement cannot
 be attributed to a particular test key or profile action. Pressing `Z` there
 left the map open after a 2.5-second wait; level launch remains unverified.
 In a later Direct-profile run, the same expected archive and active pack loaded
-the World 1 map at the Crushing-Cogs Tower. A single `D` tap, `Z` tap and click
-on the entrance left Mario on the map. This verifies boot-to-map only; the
+the World 1 map at the Crushing-Cogs Tower. A single `D` tap, configured
+GamePad-A (`Z`) tap and click on the entrance left Mario on the map. This
+verifies boot-to-map only; the
 Computer Use key API cannot hold a direction, so it does not test sustained
 movement or route traversal. The three isolated
 profiles retained byte-identical personal and common saves in the earlier

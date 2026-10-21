@@ -37,11 +37,11 @@
   Tower. Its active-pack log and archive preflight match the expected
   `WorldStudioChain` build exactly (SHA-256
   `8a473f413788cb5b3fab07f5f6ae174a6948159b39cc6019df97ef7ae24c3d35`). A
-  single `D` tap, `Z` tap, and mouse click on Mario/the tower entrance left the
-  map open and Mario at the tower. This is a verified map-load result, not a
-  traversal or level-entry result. The Computer Use API only sends key presses,
-  so this run could not reproduce the two-second held input from the earlier
-  Clean/Chain comparison.
+  single `D` tap, GamePad-A (`Z`) tap, and mouse click on Mario/the tower
+  entrance left the map open and Mario at the tower. This is a verified
+  map-load result, not a traversal or level-entry result. The Computer Use API
+  only sends key presses, so this run could not reproduce the two-second held
+  input from the earlier Clean/Chain comparison.
 - Before the latest Chain retest, Clean, Chain and Direct passed
   `tools/cemu_preflight.py` with current-run title/module and pack checks, and
   `--compare-save-to` confirmed byte-identical save snapshots. The current Chain

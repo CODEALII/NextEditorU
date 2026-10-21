@@ -1421,7 +1421,9 @@ camera behavior and a fully playable custom world remain open.
   hash to `8a473f413788cb5b3fab07f5f6ae174a6948159b39cc6019df97ef7ae24c3d35`.
 - A single `D` press, a `Z` press, and a click on the tower entrance did not
   move Mario off the tower or launch a level. The run remains on the map. The
-  Computer Use API sends key presses without a duration, so this does not
+  isolated keyboard profile maps `Z` to GamePad A, so the course-entry attempt
+  used the configured confirm button. The Computer Use API sends key presses
+  without a duration, so this does not
   reproduce a sustained stick hold and cannot show that the route is broken.
 - This supersedes the earlier statement that Direct remained in title/demo
   flow. It verifies map loading for that exact build only. The modified
