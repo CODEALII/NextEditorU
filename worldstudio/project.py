@@ -14,6 +14,8 @@ import tempfile
 from .archive import Archive
 from .bfres import Skeletons
 
+PROJECT_BACKUP_GENERATIONS = 2
+
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
@@ -51,8 +53,14 @@ def _atomic_replace(path, data):
             os.unlink(tmp)
 
 
+def _project_backup_path(path, generation):
+    path = Path(path)
+    suffix = '.backup.json' if generation == 1 else f'.backup-{generation}.json'
+    return path.with_name(path.stem + suffix)
+
+
 def save_project_bytes(path, data):
-    """Atomically save a JSON project and retain one changed prior version."""
+    """Atomically write a JSON project and rotate two changed prior versions."""
     path = Path(path)
     if not isinstance(data, bytes):
         raise TypeError('Project contents must be bytes')
@@ -60,7 +68,11 @@ def save_project_bytes(path, data):
     if path.is_file():
         previous = path.read_bytes()
         if previous != data:
-            backup = path.with_name(f'{path.stem}.backup{path.suffix}')
+            for generation in range(PROJECT_BACKUP_GENERATIONS, 1, -1):
+                older = _project_backup_path(path, generation - 1)
+                if older.is_file():
+                    _atomic_replace(_project_backup_path(path, generation), older.read_bytes())
+            backup = _project_backup_path(path, 1)
             _atomic_replace(backup, previous)
     _atomic_replace(path, data)
     return backup

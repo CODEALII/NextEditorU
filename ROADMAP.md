@@ -80,8 +80,8 @@ is still needed before baseline/patch route QA.
   and records one undo step on release. Route drawing and placement of new
   engine-backed points remain blocked on native index/script-reference safety.
 - Add transform handles and route-edit controls with project-level regression tests.
-- Implemented: changed archive members have before/after hashes and sizes in the export manifest; overwriting a changed native project keeps one adjacent, openable previous-version backup.
-- Add recent projects, recoverable sessions, multi-version backup rotation, and export/reimport comparison.
+- Implemented: changed archive members have before/after hashes and sizes in the export manifest; overwriting a changed native or OBJ-preview project rotates two adjacent, openable previous-version backups.
+- Add recent projects, recoverable sessions, and export/reimport comparison.
 - Implemented: archive, camera companion and manifest export writes roll back files created by the current export if a later output write fails.
 - Profile larger models/projects before further caching. Three local W1 texture-catalog runs had a median of 3.784 s without the material index cache and 3.152 s with it (16.7% in that stage only). Three cold shader-container loads had a 1.898 s median; warm reads returned in 0.004 s median while retaining 17,993,893 bytes of extracted shader archive data in-process. These are local component timings, not end-to-end browser or rendering benchmarks.
 

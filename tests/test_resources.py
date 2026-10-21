@@ -117,6 +117,24 @@ class LocalIntegrationTests(unittest.TestCase):
             self.assertEqual(WorldProject.load(backup).points.rows[0][2], project.points.initial[0][2])
             self.assertEqual(WorldProject.load(path).points.rows[0][2], 'saved-after-edit')
 
+            backup_two = path.with_name('world.backup-2.json')
+            project.points.rows[0][2] = 'saved-after-second-edit'
+            self.assertEqual(project.save(path), backup)
+            self.assertEqual(WorldProject.load(backup).points.rows[0][2], 'saved-after-edit')
+            self.assertEqual(WorldProject.load(backup_two).points.rows[0][2], project.points.initial[0][2])
+
+            backup_one_bytes, backup_two_bytes = backup.read_bytes(), backup_two.read_bytes()
+            self.assertIsNone(project.save(path))
+            self.assertEqual(backup.read_bytes(), backup_one_bytes)
+            self.assertEqual(backup_two.read_bytes(), backup_two_bytes)
+
+            project.points.rows[0][2] = 'saved-after-third-edit'
+            self.assertEqual(project.save(path), backup)
+            self.assertEqual(WorldProject.load(backup).points.rows[0][2], 'saved-after-second-edit')
+            self.assertEqual(WorldProject.load(backup_two).points.rows[0][2], 'saved-after-edit')
+            self.assertEqual(WorldProject.load(path).points.rows[0][2], 'saved-after-third-edit')
+            self.assertNotEqual(backup_two.read_bytes(), first_save)
+
     def test_bone_patch_changes_only_intended_bytes(self):
         p = WorldProject.open(DEFAULT_SOURCE)
         bone = p.skeletons.unique('W101')

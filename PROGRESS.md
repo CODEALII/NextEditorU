@@ -700,14 +700,17 @@ camera behavior and a fully playable custom world remain open.
 ## 2026-10-21 — Preserve the previous project save
 
 - Saving changed native or OBJ-preview project content over an existing file
-  now atomically keeps the old bytes beside it as `name.backup.json`. Unchanged
-  saves do not replace that backup, the regular JSON picker can open it, and
-  the status bar reports the backup path.
+  now keeps the two most recent prior versions beside it as `name.backup.json`
+  and `name.backup-2.json`, using atomic replacement for each file. Unchanged
+  saves do not rotate either backup, the regular JSON picker can open both, and
+  the status bar reports the newest backup path. Rotation across multiple files
+  is not transactional if a later replacement fails.
 - A local regression reloads both the saved and backup projects and checks
-  that each contains the intended version. This keeps one previous version;
-  rotation and recent-project discovery remain open roadmap items.
+  that each contains the intended version. Tests also perform multiple saves to
+  verify that the newest two prior versions remain loadable and older history
+  is rotated out. Recent-project discovery and recoverable sessions remain open.
 - Tests cover native project loading and the lightweight editor's save/status
-  path. The full suite passed (**195 tests in 137.497 seconds**), with
+  path. The full suite passed (**195 tests in 152.289 seconds**), with
   `compileall` and `git diff --check`.
 
 ## 2026-10-21 — Report unsupported OBJ features
