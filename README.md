@@ -2,7 +2,7 @@
 
 **A research and editing toolkit for New Super Mario Bros. U world maps.**
 
-World Studio reads and edits selected world-map resources, builds experimental topology and terrain patches, and provides a standalone visual editor. It is an actively researched prototype: resource handling and offline export are tested, while in-game movement currently fails in the reported route test. This project does not yet produce a complete playable custom overworld.
+World Studio reads and edits selected world-map resources, builds experimental topology and terrain patches, and provides a standalone visual editor. It is an actively researched prototype: resource handling and offline export are tested, Mario movement on the overworld is confirmed, and a complete playable custom overworld is not yet verified.
 
 ![World Studio project progress dashboard](docs/progress.svg)
 
@@ -31,7 +31,7 @@ The WebGL viewer supports BC1/BC3 base-color maps, BC5 SNORM normal-map channels
 
 ## Current runtime status
 
-An earlier Cemu traversal check reported that **Mario does not move**. A later live observation reached the World 1 map with Mario at W101 in the clean profile; a separate patched-map observation showed the map loading at the tower. Short D taps changed facing without confirming travel from W101 to W102. The currently running user Cemu profile uses DirectInput and has no World Studio Chain pack, so it cannot test WASD on the custom route. Isolated clean and direct-route profiles now share the same traversal-save snapshot and pass configuration preflight, but neither has been relaunched for a sustained movement test. Level launch, unlock progression, save persistence, and camera behavior are not claimed to work. The terrain exporter reports distant baked-light UV projection for review, but the patched terrain's in-game appearance has not been visually confirmed. See [the integration log](docs/INTEGRATION.md).
+Mario movement works: the user confirms WASD movement, and a controlled Cemu run visibly moved him from Crushing-Cogs Tower to the neighboring road node with the World Studio Chain pack active. This verifies movement on the modified map, but the exact destination point and traversal of the changed W102-to-W103 route are still unconfirmed. A `Z` press at a road junction did not establish a level-launch result because Mario was not confirmed on a course node. Level starts, unlock progression, save persistence after clearing a course, and camera behavior remain unverified. A separate Mainlight terrain build loaded but showed large overlapping/clipped dark-green surfaces; offline comparison shows its 29-vertex/54-triangle OBJ replaces a 22,236-vertex/32,374-triangle grass shape, so that terrain export is not ready for gameplay. See [the integration log](docs/INTEGRATION.md).
 
 ## Get started
 

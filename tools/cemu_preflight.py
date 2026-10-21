@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 
 
 LEFT_STICK_KEYS = {17: 87, 18: 83, 19: 65, 20: 68}  # W, S, A, D virtual keys
+GAMEPAD_A_KEY = 90  # Z virtual key, per generated Cemu test profiles
 TARGET_MODULE = re.compile(r"Loaded module 'red-pro2' with checksum 0x6caea914")
 PACK_LINE = re.compile(r"Activate graphic pack: (.+)$", re.MULTILINE)
 
@@ -34,6 +35,26 @@ def _read_controller(path):
                 values[int(key.strip())] = value.strip().casefold()
             except ValueError:
                 continue
+    return values
+
+
+def _read_controller_xml(path):
+    """Read the Cemu XML profile format used by current and some legacy installs."""
+    root = ET.parse(path).getroot()
+    controller = root.find('./controller')
+    if controller is None:
+        return {}
+    values = {
+        'api': (controller.findtext('api') or '').strip(),
+        'emulate': (root.findtext('type') or '').strip(),
+    }
+    for entry in controller.findall('./mappings/entry'):
+        try:
+            mapping = int(entry.findtext('mapping', ''))
+        except ValueError:
+            continue
+        button = (entry.findtext('button') or '').strip()
+        values[mapping] = f'key_{button}'
     return values
 
 
@@ -64,13 +85,15 @@ def _save_inventory(profile):
 
 
 def inspect_profile(profile, *, expected_pack=None, archive=None,
-                    forbidden_pack=None, require_keyboard=False, require_run=False,
+                    forbidden_pack=None, require_keyboard=False, require_gamepad_a=False,
+                    require_run=False,
                     compare_save_to=None):
     profile = Path(profile).resolve(strict=True)
     if not profile.is_dir():
         raise ValueError('Cemu profile must be a directory')
     settings_path = profile / 'settings.xml'
     controller_path = profile / 'controllerProfiles' / 'controller0.txt'
+    controller_xml_path = profile / 'controllerProfiles' / 'controller0.xml'
     log_path = profile / 'log.txt'
     issues = []
 
@@ -81,16 +104,34 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
     enabled_pack_paths = [entry.get('filename', '') for entry in
                           settings.findall('./GraphicPack/Entry')]
     enabled_pack_paths = [p.replace('\\', '/') for p in enabled_pack_paths]
-    controller = _read_controller(controller_path) if controller_path.is_file() else {}
+    controller_sources = []
+    if controller_path.is_file():
+        controller = _read_controller(controller_path)
+        controller_sources.append('controller0.txt')
+    elif controller_xml_path.is_file():
+        try:
+            controller = _read_controller_xml(controller_xml_path)
+        except (ET.ParseError, OSError) as error:
+            controller = {}
+            issues.append(f'Cannot read controllerProfiles/controller0.xml: {error}')
+        else:
+            controller_sources.append('controller0.xml')
+    else:
+        controller = {}
     keyboard_profile = (controller.get('api', '').casefold() == 'keyboard' and
                         controller.get('emulate', '').casefold() == 'wii u gamepad')
     left_stick = {mapping: controller.get(mapping) == f'key_{key}'
                   for mapping, key in LEFT_STICK_KEYS.items()}
     keyboard_left_stick = keyboard_profile and all(left_stick.values())
-    if not controller_path.is_file():
-        issues.append('controllerProfiles/controller0.txt is missing')
+    gamepad_a_key = controller.get(1)
+    gamepad_a_configured = keyboard_profile and gamepad_a_key == f'key_{GAMEPAD_A_KEY}'
+    if not controller_sources and not any(
+            'controllerProfiles/controller0.xml' in issue for issue in issues):
+        issues.append('controllerProfiles/controller0.txt and controller0.xml are missing')
     if require_keyboard and not keyboard_left_stick:
         issues.append('WASD is not configured as the Wii U GamePad left stick')
+    if require_gamepad_a and not gamepad_a_configured:
+        issues.append('Z is not configured as the Wii U GamePad A button')
 
     rules = []
     for path in profile.glob('graphicPacks/*/rules.txt'):
@@ -190,8 +231,11 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
         'active_packs_in_log': active_packs,
         'controller_api': controller.get('api'),
         'controller_emulated_device': controller.get('emulate'),
+        'controller_sources': controller_sources,
         'left_stick_key_mapping': left_stick,
         'keyboard_left_stick_configured': keyboard_left_stick,
+        'gamepad_a_key_mapping': gamepad_a_key,
+        'gamepad_a_configured': gamepad_a_configured,
         'game_module_loaded': game_module_loaded,
         'title_started': title_started,
         'expected_pack_active_in_log': pack_active,
@@ -217,6 +261,8 @@ def main(argv=None):
                         help='Expected CS_W1.szs; hash-checked against the profile copy')
     parser.add_argument('--require-keyboard', action='store_true',
                         help='Require WASD to map to the GamePad left stick')
+    parser.add_argument('--require-gamepad-a', action='store_true',
+                        help='Require Z to map to the GamePad A button for level-start tests')
     parser.add_argument('--require-run', action='store_true',
                         help='Require v64 and the expected pack in log.txt')
     parser.add_argument('--compare-save-to', type=Path, metavar='PROFILE',
@@ -227,6 +273,7 @@ def main(argv=None):
                                  archive=args.archive,
                                  forbidden_pack=args.forbid_pack,
                                  require_keyboard=args.require_keyboard,
+                                 require_gamepad_a=args.require_gamepad_a,
                                  require_run=args.require_run,
                                  compare_save_to=args.compare_save_to)
     except (OSError, ValueError) as error:

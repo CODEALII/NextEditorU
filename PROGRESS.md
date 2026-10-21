@@ -1,5 +1,38 @@
 # NSMBU World Studio progress
 
+## 2026-10-21 — controlled Cemu route follow-up
+
+- Loaded `build/cemu-chain-route-retest-20261021` with its matching isolated save.
+  Preflight confirmed the current World Studio Chain pack, archive SHA-256
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`, WASD
+  on the left stick, Z=A, and save equality with the clean profile before the
+  run.
+- The live map started at Crushing-Cogs Tower. One D tap visibly moved Mario
+  to the neighboring right/down road node; a second tap there and a Z tap left
+  him on the map. The exact point ID and whether the junction is a course node
+  are not confirmed. Do not infer a broken route or a failed level launch from
+  those taps. The user confirms held WASD movement works; this UI API exposes
+  key presses without a timed hold.
+- Screenshots are preserved under ignored `local/evidence/` as
+  `cemu-chain-tower-before-d.png` and `cemu-chain-after-first-d.png`.
+- The `cemu-island-mainlight` build loaded and showed large dark-green overlaps
+  and clipped terrain. Its screenshot is `cemu-mainlight-terrain-observed.png`;
+  this terrain export is not visually acceptable. The route-only Chain build
+  showed stock-looking terrain in the displayed area.
+- Offline geometry comparison identifies a likely cause for that failed patch:
+  the exported OBJ has only 29 vertices/54 triangles, while the selected
+  `polySurface1489__mtGrass` source shape contains 22,236 vertices/32,374
+  triangles. The current exporter replaces that entire shape allocation, so
+  most of the original terrain is discarded and the broad low-poly faces become
+  visible. This is a code-path diagnosis consistent with the screenshot, not a
+  verified Cemu rendering root cause. Do not export this terrain as a playable
+  map until the replacement preserves the source coverage or uses a safe overlay.
+- Fixed Cemu preflight to parse XML-only controller profiles as well as the
+  legacy text profile, and added an optional Z=A gate for level-start tests.
+  The Chain profile passes both gates; Mainlight correctly fails the A-button
+  gate because its current XML does not map A. Focused preflight tests: **11
+  passed**. The export manifest remains `game_tested:false`.
+
 ## 2026-10-20 — verified resource/tooling milestone
 
 Completed:
@@ -119,7 +152,10 @@ Completed:
 
 ## 2026-10-21 — Cemu movement test input audit
 
-- The user's report that Mario does not move remains a failed gameplay check.
+- At this point in the earlier input audit, Mario movement had not been verified
+  because the active input profile was uncertain. This was superseded by the
+  later controlled Chain run and the user's confirmation that WASD movement
+  works; see the 2026-10-21 controlled Cemu route follow-up above.
 - Read-only inspection found two Cemu input profiles: the isolated baseline
   copy uses a keyboard profile with arrow keys; the separate user Cemu profile
   selects a DirectInput wireless controller. Keyboard input would not control

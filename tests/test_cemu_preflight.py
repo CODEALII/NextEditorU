@@ -63,6 +63,37 @@ class CemuPreflightTests(unittest.TestCase):
         self.assertIn('WASD is not configured as the Wii U GamePad left stick',
                       report['issues'])
 
+    def test_xml_only_keyboard_profile_is_checked(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = self.make_profile(temporary)
+            (profile / 'controllerProfiles/controller0.txt').unlink()
+            entries = ''.join(
+                f'<entry><mapping>{mapping}</mapping><button>{key}</button></entry>'
+                for mapping, key in ((1, 90), (17, 87), (18, 83), (19, 65), (20, 68)))
+            (profile / 'controllerProfiles/controller0.xml').write_text(
+                '<emulated_controller><type>Wii U GamePad</type><controller>'
+                '<api>Keyboard</api><mappings>' + entries +
+                '</mappings></controller></emulated_controller>', encoding='utf-8')
+
+            report = inspect_profile(profile, expected_pack='WorldStudioChain',
+                                     require_keyboard=True, require_gamepad_a=True)
+
+        self.assertTrue(report['ready'], report['issues'])
+        self.assertTrue(report['keyboard_left_stick_configured'])
+        self.assertTrue(report['gamepad_a_configured'])
+        self.assertEqual(report['controller_sources'], ['controller0.xml'])
+
+    def test_level_start_gate_rejects_profile_without_gamepad_a(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = self.make_profile(temporary)
+            report = inspect_profile(profile, require_keyboard=True,
+                                     require_gamepad_a=True)
+
+        self.assertFalse(report['ready'])
+        self.assertFalse(report['gamepad_a_configured'])
+        self.assertIn('Z is not configured as the Wii U GamePad A button',
+                      report['issues'])
+
     def test_reports_enabled_pack_that_never_appeared_in_run_log(self):
         with tempfile.TemporaryDirectory() as temporary:
             profile = self.make_profile(temporary, active=False)

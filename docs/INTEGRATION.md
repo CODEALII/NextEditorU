@@ -60,6 +60,33 @@
   modified profile enables it and its packaged archive matches the test input
   exactly. No fresh-save progression or terrain-appearance result is established.
 
+### Current-session follow-up
+
+- A new Cemu 1.26.2f process used `build/cemu-chain-route-retest-20261021` with
+  the isolated save. Preflight confirmed the active World Studio Chain pack,
+  archive SHA-256
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`, WASD
+  on the left stick, Z=A and byte-identical personal/common saves versus Clean.
+- At the Crushing-Cogs Tower, one D tap visibly moved Mario to the next
+  right/down road node and the camera followed. A second D tap at that junction
+  did not reach the next visible course ring. The destination point ID is not
+  confirmed, so this proves movement on the patched map but not traversal of the
+  modified W102-to-W103 segment. Ignored local screenshots:
+  `cemu-chain-tower-before-d.png` and `cemu-chain-after-first-d.png`.
+- A Z tap at the road junction left the map open. Since Mario was not verified
+  on a course node, this does not establish a failed level launch. The separate
+  Mainlight profile had no A binding, so its earlier Z attempt was invalid for
+  course-start testing.
+- The Mainlight build loaded with the exact archive hash
+  `80c593995585f59757c3a728b1dbd558efd79158757dd9e1ba87729c281e4bce` and
+  visibly showed large dark-green overlaps/clipped terrain. It is not a visual
+  pass. The screenshot `cemu-mainlight-terrain-observed.png` is in ignored local
+  evidence; the route-only Chain view retained stock-looking terrain.
+- The user confirms Mario can move with WASD. This Computer Use API sends key
+  taps rather than timed holds, so another sustained D test is needed from the
+  observed junction before drawing a route conclusion. Level launch,
+  fresh-save unlocks and save/reload progression remain unverified.
+
 These observations supersede older statements below that no sustained input
 or traversal had been performed. The earlier notes remain as historical
 evidence for their respective, inconclusive runs.
@@ -123,11 +150,11 @@ evidence for their respective, inconclusive runs.
   interpretation remains an implementation hypothesis pending that test.
 - The original W1 input hash remains
   `d2547f5bfa9963d05916816301a0b53e8916ab62628210409be232228b117cf0`.
-- Latest manual traversal report: **Mario does not move**. This confirms the
-  current gameplay test is failing, but does not identify whether the cause is
-  controller/input state, map state, or the patched route. No traversal pass is
-  claimed; reproduce with the active input profile and record the exact start
-  node and attempted direction before changing route data.
+- Earlier manual traversal report: **Mario does not move**. At that point the
+  active input profile and map state were uncertain. This observation is
+  superseded by the controlled Chain run and the user's confirmation that WASD
+  movement works, recorded in the current-session follow-up below; it is not a
+  current movement failure diagnosis.
 - Read-only inspection found two controller configurations: the generated
   isolated profile is GamePad + Keyboard, while the separate user profile is
   GamePad + DirectInput / Wireless Controller. The isolated XML, text profile
@@ -147,7 +174,8 @@ evidence for their respective, inconclusive runs.
   presses changed his facing but did not move him to the next map node. Computer
   Use sends taps rather than a sustained key hold, so this cannot distinguish a
   route failure from a too-short input and does not verify the reported
-  W102-to-W103 traversal.
+  W102-to-W103 traversal. The current-session follow-up above confirms movement
+  from the tower to a neighboring road node, but not that modified segment.
 - The active patched test archive hash is
   `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`,
   matching `build/chain-quoted`; it is not `build/direct-route-v2`. The exact
