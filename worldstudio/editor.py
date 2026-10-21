@@ -506,15 +506,20 @@ class WorldStudio(ttk.Frame):
             if hasattr(self, "native"):
                 from .mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model
                 from .preview_textures import (attach_base_color_textures,
+                                               attach_sampler_diagnostic_textures,
                                                attach_normal_map_textures)
                 shapes = extract_rigid_model(self.native.model)
                 textures = {}
                 normal_textures = {}
+                diagnostic_textures = {}
                 warned_materials = set()
                 warned_normal_materials = set()
+                warned_diagnostic_materials = set()
                 if self.native.geometry is None:
                     textures, warned_materials = attach_base_color_textures(self.native.model, shapes)
                     normal_textures, warned_normal_materials = attach_normal_map_textures(
+                        self.native.model, shapes)
+                    diagnostic_textures, warned_diagnostic_materials = attach_sampler_diagnostic_textures(
                         self.native.model, shapes)
                 textured_shapes = sum(bool(shape.get("texture")) for shape in shapes)
                 normal_textured_shapes = sum(bool(shape.get("normalTexture")) for shape in shapes)
@@ -533,6 +538,16 @@ class WorldStudio(ttk.Frame):
                 )
                 if warned_normal_materials:
                     normal_texture_notice += f" {len(warned_normal_materials)} material(s) have no supported _n0 map."
+                diagnostic_textured_shapes = sum(bool(shape.get("diagnosticTexture")) for shape in shapes)
+                diagnostic_texture_notice = (
+                    f"BC5 UNorm sampler `_o0` diagnostics: {len(diagnostic_textures)} unique maps on "
+                    f"{diagnostic_textured_shapes} UV meshes. R/G show stored channels only; sampler meaning "
+                    "and game material behavior are not inferred. Only top-level texture images are previewed."
+                )
+                if warned_diagnostic_materials:
+                    diagnostic_texture_notice += (
+                        f" {len(warned_diagnostic_materials)} material(s) have no supported `_o0` BC5 UNorm map."
+                    )
                 if self.native.geometry is not None:
                     geometry = self.native.geometry
                     vertices, indices, normals, uvs = _geometry(
@@ -561,6 +576,8 @@ class WorldStudio(ttk.Frame):
                           f"BC1/BC3 textures ×{len(textures)}" if textures else "Approximate materials"]
                 if normal_textures:
                     badges.append(f"BC5 diagnostic maps ×{len(normal_textures)}")
+                if diagnostic_textures:
+                    badges.append(f"BC5 UNorm `_o0` maps ×{len(diagnostic_textures)}")
             else:
                 from .mesh import _geometry
                 vertices, indices, normals, _ = _geometry(self.mesh[0], self.mesh[1])
@@ -587,6 +604,8 @@ class WorldStudio(ttk.Frame):
                 scene["textures"] = textures
                 scene["normalTextureNotice"] = normal_texture_notice
                 scene["normalTextures"] = normal_textures
+                scene["diagnosticTextureNotice"] = diagnostic_texture_notice
+                scene["diagnosticTextures"] = diagnostic_textures
             open_preview(scene)
             self.status.set(f"3D preview opened · {len(shapes)} shapes · {triangle_count:,} triangles")
         except (OSError, ValueError, KeyError, TypeError, OverflowError) as error:

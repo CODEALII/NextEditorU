@@ -417,3 +417,18 @@ camera behavior and a fully playable custom world remain open.
   normal transforms, mirrored faces and invalid scales.
 - Full regression: **145 tests passed in 91.962 seconds**. `compileall`,
   `git diff --check`, and the W101 → W102/W103 graph validator passed.
+
+## 2026-10-21 — BC5 UNorm sampler diagnostics
+
+- Added bounded BC5 UNorm decoding and GX2 Thin1 detiling for the local W1
+  `_o0` sampler path. It is labeled channel inspection; the game's slot
+  semantics remain unknown. The viewer separates it from BC5 SNORM normals
+  and optional approximate normal lighting.
+- Local W1 table checks resolve two unique `_o0` maps (`Mask`, `MaskOpaque`)
+  on 11 UV meshes. Raw and detiled fingerprints for `MaskOpaque` are recorded
+  in `docs/RESEARCH.md`. Chrome/SwiftShader loaded all 42 shapes, enabled the
+  diagnostic mode, and displayed the selected map without an error overlay;
+  screenshot evidence is ignored under `local/evidence/`.
+- Focused texture, BFRES-reference and WebGL tests: **56 passed**. Full
+  regression: **150 tests passed in 93.243 seconds**; `compileall`,
+  `git diff --check`, and W101 → W102/W103 reachability passed.

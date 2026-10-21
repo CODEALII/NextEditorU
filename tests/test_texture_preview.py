@@ -5,9 +5,11 @@ from worldstudio.texture_preview import (
     decode_bc1,
     decode_bc3,
     decode_bc5_snorm,
+    decode_bc5_unorm,
     detile_bc1_thin1,
     detile_bc3_thin1,
     detile_bc5_snorm_thin1,
+    detile_bc5_unorm_thin1,
 )
 
 
@@ -168,6 +170,18 @@ class Bc5SNormDecodeTests(unittest.TestCase):
             decode_bc5_snorm(bytes(31), 5, 3)
 
 
+class Bc5UnormDecodeTests(unittest.TestCase):
+    def test_unsigned_endpoints_and_independent_channels(self):
+        block = bytes((255, 0, 0, 0, 0, 0, 0, 0,
+                       0, 255, 255, 255, 255, 255, 255, 255))
+        rgba = decode_bc5_unorm(block, 4, 4)
+        self.assertEqual(rgba[:4], bytes((255, 255, 128, 255)))
+        self.assertEqual(set(rgba[0::4]), {255})
+        self.assertEqual(set(rgba[1::4]), {255})
+        with self.assertRaisesRegex(ValueError, "exactly 16 bytes"):
+            decode_bc5_unorm(block[:-1], 4, 4)
+
+
 class Bc1Thin1Tests(unittest.TestCase):
     def test_known_gx2_address_vectors(self):
         # Expected offsets are manually evaluated from the pinned C# branches:
@@ -262,6 +276,15 @@ class Bc5SNormThin1Tests(unittest.TestCase):
             detile_bc5_snorm_thin1(data, 4, 4, 32, tile_mode=5)
         with self.assertRaisesRegex(ValueError, 'exactly 8192 bytes'):
             detile_bc5_snorm_thin1(data[:-16], 4, 4, 32)
+
+
+class Bc5UnormThin1Tests(unittest.TestCase):
+    def test_same_128_bpp_thin1_layout_roundtrips_bc5_blocks(self):
+        width, height, pitch, swizzle = 129, 65, 64, 0xD0300
+        blocks_w, blocks_h = (width + 3) // 4, (height + 3) // 4
+        linear = bytes((i * 31 + 23) & 255 for i in range(blocks_w * blocks_h * 16))
+        tiled = tiled_bc3_from_linear(linear, width, height, pitch, swizzle)
+        self.assertEqual(detile_bc5_unorm_thin1(tiled, width, height, pitch, swizzle=swizzle), linear)
 
 
 if __name__ == "__main__":

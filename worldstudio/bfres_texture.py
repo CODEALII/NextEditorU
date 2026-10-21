@@ -10,6 +10,7 @@ from .bfres import Skeletons
 
 _BASE_COLOR_FORMATS = {0x31: "BC1 UNorm", 0x33: "BC3 UNorm"}
 _NORMAL_MAP_FORMATS = {0x235: "BC5 SNORM"}
+_DIAGNOSTIC_MAP_FORMATS = {0x35: "BC5 UNorm"}
 
 
 def _extract_material_texture(data, model_name, material_name, texture_name, *, suffix,
@@ -35,6 +36,12 @@ def _extract_material_texture(data, model_name, material_name, texture_name, *, 
     reference_count = data[material + 17]
     reference_list = r.ptr(material + 40)
     r.bounds(reference_list, reference_count * 8)
+    samplers = None
+    if expected_slot is not None:
+        sampler_count = data[material + 16]
+        samplers = r.dictionary(r.ptr(material + 48))
+        if sampler_count != reference_count or len(samplers) != reference_count:
+            raise ValueError(f'{material_name}: texture-reference and sampler counts do not match')
     matches = []
     for index in range(reference_count):
         reference = reference_list + index * 8
@@ -43,18 +50,21 @@ def _extract_material_texture(data, model_name, material_name, texture_name, *, 
         if name not in textures or textures[name] != texture:
             raise ValueError(f'{material_name}: texture reference does not match BFRES dictionary: {name}')
         if (texture_name is not None and name == texture_name) or (
-                texture_name is None and name.lower().endswith(suffix)):
+                texture_name is None and suffix is not None and name.lower().endswith(suffix)) or (
+                texture_name is None and suffix is None and expected_slot is not None and
+                samplers[index][0] == expected_slot):
             matches.append((index, name, texture))
     if len(matches) != 1:
-        expected = texture_name if texture_name is not None else f'one *{suffix} reference'
+        if texture_name is not None:
+            expected = texture_name
+        elif suffix is not None:
+            expected = f'one *{suffix} reference'
+        else:
+            expected = f'one {expected_slot} sampler texture'
         raise ValueError(f'{material_name}: expected exactly {expected}, found {len(matches)}')
 
     reference_index, name, texture = matches[0]
     if expected_slot is not None:
-        sampler_count = data[material + 16]
-        samplers = r.dictionary(r.ptr(material + 48))
-        if sampler_count != reference_count or len(samplers) != reference_count:
-            raise ValueError(f'{material_name}: texture-reference and sampler counts do not match')
         if samplers[reference_index][0] != expected_slot:
             raise ValueError(f'{material_name}: {name} is in sampler slot {samplers[reference_index][0]}, expected {expected_slot}')
     r.bounds(texture, 0xB8)
@@ -113,6 +123,20 @@ def extract_normal_map_texture(data, model_name, material_name, texture_name=Non
     if not texture["name"].lower().endswith("_nml"):
         raise ValueError(f'{texture["name"]}: expected a *_nml normal-map reference')
     return texture
+
+
+def extract_sampler_diagnostic_texture(data, model_name, material_name, sampler_slot="_o0"):
+    """Return one BC5 UNorm texture by observed sampler slot for inspection.
+
+    Sampler and texture-reference order must correspond and the table sizes
+    must agree. This identifies the stored texture and slot only; it does not
+    infer the shader meaning of the slot.
+    """
+    if not isinstance(sampler_slot, str) or not sampler_slot:
+        raise ValueError("A non-empty BFRES sampler slot is required")
+    return _extract_material_texture(data, model_name, material_name, None, suffix=None,
+                                    formats=_DIAGNOSTIC_MAP_FORMATS,
+                                    kind="diagnostic map", expected_slot=sampler_slot)
 
 
 def extract_bc1_base_texture(data, model_name, material_name, texture_name=None):

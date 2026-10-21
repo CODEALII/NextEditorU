@@ -199,6 +199,56 @@ def decode_bc5_snorm(data, width, height):
     return bytes(output)
 
 
+def _bc4_unorm_palette(block):
+    """Decode one BC4 UNorm channel block using BC3's alpha interpolation."""
+    endpoint0, endpoint1 = block[0], block[1]
+    palette = [endpoint0, endpoint1]
+    if endpoint0 > endpoint1:
+        palette.extend(((7 - index) * endpoint0 + index * endpoint1) // 7
+                       for index in range(1, 7))
+    else:
+        palette.extend(((5 - index) * endpoint0 + index * endpoint1) // 5
+                       for index in range(1, 5))
+        palette.extend((0, 255))
+    return palette, int.from_bytes(block[2:8], "little")
+
+
+def decode_bc5_unorm(data, width, height):
+    """Decode BC5 UNorm to diagnostic R/G channel colors.
+
+    This reports the stored channels only; it does not assign a material role.
+    """
+    width = _positive_int(width, "width")
+    height = _positive_int(height, "height")
+    source = _byte_view(data)
+    blocks_w = (width + 3) // 4
+    blocks_h = (height + 3) // 4
+    expected = blocks_w * blocks_h * 16
+    if len(source) != expected:
+        raise ValueError(f"BC5 UNORM data must be exactly {expected} bytes for {width}x{height}; got {len(source)}")
+
+    output = bytearray(width * height * 4)
+    for by in range(blocks_h):
+        for bx in range(blocks_w):
+            offset = (by * blocks_w + bx) * 16
+            red_palette, red_indices = _bc4_unorm_palette(source[offset:offset + 8])
+            green_palette, green_indices = _bc4_unorm_palette(source[offset + 8:offset + 16])
+            for py in range(_TEXELS_PER_BLOCK):
+                y = by * _TEXELS_PER_BLOCK + py
+                if y >= height:
+                    break
+                for px in range(_TEXELS_PER_BLOCK):
+                    x = bx * _TEXELS_PER_BLOCK + px
+                    if x >= width:
+                        break
+                    pixel = py * _TEXELS_PER_BLOCK + px
+                    red = red_palette[(red_indices >> (3 * pixel)) & 7]
+                    green = green_palette[(green_indices >> (3 * pixel)) & 7]
+                    target = (y * width + x) * 4
+                    output[target:target + 4] = bytes((red, green, 128, 255))
+    return bytes(output)
+
+
 def _bc1_thin1_block_offset(x, y, pitch, swizzle):
     """Port the pinned GX2 macro-tile address for one compressed BC1 block."""
     # 64 bpp here means one 8-byte BC1 block on the block grid. GX2's
@@ -308,6 +358,23 @@ def detile_bc5_snorm_thin1(
     aa=0,
 ):
     """Return compact row-major BC5 SNORM data from GX2 2D Thin1 storage."""
+    return _detile_bc_thin1(data, width, height, pitch, 16, tile_mode=tile_mode,
+                            swizzle=swizzle, dimension=dimension, depth=depth, aa=aa)
+
+
+def detile_bc5_unorm_thin1(
+    data,
+    width,
+    height,
+    pitch,
+    *,
+    tile_mode=4,
+    swizzle=0,
+    dimension=1,
+    depth=1,
+    aa=0,
+):
+    """Return compact row-major BC5 UNorm data from GX2 2D Thin1 storage."""
     return _detile_bc_thin1(data, width, height, pitch, 16, tile_mode=tile_mode,
                             swizzle=swizzle, dimension=dimension, depth=depth, aa=aa)
 

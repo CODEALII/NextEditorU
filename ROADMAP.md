@@ -27,8 +27,9 @@ is still needed before baseline/patch route QA.
 - Implemented: each supported shape has bounded local geometry framing, and the inspector's Focus mesh action centers the camera on that mesh and adjusts its distance using the mesh radius.
 - Implemented: clicking the viewport uses a depth-tested, texture-alpha-aware ID pass to select the visible shape under the pointer; high-DPI coordinate mapping and ID decoding have synthetic coverage, and a local W1 headless Chrome click selected the expected terrain mesh.
 - Implemented: the inspector shows cached 96-pixel previews of supported BC1/BC3 base-color and BC5 diagnostic textures, with separate labels; these remain inspectable samples and do not imply full material fidelity.
+- Implemented: `_o0` textures encoded as BC5 UNorm in the observed local W1 material tables can be decoded and toggled as stored R/G channel diagnostics. The local scan attaches `Mask` and `MaskOpaque` to 11 UV meshes; slot rendering semantics remain unknown.
 - Next: verify the new viewer controls with the user's browser/GPU; add material controls and camera presets/target controls.
-- Investigate BC5 UNORM masks and BC4 slots with material-slot evidence before rendering them. Add UV transforms, transparent material modes, baked light maps, and additional GX2 tile layouts only with local references and fixed regression vectors.
+- Investigate `_o1` BC4 maps, UV transforms, transparent material modes, baked light maps, and additional GX2 tile layouts before rendering them; require local slot evidence and fixed regression vectors.
 - Broaden geometry parsing to multiple meshes, more vertex encodings, hierarchy transforms, skinning, and other BFRES variants. The current static geometry subset must reject unsupported layouts clearly.
 
 ## Terrain pipeline

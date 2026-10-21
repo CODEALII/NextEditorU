@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import base64
 
-from .bfres_texture import extract_base_color_texture, extract_normal_map_texture
-from .texture_preview import (decode_bc1, decode_bc3, decode_bc5_snorm,
+from .bfres_texture import (extract_base_color_texture, extract_normal_map_texture,
+                            extract_sampler_diagnostic_texture)
+from .texture_preview import (decode_bc1, decode_bc3, decode_bc5_snorm, decode_bc5_unorm,
                               detile_bc1_thin1, detile_bc3_thin1,
-                              detile_bc5_snorm_thin1)
+                              detile_bc5_snorm_thin1, detile_bc5_unorm_thin1)
 
 
 def attach_base_color_textures(model_data, shapes, *, max_texture_pixels=4 * 1024 * 1024,
@@ -120,4 +121,57 @@ def attach_normal_map_textures(model_data, shapes, *, max_texture_pixels=4 * 102
         texture_name = material_textures[material]
         if texture_name:
             shape["normalTexture"] = texture_name
+    return textures, failed_materials
+
+
+def attach_sampler_diagnostic_textures(model_data, shapes, *, sampler_slot="_o0",
+                                       max_texture_pixels=4 * 1024 * 1024,
+                                       max_scene_pixels=8 * 1024 * 1024):
+    """Attach BC5 UNorm textures from one verified sampler slot as diagnostics.
+
+    The W1 viewer currently uses `_o0` evidence. It displays the stored R/G
+    channels only and makes no claim about the slot's rendering semantics.
+    """
+    if type(max_texture_pixels) is not int or max_texture_pixels <= 0:
+        raise ValueError("max_texture_pixels must be a positive integer")
+    if type(max_scene_pixels) is not int or max_scene_pixels <= 0:
+        raise ValueError("max_scene_pixels must be a positive integer")
+
+    textures = {}
+    material_textures = {}
+    failed_materials = set()
+    decoded_pixels = 0
+    for shape in shapes:
+        if shape.get("uvs") is None:
+            continue
+        material = shape["material"]
+        if material not in material_textures:
+            try:
+                texture = extract_sampler_diagnostic_texture(
+                    model_data, "CS_W1_World", material, sampler_slot)
+                if texture["name"] not in textures:
+                    pixels = texture["width"] * texture["height"]
+                    if pixels > max_texture_pixels:
+                        raise ValueError(f"{texture['name']}: diagnostic texture exceeds the pixel limit")
+                    if decoded_pixels + pixels > max_scene_pixels:
+                        raise ValueError("diagnostic textures exceed the scene pixel limit")
+                    compact = detile_bc5_unorm_thin1(
+                        texture["data"], texture["width"], texture["height"], texture["pitch"],
+                        tile_mode=texture["tile_mode"], swizzle=texture["swizzle"],
+                        depth=texture["depth"], aa=0,
+                    )
+                    rgba = decode_bc5_unorm(compact, texture["width"], texture["height"])
+                    textures[texture["name"]] = {
+                        "name": texture["name"], "width": texture["width"],
+                        "height": texture["height"],
+                        "rgbaBase64": base64.b64encode(rgba).decode("ascii"),
+                    }
+                    decoded_pixels += pixels
+                material_textures[material] = texture["name"]
+            except (ValueError, KeyError, TypeError, OverflowError):
+                material_textures[material] = None
+                failed_materials.add(material)
+        texture_name = material_textures[material]
+        if texture_name:
+            shape["diagnosticTexture"] = texture_name
     return textures, failed_materials
