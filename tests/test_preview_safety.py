@@ -1,3 +1,7 @@
+import base64
+import json
+import re
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -32,6 +36,7 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("approximate material colors", page)
         self.assertIn("aUv", page)
         self.assertIn("texture2D(uTexture,vUv)", page)
+        self.assertIn("texel.a<0.5)discard", page)
         self.assertNotIn("https://", page)
         self.assertNotIn("</script><script>alert(1)", page)
         self.assertIn("<\\/script>", page)
@@ -46,6 +51,38 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("gl.texImage2D", page)
         self.assertIn("gl.TEXTURE_WRAP_S,gl.REPEAT", page)
         self.assertNotIn("https://", page)
+
+    def test_viewer_resolves_shared_texture_catalog_and_shape_filter(self):
+        page = build_document({
+            "textures": {"RouteW1_alb": {"name": "RouteW1_alb", "width": 1,
+                                          "height": 1, "rgbaBase64": "AAAAAA=="}},
+            "shapes": [{"name": "route-mesh", "material": "mtRoute", "uvs": [[0, 0]],
+                        "texture": "RouteW1_alb", "positions": [[0, 0, 0]],
+                        "normals": [[0, 1, 0]], "indices": [0]}],
+            "nodes": [], "routes": []})
+        self.assertIn('"texture":"RouteW1_alb"', page)
+        self.assertIn('"RouteW1_alb":{"name":"RouteW1_alb"', page)
+        self.assertIn("scene.textures?.[shape.texture]", page)
+        self.assertIn("textureCache.set(payload.name,texture)", page)
+        self.assertIn("mesh.textureName).toLowerCase()", page)
+
+    def test_viewer_packs_geometry_as_little_endian_typed_arrays(self):
+        shape = {"name": "mesh", "material": "mat",
+                 "positions": [(float(i), 1.25, -2.5) for i in range(100)],
+                 "normals": [(0.0, 1.0, 0.0)] * 100,
+                 "uvs": [(0.25, 0.75)] * 100,
+                 "indices": [0, 1, 2]}
+        scene = {"shapes": [shape], "nodes": [], "routes": []}
+        page = build_document(scene)
+        encoded_scene = json.loads(re.search(r"const scene=(.*?);", page).group(1))
+        packed = encoded_scene["shapes"][0]
+        self.assertNotIn("positions", packed)
+        self.assertEqual(packed["indexCount"], 3)
+        self.assertEqual(struct.unpack("<3f", base64.b64decode(packed["positionsPacked"])[:12]),
+                         (0.0, 1.25, -2.5))
+        self.assertEqual(struct.unpack("<3H", base64.b64decode(packed["indicesPacked"])), (0, 1, 2))
+        self.assertIn("shape.positionsPacked?unpackArray", page)
+        self.assertEqual(len(shape["positions"]), 100)
 
     def test_project_asset_paths_survive_moving_project_folder(self):
         with tempfile.TemporaryDirectory() as temp:

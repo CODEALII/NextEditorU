@@ -134,6 +134,31 @@ Completed:
   static reachability evidence only. The same-profile baseline-then-patch
   movement check remains a human Cemu test.
 
+## 2026-10-21 - BC3 albedos and compact W1 preview
+
+- Added BC3 color/alpha decoding and the pinned GX2 128-bpp Thin1 microtile
+  ordering. A synthetic surface round-trips across macro tiles and fixed address
+  vectors; the local `RouteW1_alb` raw and detiled hashes are regression-tested.
+- Material extraction now accepts only the observed BC1/BC3 base-color formats.
+  The actual W1 BFRES resolves 17 unique textures across all 36 UV-bearing shapes;
+  no UV material fell back. Decoded textures share one catalog, with bounds of
+  4M pixels per texture and 16M pixels per preview scene. The viewer cuts out
+  alpha below 50% and names each texture in the shape filter tooltip.
+- Packed positions, normals, UVs and indexes as little-endian typed arrays. The
+  same local 42-shape scene fell from about 16.8 MB to 8.1 MB. Its generated
+  JavaScript passes `node --check`; the decoded BC3 route image shows a sandy
+  path with green edging.
+- Headless Chrome with SwiftShader renders the full scene, routes, labels and
+  textures. Screenshot: `local/evidence/preview-w1-headless-swiftshader.png`
+  (ignored local evidence). User-browser GPU behavior and Cemu rendering remain
+  unverified.
+- Synthetic extraction, decoder and viewer tests cover the new behavior. The complete
+  local suite passed **91 tests in 72.403 seconds** after the raw-asset hash
+  assertion; Python compileall passed.
+- Only BC1/BC3 base colors are rendered. BC4/BC5 maps, game material settings,
+  UV transforms, baked lighting, shaders, animation and arbitrary BFRES layouts
+  remain unsupported. No in-game or Cemu claim changes.
+
 Not yet proven / outstanding:
 - Actual game traversal, level launch, clear-triggered unlock/save persistence,
   camera behavior and cutscene interactions for the topology experiment.

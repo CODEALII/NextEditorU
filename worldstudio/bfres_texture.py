@@ -2,14 +2,17 @@
 
 The layouts are cross-checked against the repository's pinned MIT BfresLibrary
 Wii U Material, TextureRef and FTEX readers. This helper intentionally supports
-only one non-array BC1 texture on a named material; it does not interpret
+only one non-array BC1 or BC3 texture on a named material; it does not interpret
 samplers, light maps, shader parameters, animation or other surface formats.
 """
 from .bfres import Skeletons
 
 
-def extract_bc1_base_texture(data, model_name, material_name, texture_name=None):
-    """Return raw GX2 BC1 base-color texture metadata and bytes for one material.
+_BASE_COLOR_FORMATS = {0x31: "BC1 UNorm", 0x33: "BC3 UNorm"}
+
+
+def extract_base_color_texture(data, model_name, material_name, texture_name=None):
+    """Return raw GX2 BC1/BC3 base-color metadata and bytes for a material.
 
     The supported surface is a single-slice 2D, one-sample, 2D Thin1 texture
     stored in the BFRES image payload. The returned bytes remain GX2-tiled;
@@ -56,8 +59,9 @@ def extract_bc1_base_texture(data, model_name, material_name, texture_name=None)
     swizzle, pitch = r.u32(texture + 56), r.u32(texture + 64)
     if not (1 <= width <= 16384 and 1 <= height <= 16384 and depth == 1):
         raise ValueError(f'{name}: unsupported or unreasonable texture dimensions')
-    if surface_format != 0x31:
-        raise ValueError(f'{name}: expected GX2 BC1 UNorm (0x31), found 0x{surface_format:X}')
+    if surface_format not in _BASE_COLOR_FORMATS:
+        formats = ", ".join(f"{label} (0x{value:X})" for value, label in _BASE_COLOR_FORMATS.items())
+        raise ValueError(f'{name}: expected supported base-color format {formats}, found 0x{surface_format:X}')
     if aa_mode != 0 or use != 1 or tile_mode != 4:
         raise ValueError(f'{name}: expected single-sample texture-use GX2 2D Thin1 layout')
     if mip_count < 1 or pitch < (width + 3) // 4:
@@ -80,3 +84,11 @@ def extract_bc1_base_texture(data, model_name, material_name, texture_name=None)
         'mip_size': mip_size,
         'data': data[data_offset:data_offset + data_size],
     }
+
+
+def extract_bc1_base_texture(data, model_name, material_name, texture_name=None):
+    """Compatibility wrapper that requires a BC1 base-color texture."""
+    texture = extract_base_color_texture(data, model_name, material_name, texture_name)
+    if texture['format'] != 0x31:
+        raise ValueError(f"{texture['name']}: expected GX2 BC1 UNorm (0x31), found 0x{texture['format']:X}")
+    return texture

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
   <title id="title">NSMBU World Studio progress</title>
-  <desc id="desc">A project status dashboard showing 78 local tests passing, a reported Mario movement failure, a BC1 textured static BFRES preview, and terrain rendering still awaiting Cemu visual confirmation.</desc>
+  <desc id="desc">A project status dashboard showing 91 local tests passing, a reported Mario movement failure, 17 BC1/BC3 textures in the static BFRES preview, and terrain rendering awaiting Cemu visual confirmation.</desc>
   <defs>
     <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
       <path d="M8 0H0V8" fill="none" stroke="#07120f" stroke-opacity=".35" stroke-width="1"/>
@@ -21,7 +21,7 @@
   <rect x="48" y="103" width="318" height="74" rx="7" fill="#238636"/>
   <rect x="48" y="103" width="318" height="74" rx="7" fill="url(#grid)"/>
   <text class="label" x="66" y="126">AUTOMATED SUITE</text>
-  <text class="value" x="66" y="157">78 / 78 <tspan font-size="14">PASS</tspan></text>
+  <text class="value" x="66" y="157">91 / 91 <tspan font-size="14">PASS</tspan></text>
   <rect x="379" y="103" width="337" height="74" rx="7" fill="#da3633"/>
   <rect x="379" y="103" width="337" height="74" rx="7" fill="url(#grid)"/>
   <text class="label" x="397" y="126">MANUAL CEMU TRAVERSAL</text>
@@ -44,8 +44,8 @@
   <rect x="32" y="377" width="250" height="139" rx="8" fill="url(#grid)"/>
   <text class="label" x="49" y="404">VISUAL EDITOR</text>
   <text class="copy" x="49" y="431">42 rigid BFRES shapes · routes</text>
-  <text class="copy" x="49" y="451">Grass_alb BC1 decoded</text>
-  <text class="tiny" x="49" y="487">Other materials are approximated</text>
+  <text class="copy" x="49" y="451">17 BC1/BC3 albedos decoded</text>
+  <text class="tiny" x="49" y="487">36 UV meshes · WebGL check open</text>
 
   <rect class="tile" x="290" y="377" width="256" height="139" rx="8" fill="#9e6a03"/>
   <rect x="290" y="377" width="256" height="139" rx="8" fill="url(#grid)"/>

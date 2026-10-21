@@ -16,13 +16,14 @@ Progress details and dated findings: [PROGRESS.md](PROGRESS.md) · [Runtime test
 - Export an experimental three-node progression patch using existing route data.
 - Import a bounded rigid OBJ mesh into a known grass shape while retaining its material and layout.
 - Open an offline WebGL viewer for 42 supported static shapes from the local World 1 BFRES (70,193 vertices and 106,736 triangles), with route overlays and per-shape visibility controls.
-- Decode and show the `Grass_alb` BC1 base texture on the main grass shape using its BFRES UVs; other materials remain approximate colors.
+- Decode shared BC1/BC3 base-color textures for all 36 local W1 meshes with supported UVs, including alpha cutouts. Other texture formats and material effects remain approximations.
+- Pack scene geometry into compact typed buffers for the viewer; its generated page was about 8.1 MB for the supplied W1 model and decoded textures.
 - Run directed reachability checks for explicitly selected entry points and required locations with `validate-graph`.
 - Read and edit discovered camera-offset tables; analyze and round-trip event data offline.
 - Use the standalone Tk editor to inspect the map, edit supported fields, and save project files.
-- Run a 68-test local suite against synthetic fixtures and the user-provided local dump.
+- Run the local automated suite against synthetic fixtures and the user-provided local dump.
 
-The WebGL viewer displays one supported BC1 base texture; other materials use approximate colors. It does not evaluate light maps, game shaders, animation or arbitrary BFRES variants. The editor deliberately blocks unsupported node/index changes. Camera and event formats have offline tooling, but their in-game behavior and runtime integration are not verified. Read [Research and format findings](docs/RESEARCH.md), [Resource findings](docs/RESOURCE_FINDINGS.md), [Camera findings](docs/CAMERA_FINDINGS.md), and [Event findings](docs/EVENTS.md) for the evidence and limits of each feature.
+The WebGL viewer supports BC1/BC3 base-color maps in the observed GX2 2D Thin1 layout. It does not evaluate material parameters, UV transforms, light maps, game shaders, animation, or arbitrary BFRES variants. The editor deliberately blocks unsupported node/index changes. Camera and event formats have offline tooling, but their in-game behavior and runtime integration are not verified. Read [Research and format findings](docs/RESEARCH.md), [Resource findings](docs/RESOURCE_FINDINGS.md), [Camera findings](docs/CAMERA_FINDINGS.md), and [Event findings](docs/EVENTS.md) for the evidence and limits of each feature.
 
 ## Current runtime status
 
@@ -69,7 +70,7 @@ python -m unittest discover -s tests -v
 python -m compileall -q worldstudio tests tools
 ```
 
-The latest verified local run passed **78 tests**. This confirms offline parsers, exporters, guards, geometry and texture extraction, and round-trips; it does not establish browser rendering, game acceptance or gameplay. See [TESTING.md](docs/TESTING.md) for targeted graph and Cemu checks, and [ROADMAP.md](docs/ROADMAP.md) for the next milestones.
+A headless Chrome/SwiftShader render of the local W1 scene was visually inspected. This verifies the software-rendered preview path, while user-browser GPU behavior and interaction remain open. Cemu movement, level launches, progression and save compatibility are still unverified. See [TESTING.md](docs/TESTING.md) for local checks and [ROADMAP.md](ROADMAP.md) for the next milestones.
 
 ## Repository map
 

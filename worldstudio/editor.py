@@ -272,40 +272,32 @@ class WorldStudio(ttk.Frame):
         try:
             nodes, routes = [], []
             if hasattr(self, "native"):
-                import base64
-                from .bfres_texture import extract_bc1_base_texture
                 from .mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model
-                from .texture_preview import decode_bc1, detile_bc1_thin1
+                from .preview_textures import attach_base_color_textures
                 shapes = extract_rigid_model(self.native.model)
-                texture_loaded = False
-                texture_notice = "Grass base texture unavailable; other materials are approximate."
+                textures = {}
+                warned_materials = set()
                 if self.native.geometry is None:
-                    for shape in shapes:
-                        if shape["name"] != DEFAULT_SHAPE or shape["material"] != "mtGrass":
-                            continue
-                        texture = extract_bc1_base_texture(self.native.model, "CS_W1_World", "mtGrass")
-                        compact = detile_bc1_thin1(
-                            texture["data"], texture["width"], texture["height"], texture["pitch"],
-                            tile_mode=texture["tile_mode"], swizzle=texture["swizzle"],
-                            depth=texture["depth"], aa=0,
-                        )
-                        rgba = decode_bc1(compact, texture["width"], texture["height"])
-                        shape["texture"] = {
-                            "name": texture["name"], "width": texture["width"],
-                            "height": texture["height"],
-                            "rgbaBase64": base64.b64encode(rgba).decode("ascii"),
-                        }
-                        texture_loaded = True
-                        texture_notice = "Grass_alb BC1 base texture on the main grass mesh; other game materials, shaders and animation are not evaluated."
-                        break
+                    textures, warned_materials = attach_base_color_textures(self.native.model, shapes)
+                textured_shapes = sum(bool(shape.get("texture")) for shape in shapes)
+                texture_notice = (
+                    f"BC1/BC3 base-color maps: {len(textures)} unique textures on {textured_shapes} UV meshes. "
+                    "Alpha below 50% is cut out; material settings, light maps, game shaders and animation are not evaluated."
+                )
+                if warned_materials:
+                    texture_notice += f" {len(warned_materials)} material(s) use approximate colors."
                 if self.native.geometry is not None:
                     geometry = self.native.geometry
-                    vertices, indices, normals, _ = _geometry(
+                    vertices, indices, normals, uvs = _geometry(
                         geometry["vertices"], geometry["faces"], geometry.get("uvs"), geometry.get("normals"))
                     for shape in shapes:
                         if shape["name"] == DEFAULT_SHAPE:
                             shape.update(positions=vertices, normals=normals, indices=indices,
                                          material="World Studio imported grass mesh")
+                            if uvs is not None and all(uv is not None for uv in uvs):
+                                shape["uvs"] = uvs
+                            else:
+                                shape.pop("uvs", None)
                             break
                 graph = self.view_project()
                 visible_nodes = {n["id"]: n for n in graph["nodes"]
@@ -319,7 +311,7 @@ class WorldStudio(ttk.Frame):
                 title = f"{self.native.source.name} · W1 world"
                 model_name = "CS_W1_World • native BFRES static geometry"
                 badges = ["BFRES source", "Static rest pose",
-                          "Grass_alb BC1" if texture_loaded else "Approximate materials"]
+                          f"BC1/BC3 textures ×{len(textures)}" if textures else "Approximate materials"]
             else:
                 from .mesh import _geometry
                 vertices, indices, normals, _ = _geometry(self.mesh[0], self.mesh[1])
@@ -343,6 +335,7 @@ class WorldStudio(ttk.Frame):
                      "bounds": {"center": center, "radius": max(radius, 10)}}
             if hasattr(self, "native"):
                 scene["textureNotice"] = texture_notice
+                scene["textures"] = textures
             open_preview(scene)
             self.status.set(f"3D preview opened · {len(shapes)} shapes · {triangle_count:,} triangles")
         except (OSError, ValueError, KeyError, TypeError, OverflowError) as error:

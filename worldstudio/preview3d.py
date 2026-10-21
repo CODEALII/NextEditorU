@@ -1,6 +1,9 @@
 """Self-contained WebGL viewer for locally loaded world geometry."""
 from __future__ import annotations
 
+from array import array
+import base64
+import sys
 import json
 import tempfile
 import uuid
@@ -61,17 +64,18 @@ if(!gl){error.style.display='grid';error.textContent='WebGL is unavailable in th
 function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 function program(vs,fs){const p=gl.createProgram();gl.attachShader(p,shader(gl.VERTEX_SHADER,vs));gl.attachShader(p,shader(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p}
 let meshProgram=null,overlayProgram=null;
-if(gl){try{meshProgram=program(`attribute vec3 aPosition;attribute vec3 aNormal;attribute vec2 aUv;uniform mat4 uMvp;uniform mat3 uNormal;varying vec3 vNormal;varying vec2 vUv;void main(){gl_Position=uMvp*vec4(aPosition,1.0);vNormal=normalize(uNormal*aNormal);vUv=aUv;}`,`precision mediump float;uniform vec3 uColor;uniform sampler2D uTexture;uniform float uHasTexture;varying vec3 vNormal;varying vec2 vUv;void main(){vec3 n=normalize(vNormal);float d=max(dot(n,normalize(vec3(-0.42,0.82,0.36))),0.0);float rim=pow(1.0-max(dot(n,vec3(0.0,0.0,1.0)),0.0),2.0)*0.08;vec3 base=mix(uColor,texture2D(uTexture,vUv).rgb,uHasTexture);vec3 c=base*(0.42+0.72*d)+rim;gl_FragColor=vec4(c,1.0);}`);
+if(gl){try{meshProgram=program(`attribute vec3 aPosition;attribute vec3 aNormal;attribute vec2 aUv;uniform mat4 uMvp;uniform mat3 uNormal;varying vec3 vNormal;varying vec2 vUv;void main(){gl_Position=uMvp*vec4(aPosition,1.0);vNormal=normalize(uNormal*aNormal);vUv=aUv;}`,`precision mediump float;uniform vec3 uColor;uniform sampler2D uTexture;uniform float uHasTexture;varying vec3 vNormal;varying vec2 vUv;void main(){vec3 n=normalize(vNormal);float d=max(dot(n,normalize(vec3(-0.42,0.82,0.36))),0.0);float rim=pow(1.0-max(dot(n,vec3(0.0,0.0,1.0)),0.0),2.0)*0.08;vec4 texel=texture2D(uTexture,vUv);if(uHasTexture>0.5&&texel.a<0.5)discard;vec3 base=mix(uColor,texel.rgb,uHasTexture);vec3 c=base*(0.42+0.72*d)+rim;gl_FragColor=vec4(c,1.0);}`);
 overlayProgram=program(`attribute vec3 aPosition;uniform mat4 uMvp;uniform float uPointSize;void main(){gl_Position=uMvp*vec4(aPosition,1.0);gl_PointSize=uPointSize;}`,`precision mediump float;uniform vec4 uColor;uniform float uRound;void main(){if(uRound>0.5&&distance(gl_PointCoord,vec2(0.5))>0.48)discard;gl_FragColor=uColor;}`);}catch(e){error.style.display='grid';error.textContent='Could not initialize the WebGL renderer: '+e.message;gl=null}}
 function loc(p,n){return gl.getAttribLocation(p,n)}
 function buffer(data,target=gl.ARRAY_BUFFER,usage=gl.STATIC_DRAW){const b=gl.createBuffer();gl.bindBuffer(target,b);gl.bufferData(target,data,usage);return b}
 function colorFor(name,index){const n=name.toLowerCase();if(/grass|kusa|leaf/.test(n))return[0.31,0.68,0.35];if(/water|mizu/.test(n))return[0.22,0.59,0.79];if(/snow|ice|yuki/.test(n))return[0.76,0.85,0.9];if(/sand|sunaba/.test(n))return[0.78,0.65,0.39];if(/rock|gake|stone/.test(n))return[0.48,0.53,0.53];if(/tree|wood|trunk|ki/.test(n))return[0.43,0.31,0.19];if(/castle|dokan|brick/.test(n))return[0.68,0.4,0.28];if(/route|road|path/.test(n))return[0.48,0.53,0.55];const h=[...name].reduce((a,c)=>(a*33+c.charCodeAt(0))>>>0,2166136261);return[0.38+(h&255)/850,0.4+((h>>>8)&255)/1100,0.42+((h>>>16)&255)/900]}
-function createTexture(payload){const binary=atob(payload.rgbaBase64),pixels=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)pixels[i]=binary.charCodeAt(i);if(pixels.length!==payload.width*payload.height*4)throw Error('Invalid decoded '+payload.name+' RGBA texture');const texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,payload.width,payload.height,0,gl.RGBA,gl.UNSIGNED_BYTE,pixels);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);return texture}
+const textureCache=new Map();function createTexture(payload){if(textureCache.has(payload.name))return textureCache.get(payload.name);const binary=atob(payload.rgbaBase64),pixels=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)pixels[i]=binary.charCodeAt(i);if(pixels.length!==payload.width*payload.height*4)throw Error('Invalid decoded '+payload.name+' RGBA texture');const texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,payload.width,payload.height,0,gl.RGBA,gl.UNSIGNED_BYTE,pixels);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);textureCache.set(payload.name,texture);return texture}
 let meshes=[];
-if(gl){try{meshes=scene.shapes.map((shape,index)=>{const positions=new Float32Array(shape.positions.flat());const normals=new Float32Array(shape.normals.flat());return{name:shape.name,material:shape.material,color:colorFor(shape.material,index),count:shape.indices.length,visible:true,pos:buffer(positions),normal:buffer(normals),uv:shape.uvs?buffer(new Float32Array(shape.uvs.flat())):null,texture:shape.texture?createTexture(shape.texture):null,index:buffer(new Uint16Array(shape.indices),gl.ELEMENT_ARRAY_BUFFER)}})}catch(e){error.style.display='grid';error.textContent='Could not build the 3D preview: '+e.message}}
+function unpackArray(payload,Type,itemSize){const binary=atob(payload),bytes=new Uint8Array(binary.length);if(bytes.length%itemSize)throw Error('Invalid packed geometry array');for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return new Type(bytes.buffer)}
+if(gl){try{meshes=scene.shapes.map((shape,index)=>{const positions=shape.positionsPacked?unpackArray(shape.positionsPacked,Float32Array,4):new Float32Array(shape.positions.flat());const normals=shape.normalsPacked?unpackArray(shape.normalsPacked,Float32Array,4):new Float32Array(shape.normals.flat());const uvs=shape.uvsPacked?unpackArray(shape.uvsPacked,Float32Array,4):(shape.uvs?new Float32Array(shape.uvs.flat()):null);const indices=shape.indicesPacked?unpackArray(shape.indicesPacked,Uint16Array,2):new Uint16Array(shape.indices);const texturePayload=typeof shape.texture==='string'?scene.textures?.[shape.texture]:shape.texture;if(shape.texture&&!texturePayload)throw Error('Missing texture payload for '+shape.texture);return{name:shape.name,material:shape.material,textureName:typeof shape.texture==='string'?shape.texture:(shape.texture?.name||''),color:colorFor(shape.material,index),count:shape.indexCount??shape.indices.length,visible:true,pos:buffer(positions),normal:buffer(normals),uv:uvs?buffer(uvs):null,texture:texturePayload?createTexture(texturePayload):null,index:buffer(indices,gl.ELEMENT_ARRAY_BUFFER)}})}catch(e){error.style.display='grid';error.textContent='Could not build the 3D preview: '+e.message}}
 const materials=new Map();for(const m of meshes)if(!materials.has(m.material))materials.set(m.material,m.color);
 const list=document.getElementById('shapes');
-function addShapeRow(mesh){const row=document.createElement('label');row.className='shape';const check=document.createElement('input');check.type='checkbox';check.checked=true;check.addEventListener('change',()=>{mesh.visible=check.checked});const sw=document.createElement('i');sw.className='swatch';sw.style.background=`rgb(${mesh.color.map(x=>Math.round(x*255)).join(',')})`;const name=document.createElement('span');name.textContent=mesh.name;name.title=`${mesh.name} · ${mesh.material}`;row.append(check,sw,name);row.dataset.search=(mesh.name+' '+mesh.material).toLowerCase();list.appendChild(row)}
+function addShapeRow(mesh){const row=document.createElement('label');row.className='shape';const check=document.createElement('input');check.type='checkbox';check.checked=true;check.addEventListener('change',()=>{mesh.visible=check.checked});const sw=document.createElement('i');sw.className='swatch';sw.style.background=`rgb(${mesh.color.map(x=>Math.round(x*255)).join(',')})`;const name=document.createElement('span');name.textContent=mesh.name;name.title=`${mesh.name} · ${mesh.material}${mesh.textureName?' · '+mesh.textureName:''}`;row.append(check,sw,name);row.dataset.search=(mesh.name+' '+mesh.material+' '+mesh.textureName).toLowerCase();list.appendChild(row)}
 for(const mesh of meshes)addShapeRow(mesh);
 document.getElementById('filter').addEventListener('input',e=>{const q=e.target.value.toLowerCase();for(const row of list.children)row.hidden=!row.dataset.search.includes(q)});
 document.getElementById('paths').addEventListener('click',e=>{scene.showPaths=!scene.showPaths;e.currentTarget.classList.toggle('active',scene.showPaths);e.currentTarget.textContent=scene.showPaths?'Paths on':'Paths off'});
@@ -98,7 +102,30 @@ if(gl)requestAnimationFrame(frame);
 
 def build_document(scene: dict) -> str:
     """Build an offline preview with escaped scene data and no remote scripts."""
-    payload = json.dumps(scene, ensure_ascii=True, separators=(",", ":"))
+    compact_scene = dict(scene)
+    compact_shapes = []
+    for original in scene.get("shapes", ()):
+        shape = dict(original)
+        for field, typecode in (("positions", "f"), ("normals", "f"), ("uvs", "f"), ("indices", "H")):
+            if field not in shape:
+                continue
+            values = array(typecode)
+            for item in shape[field]:
+                if isinstance(item, (list, tuple)):
+                    values.extend(item)
+                else:
+                    values.append(item)
+            if values.itemsize != (4 if typecode == "f" else 2):
+                raise ValueError(f"Platform array size is unsupported for {field}")
+            if sys.byteorder != "little":
+                values.byteswap()
+            shape[f"{field}Packed"] = base64.b64encode(values.tobytes()).decode("ascii")
+            if field == "indices":
+                shape["indexCount"] = len(shape[field])
+            del shape[field]
+        compact_shapes.append(shape)
+    compact_scene["shapes"] = compact_shapes
+    payload = json.dumps(compact_scene, ensure_ascii=True, separators=(",", ":"))
     payload = payload.replace("</", "<\\/").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
     return _PAGE.replace("__SCENE__", payload)
 
