@@ -633,6 +633,10 @@ class WorldStudio(ttk.Frame):
         if hasattr(self, "position_properties"):
             self.position_properties = {}
         self.refresh()
+        if state["kind"] == "native":
+            camera_window = getattr(self, "camera_window", None)
+            if camera_window is not None and camera_window.winfo_exists():
+                camera_window.reload()
         if self.mesh is not previous_mesh:
             self.fit()
         self.status.set(f"{action} applied; save the project to keep changes")

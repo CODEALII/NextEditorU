@@ -95,7 +95,7 @@ the remaining controlled-test steps.
 - Implemented: native point path-chain fields have an ordered BFRES-ID picker with add, remove and reorder controls. New IDs must be present in the BFRES and have resolvable local endpoints; existing unresolved strings are retained unless removed, and untouched fields roundtrip exactly. Route-table wiring, destination editing and in-game movement remain separate and unverified.
 - Implemented: native normal and secret point destinations now use an ordered point-ID picker with add, remove and reorder actions. It preserves unresolved IDs until removed, excludes a self-destination from new choices, waits for Apply before editing the CSV, and participates in undo/redo. Matching path-chain fields remain a separate edit; the native validator still gates export, and game behavior is unverified.
 - Continue full route creation and node placement after route-geometry links, safe bone naming, point indexes, and engine/script references are understood. Preserve unknown data and block unresolved exports.
-- Improve camera offset editing with a clear table inspector, then map each bank and transition to in-game behavior.
+- Implemented: the camera companion inspector lists each raw record for both banks, with stored name, XYZ components and unknown-u32 values visible; selected vectors can be edited without changing protected fields. Camera Apply participates in project history, and an open inspector now refreshes on Undo/Redo. Bank meanings and actual camera movement still require in-game mapping.
 - Keep the Cobra event table bridge offline until a loader or game-side hook is verified. Round-trip success alone does not establish that the game consumes an edited table.
 
 ## Editor and project workflow

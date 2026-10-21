@@ -1458,3 +1458,17 @@ camera behavior and a fully playable custom world remain open.
   editor smoke tests passed after adding redo coverage; `compileall` and
   `git diff --check` passed. This is editor evidence only; no route or level
   behavior has been verified in Cemu.
+
+## 2026-10-21 — Camera inspector history synchronization
+
+- Fixed the open camera table window going stale after the main editor Undo/Redo
+  restored project camera edits. Native-state restore now reloads the companion
+  table when that window is open; closed or replaced projects remain unaffected.
+- Added a GUI regression with a synthetic Mario offset table. It checks the
+  selected XYZ value after Apply, Undo and Redo in both the camera window and
+  the underlying project edit state. The existing inspector exposes raw record
+  names, both banks, XYZ and unknown-u32 fields without assigning semantics.
+- Verification: all **302 tests** passed in 185.103 seconds; all 27 focused
+  editor smoke tests passed; `compileall` and `git diff --check` passed. This
+  verifies editor synchronization only; camera movement in Cemu remains
+  unverified.

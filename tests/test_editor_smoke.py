@@ -10,9 +10,10 @@ import unittest
 import json
 from unittest.mock import patch
 
-from worldstudio.editor import (NativeStudio, ObjTransformDialog, PathChainDialog,
+from worldstudio.editor import (CameraDataWindow, NativeStudio, ObjTransformDialog, PathChainDialog,
                                 WorldStudio, demo_project, fit_preview_scale,
                                 project_preview_point)
+from worldstudio.camera import OffsetTable
 from worldstudio.recent_projects import RecentProjects
 from worldstudio.project import WorldProject, resolve_project_path
 from worldstudio.session_recovery import SessionRecovery
@@ -35,6 +36,18 @@ class NativeFixture:
         self.references = set(names) | {"RW102F001"}
         self.positions = dict(zip(names, ([100, 0, 0], [300, 0, 0], [10, 0, 0], [20, 0, 0], [4, 0, 0], [999999, 0, 0])))
         self.layout, self.terrain, self.geometry = {}, None, None
+        self.camera_tables = {"MarioOffsetDataW1.bin": OffsetTable.parse(bytes(5376), "mario")}
+        self.camera_edits = {}
+
+    def camera_table(self, filename):
+        table = self.camera_tables[filename]
+        for key, vector in self.camera_edits.get(filename, {}).items():
+            bank, index = map(int, key.split(":"))
+            table = table.with_vector(bank, index, vector)
+        return table
+
+    def set_camera_vector(self, filename, bank, index, vector):
+        self.camera_edits.setdefault(filename, {})[f"{bank}:{index}"] = list(vector)
 
     @property
     def world_positions(self):
@@ -400,6 +413,23 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertEqual(self.native.points.rows[0][3], before)
         self.app.redo()
         self.assertEqual(self.native.points.rows[0][3], "W199,W102")
+
+    def test_camera_table_window_tracks_apply_undo_and_redo(self):
+        window = CameraDataWindow(self.app, visible=False)
+        self.app.camera_window = window
+        window.records.selection_set("0")
+        window.select_record()
+        window.vector["x"].set("12")
+        window.apply()
+        self.assertEqual(window.records.item("0", "values")[2], "12.0")
+
+        self.app.undo()
+        self.assertEqual(window.records.item("0", "values")[2], "0.0")
+        self.assertEqual(window.vector["x"].get(), "0.0")
+
+        self.app.redo()
+        self.assertEqual(window.records.item("0", "values")[2], "12.0")
+        self.assertEqual(window.vector["x"].get(), "12.0")
 
     def test_native_tree_filter_clears_properties_when_selected_item_is_hidden(self):
         self.app.tree.selection_set("bone:K001")
