@@ -22,8 +22,18 @@ def write_new(path, data):
     """Create once: neither existing exports nor original files are overwritten."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('xb') as f:
-        f.write(data)
+    created = False
+    try:
+        with path.open('xb') as f:
+            created = True
+            f.write(data)
+    except Exception:
+        if created:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        raise
 
 
 def store_project_path(value, project_file):
@@ -170,6 +180,8 @@ class WorldProject:
 
     def validate(self):
         errors = []
+        world = re.search(r'pointW([1-9])', self.point_name)
+        world_prefix = f'W{world[1]}' if world else None
         for filename in self.camera_edits:
             try:
                 self.camera_table(filename).build()
@@ -232,9 +244,11 @@ class WorldProject:
             route_seen.add(r[0])
             if i >= len(self.routes.initial) or r != self.routes.initial[i]:
                 for endpoint in (r[0][1:5], r[0][5:9]):
+                    if (world_prefix and endpoint.startswith('W') and
+                            not endpoint.startswith(world_prefix)):
+                        continue
                     if endpoint not in self.skeletons.bones:
                         errors.append(f'{r[0]}: missing endpoint bone {endpoint}')
-        world = re.search(r'pointW([1-9])', self.point_name)
         if world:
             from .graph_validation import validate_native_world
             errors.extend(validate_native_world(
@@ -348,8 +362,21 @@ class WorldProject:
             raise ValueError('Archive and companion output paths collide')
         if any(p.exists() for p in paths):
             raise FileExistsError('Output, companion or manifest already exists; choose a new export path')
-        write_new(output, blob)
-        for name, encoded in camera_outputs.items():
-            write_new(output.parent / name, encoded)
-        write_new(manifest_path, json.dumps(manifest, indent=2).encode())
+        created_outputs = []
+        try:
+            write_new(output, blob)
+            created_outputs.append(output)
+            for name, encoded in camera_outputs.items():
+                companion = output.parent / name
+                write_new(companion, encoded)
+                created_outputs.append(companion)
+            write_new(manifest_path, json.dumps(manifest, indent=2).encode())
+            created_outputs.append(manifest_path)
+        except Exception:
+            for created_path in reversed(created_outputs):
+                try:
+                    created_path.unlink()
+                except OSError:
+                    pass
+            raise
         return manifest

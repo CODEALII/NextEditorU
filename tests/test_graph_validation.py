@@ -109,6 +109,21 @@ class NativeGraphValidationTests(unittest.TestCase):
         )
         self.assertIn("W101: no directed route-segment path to W102", issues)
 
+    def test_external_route_endpoint_is_not_required_in_local_bfres(self):
+        points = [point(0, "W101"), point(1, "W102")]
+        issues = validate_native_world(
+            points,
+            [["RW101W201", "road", ""]],
+            known_references={"W101", "W102", "RW101W201"},
+            initial_points=points,
+            initial_routes=[],
+            world_prefix="W1",
+            entry_points=("W101",),
+            required_locations=("W102",),
+        )
+        self.assertNotIn("RW101W201: missing endpoint model reference W201", issues)
+        self.assertIn("Unreachable location W102", issues)
+
     def test_preserves_old_route_gaps_and_skips_cross_world_destinations(self):
         partial_baseline = [point(0, "W101", "W102"), point(1, "W102"),
                             point(2, "W103")]
@@ -167,7 +182,7 @@ class NativeGraphValidationTests(unittest.TestCase):
 
     def test_reports_missing_route_endpoints_and_unreachable_location(self):
         points = [point(0, "W101", "W102"), point(1, "W102"), point(2, "W103")]
-        routes = [["RW101W404", "road", ""]]
+        routes = [["RW101W199", "road", ""]]
         issues = validate_native_world(
             points,
             routes,
@@ -176,7 +191,7 @@ class NativeGraphValidationTests(unittest.TestCase):
             entry_points=("W101",),
             required_locations=("W102", "W103"),
         )
-        self.assertIn("RW101W404: missing endpoint model reference W404", issues)
+        self.assertIn("RW101W199: missing endpoint model reference W199", issues)
         self.assertIn("Unreachable location W103", issues)
 
     def test_unchanged_partial_inventory_is_not_misreported(self):

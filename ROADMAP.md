@@ -57,6 +57,7 @@ is still needed before baseline/patch route QA.
 ## Topology, events, and camera
 
 - Implemented: project, editor, and export validation require a directed segment chain for newly added same-world destinations. Route edits recheck baseline-connected destinations and block an export if an edit disconnects one; pre-existing gaps and cross-world links are not treated as new failures.
+- Implemented: a route segment may reference endpoints in another world without requiring those bones in the current BFRES. Local endpoints are still validated, and cross-world segments cannot satisfy local reachability checks.
 - Extend graph validation only as each native reference is identified: level destinations, event dependencies, and progression conditions.
 - Support route creation and node placement after safe bone naming, point indexes, and engine/script references are understood. Preserve unknown data and block unresolved exports.
 - Improve camera offset editing with a clear table inspector, then map each bank and transition to in-game behavior.
@@ -76,6 +77,7 @@ is still needed before baseline/patch route QA.
   engine-backed points remain blocked on native index/script-reference safety.
 - Add transform handles and route-edit controls with project-level regression tests.
 - Add recent projects, recoverable sessions, backup rotation, changed-file manifests, and export/reimport comparison.
+- Implemented: archive, camera companion and manifest export writes roll back files created by the current export if a later output write fails.
 - Profile large models and projects before adding background parsing or more caching. A current local W1 page embedding decoded maps measured 21.01 MiB; this is payload size, not a browser performance benchmark.
 
 ## Central acceptance milestone

@@ -19,7 +19,7 @@ Progress details and dated findings: [PROGRESS.md](PROGRESS.md) · [Runtime test
 - Inspect SHARCFB v8 archives without decoding proprietary GX2 instructions. When the local common shader archive is available, the material inspector resolves BFRES shader-program assignments, sampler/uniform symbols, material-option permutation candidates, and declared shader-input to BFRES vertex-attribute bindings with stored formats. Shape-specific skinning selection and actual game shader execution remain unresolved.
 - Decode shared BC1/BC3 base-color textures for all 42 local W1 shapes with verified `_u0` data, including alpha cutouts. The reader supports float32x2, UNorm16x2, SNorm16x2, and UNorm8x2 UV formats; texture transforms and shader operations remain unverified.
 - Inspect BC5 SNORM R/G channels for eight shared `_n0` maps across 26 UV meshes, or enable optional tangent-space lighting reconstructed from those maps and generated mesh tangents. The lighting preview is approximate; channel orientation and game material settings remain unverified.
-- Pack scene geometry into compact typed buffers for the viewer; its generated page was about 8.1 MB for the supplied W1 model and decoded textures.
+- Pack scene geometry into compact typed buffers for the viewer; the current generated page with all supported decoded W1 maps is 22,034,943 bytes (21.01 MiB). This payload size is not a load-performance benchmark.
 - Validate directed reachability with `validate-graph`, and block project exports when a new local destination lacks a route chain or an edited route disconnects a destination that was connected in the baseline.
 - Read and edit discovered camera-offset tables; analyze and round-trip event data offline.
 - Use the standalone Tk editor to inspect the map, drag supported rest-pose points in the camera-facing plane, edit supported fields, save project files, and undo or redo up to 31 recent edits with Ctrl+Z / Ctrl+Y. Unsupported transforms are kept in a labeled preview layout.
@@ -65,7 +65,7 @@ Check a route from an explicit start to required locations:
 python -m worldstudio validate-graph --entry W101 --require W102 --require W103
 ```
 
-Pass a saved `.nws.json` project path as the first argument to validate edits. This verifies the declared graph only; it does not simulate in-game movement or unlock rules.
+Pass a saved `.nws.json` project path as the first argument to validate edits. Local route endpoints must resolve to the current BFRES; remote-world endpoints are left unresolved because their archive is outside the project. Remote segments cannot satisfy local reachability. This verifies the declared graph only; it does not simulate in-game movement or unlock rules.
 
 The experimental mesh export accepts the included original sample island:
 

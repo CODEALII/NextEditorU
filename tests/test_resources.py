@@ -5,6 +5,7 @@ import struct
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 from worldstudio.archive import Archive, compress, decompress
 from worldstudio.project import WorldProject, Table, sha
 from worldstudio.__main__ import chain_demo, direct_route_demo, DEFAULT_SOURCE
@@ -219,6 +220,30 @@ class LocalIntegrationTests(unittest.TestCase):
 
         self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
 
+    def test_export_removes_archive_if_manifest_write_fails(self):
+        from worldstudio.project import write_new
+
+        p = WorldProject.open(DEFAULT_SOURCE)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'interrupted.szs'
+            calls = 0
+
+            def fail_on_manifest(path, data):
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError('simulated manifest write failure')
+                write_new(path, data)
+
+            with patch('worldstudio.project.write_new', side_effect=fail_on_manifest):
+                with self.assertRaisesRegex(OSError, 'simulated manifest write failure'):
+                    p.export(output)
+
+            self.assertEqual(calls, 2)
+            self.assertFalse(output.exists())
+            self.assertFalse(output.with_suffix('.szs.manifest.json').exists())
+        self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
+
 
 class ProjectGraphValidationTests(unittest.TestCase):
     def test_route_only_disconnect_blocks_project_export(self):
@@ -252,6 +277,28 @@ class ProjectGraphValidationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'no directed route-segment path'):
                 project.export(output)
             self.assertFalse(output.exists())
+
+    def test_external_route_endpoint_is_not_required_in_local_project_bones(self):
+        point_rows = [
+            ['0', 'W101', '', '', '', '', '', '', ''],
+            ['1', 'W102', '', '', '', '', '', '', ''],
+        ]
+        project = object.__new__(WorldProject)
+        project.camera_edits = {}
+        project.bone_renames = []
+        project.references = {'W101', 'W102', 'RW101W201'}
+        project.skeletons = SimpleNamespace(models={}, bones=set(project.references))
+        project.points = SimpleNamespace(
+            rows=[row[:] for row in point_rows],
+            initial=[row[:] for row in point_rows],
+        )
+        project.routes = SimpleNamespace(
+            rows=[['RW101W201', 'road', '']],
+            initial=[],
+        )
+        project.point_name = 'pointW1.csv'
+
+        self.assertEqual(project.validate(), [])
 
 
 if __name__ == '__main__':

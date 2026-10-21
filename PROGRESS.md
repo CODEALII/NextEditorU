@@ -600,3 +600,19 @@ camera behavior and a fully playable custom world remain open.
   covered by generated-JavaScript and data tests, but this UV milestone has no
   fresh browser screenshot. Cemu route movement and terrain appearance remain
   unverified.
+
+## 2026-10-21 — Cross-world route checks and export rollback
+
+- Corrected local graph validation to accept route segments with remote-world
+  endpoints while continuing to require current-world endpoint bones. Cross-
+  world segments remain excluded from local reachability. Regression tests
+  reproduced the prior false rejection in both the pure validator and project
+  validation before the fix; 16 focused graph/project tests now pass.
+- Export now removes archive and companion files it created if a later
+  companion or manifest write fails. A fault-injection test verifies an
+  interrupted manifest write leaves no partial archive behind.
+- Updated README's viewer payload figure to the current generated W1 page size:
+  22,034,943 bytes (21.01 MiB). This is a file-size measurement, not a load
+  performance claim.
+- Full suite: **184 tests passed in 129.793 seconds**. `compileall`,
+  `git diff --check`, and the W101 → W102/W103 reachability command passed.

@@ -163,6 +163,9 @@ def validate_native_world(
         name_changed = _field_changed(row, initial_routes, index, 0)
         if name_changed and known_references is not None:
             for endpoint in (name[1:5], name[5:9]):
+                if (world_prefix and endpoint.startswith('W') and
+                        not endpoint.startswith(world_prefix)):
+                    continue
                 if endpoint not in known_references:
                     issues.append(f"{name}: missing endpoint model reference {endpoint}")
 
