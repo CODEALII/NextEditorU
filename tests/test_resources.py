@@ -3,6 +3,7 @@ import io
 from pathlib import Path
 import struct
 import tempfile
+from types import SimpleNamespace
 import unittest
 from worldstudio.archive import Archive, compress, decompress
 from worldstudio.project import WorldProject, Table, sha
@@ -109,6 +110,33 @@ class LocalIntegrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             p.export(Path(tempfile.gettempdir()) / 'never-written.szs')
 
+    def test_real_world_route_only_disconnect_blocks_export(self):
+        from worldstudio.graph_validation import validate_native_world
+
+        p = WorldProject.open(DEFAULT_SOURCE)
+        world_prefix = 'W' + p.point_name.split('pointW', 1)[1][0]
+        disconnected = None
+        for index, route in enumerate(p.routes.rows):
+            candidate = p.routes.rows[:index] + p.routes.rows[index + 1:]
+            issues = validate_native_world(
+                p.points.rows, candidate, known_references=p.references,
+                initial_points=p.points.initial, initial_routes=p.routes.initial,
+                world_prefix=world_prefix,
+            )
+            issue = next((item for item in issues
+                          if 'no directed route-segment path' in item), None)
+            if issue:
+                disconnected = candidate, issue
+                break
+        self.assertIsNotNone(disconnected, 'expected a stock route to carry a reachable destination')
+        p.routes.rows = disconnected[0]
+        self.assertIn(disconnected[1], p.validate())
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'disconnected.szs'
+            with self.assertRaisesRegex(ValueError, 'no directed route-segment path'):
+                p.export(output)
+            self.assertFalse(output.exists())
+
     def test_game_tree_protected_for_projects_and_exports(self):
         p = WorldProject.open(DEFAULT_SOURCE)
         with self.assertRaises(ValueError):
@@ -136,6 +164,40 @@ class LocalIntegrationTests(unittest.TestCase):
             self.assertIn(['RK02hW103', '坂', ''], Table(a.read(p.route_name)).rows)
             self.assertEqual(s.unique('W101').index, p.skeletons.unique('W101').index)
         self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
+
+
+class ProjectGraphValidationTests(unittest.TestCase):
+    def test_route_only_disconnect_blocks_project_export(self):
+        point_rows = [
+            ['0', 'W101', '', 'W102', 'RW101W102', '', '', '', ''],
+            ['1', 'W102', '', 'W103', 'RW102W103', '', '', '', ''],
+            ['2', 'W103', '', '', '', '', '', '', ''],
+        ]
+        route_rows = [['RW101W102', 'road', ''], ['RW102W103', 'road', '']]
+        project = object.__new__(WorldProject)
+        project.camera_edits = {}
+        project.bone_renames = []
+        project.references = {'W101', 'W102', 'W103', *[row[0] for row in route_rows]}
+        project.skeletons = SimpleNamespace(
+            models={}, bones=set(project.references),
+        )
+        project.points = SimpleNamespace(
+            rows=[row[:] for row in point_rows],
+            initial=[row[:] for row in point_rows],
+        )
+        project.routes = SimpleNamespace(
+            rows=[route_rows[0][:]],
+            initial=[row[:] for row in route_rows],
+        )
+        project.point_name = 'pointW1.csv'
+
+        issue = 'W102: no directed route-segment path to W103'
+        self.assertIn(issue, project.validate())
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'disconnected.szs'
+            with self.assertRaisesRegex(ValueError, 'no directed route-segment path'):
+                project.export(output)
+            self.assertFalse(output.exists())
 
 
 if __name__ == '__main__':

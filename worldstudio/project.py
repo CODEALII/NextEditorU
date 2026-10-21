@@ -234,6 +234,17 @@ class WorldProject:
                 for endpoint in (r[0][1:5], r[0][5:9]):
                     if endpoint not in self.skeletons.bones:
                         errors.append(f'{r[0]}: missing endpoint bone {endpoint}')
+        world = re.search(r'pointW([1-9])', self.point_name)
+        if world:
+            from .graph_validation import validate_native_world
+            errors.extend(validate_native_world(
+                self.points.rows,
+                self.routes.rows,
+                known_references=references,
+                initial_points=self.points.initial,
+                initial_routes=self.routes.initial,
+                world_prefix=f'W{world[1]}',
+            ))
         return sorted(set(errors))
 
     def save(self, path):

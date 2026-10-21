@@ -15,6 +15,7 @@ the title prompt. A working game input source is still needed before route QA.
 
 - Implemented: 42 rigid static shapes, 70,193 vertices, 106,736 triangles, route overlays, shape filtering, visibility toggles, and 17 shared BC1/BC3 albedos on 36 UV meshes from the local W1 BFRES.
 - Implemented: WebGL context, shader/program and mesh-initialization errors show a high-contrast overlay.
+- Implemented: perspective depth planes follow the model bounding radius and camera distance, with a safe near-plane floor while zoomed inside the scene bounds.
 - Next: test user-browser hardware acceleration and interaction, then add material and texture inspectors, selectable meshes, wireframe/normals overlays, and camera/light controls.
 - Research BC4/BC5 data as normal or mask textures before assigning it to color output. Add UV transforms, transparent material modes, baked light maps, and additional GX2 tile layouts only with local references and fixed regression vectors.
 - Broaden geometry parsing to multiple meshes, more vertex encodings, hierarchy transforms, skinning, and other BFRES variants. The current static geometry subset must reject unsupported layouts clearly.
@@ -29,7 +30,7 @@ the title prompt. A working game input source is still needed before route QA.
 
 ## Topology, events, and camera
 
-- Implemented: changed same-world destinations require a directed route-segment chain when complete local baseline inventories are available; partial inventories and cross-world links are skipped.
+- Implemented: project, editor, and export validation require a directed segment chain for newly added same-world destinations. Route edits recheck baseline-connected destinations and block an export if an edit disconnects one; pre-existing gaps and cross-world links are not treated as new failures.
 - Extend graph validation only as each native reference is identified: level destinations, event dependencies, and progression conditions.
 - Support route creation and node placement after safe bone naming, point indexes, and engine/script references are understood. Preserve unknown data and block unresolved exports.
 - Improve camera offset editing with a clear table inspector, then map each bank and transition to in-game behavior.

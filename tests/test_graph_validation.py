@@ -65,7 +65,51 @@ class NativeGraphValidationTests(unittest.TestCase):
                 )
                 self.assertIn("W101: no directed route-segment path to W102", issues)
 
-    def test_skips_topology_check_for_partial_baseline_and_cross_world_edges(self):
+    def test_route_edge_removal_rechecks_unchanged_destinations(self):
+        points = [point(0, "W101", "W102"), point(1, "W102", "W103"),
+                  point(2, "W103")]
+        routes = [["RW101W102", "road", ""], ["RW102W103", "road", ""]]
+        edited_routes = routes[:1]
+        issues = validate_native_world(
+            points,
+            edited_routes,
+            known_references={"W101", "W102", "W103"},
+            initial_points=points,
+            initial_routes=routes,
+            world_prefix="W1",
+        )
+        self.assertIn("W102: no directed route-segment path to W103", issues)
+
+    def test_route_display_column_change_does_not_change_connectivity(self):
+        points = [point(0, "W101", "W102"), point(1, "W102")]
+        initial_routes = [["RW101W102", "road", ""]]
+        edited_routes = [["RW101W102", "stone", "reserved"]]
+        issues = validate_native_world(
+            points,
+            edited_routes,
+            known_references={"W101", "W102"},
+            initial_points=points,
+            initial_routes=initial_routes,
+            world_prefix="W1",
+        )
+        self.assertEqual(issues, [])
+
+    def test_cross_world_route_segments_cannot_bridge_a_local_chain(self):
+        initial_points = [point(0, "W101"), point(1, "W102")]
+        points = [row[:] for row in initial_points]
+        points[0][3] = "W102"
+        routes = [["RW101W201", "road", ""], ["RW201W102", "road", ""]]
+        issues = validate_native_world(
+            points,
+            routes,
+            known_references={"W101", "W102"},
+            initial_points=initial_points,
+            initial_routes=routes,
+            world_prefix="W1",
+        )
+        self.assertIn("W101: no directed route-segment path to W102", issues)
+
+    def test_preserves_old_route_gaps_and_skips_cross_world_destinations(self):
         partial_baseline = [point(0, "W101", "W102"), point(1, "W102"),
                             point(2, "W103")]
         edited_partial = [row[:] for row in partial_baseline]

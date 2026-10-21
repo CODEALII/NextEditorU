@@ -1,7 +1,9 @@
 import base64
 import json
 import re
+import shutil
 import struct
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -49,6 +51,26 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("if(!gl)showError('WebGL is unavailable in this browser.", script)
         self.assertIn("catch(e){showError('Could not initialize the WebGL renderer:", script)
         self.assertIn("#error{display:none;position:absolute;inset:0;z-index:4", page)
+
+    def test_depth_planes_follow_scene_radius_and_remain_safe_when_zoomed_in(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise viewer camera math")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
+        match = re.search(r"function cameraPlanes\(distance,radius\)\{[^}]*\}", script)
+        self.assertIsNotNone(match)
+        self.assertIn("cameraPlanes(distance,sceneRadius)", script)
+        probe = match.group(0) + "\nconsole.log(JSON.stringify([cameraPlanes(2.65,1),cameraPlanes(16,1),cameraPlanes(.2,1),cameraPlanes(0,0)]))"
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        fit, zoomed_out, close, invalid = json.loads(result.stdout)
+        for near, far in (fit, zoomed_out, close, invalid):
+            self.assertTrue(0 < near < far)
+            self.assertTrue(all(map(lambda value: value == value and abs(value) != float("inf"), (near, far))))
+        self.assertLess(fit[1] / fit[0], 3)
+        self.assertLess(zoomed_out[1] / zoomed_out[0], 1.2)
+        self.assertLess(fit[0], 2.65 - 1)
+        self.assertGreater(zoomed_out[1], 16 + 1)
 
     def test_viewer_accepts_embedded_base_texture_without_remote_resources(self):
         page = build_document({"shapes": [{"name": "grass", "uvs": [[0, 0]],

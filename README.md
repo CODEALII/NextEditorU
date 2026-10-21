@@ -18,7 +18,7 @@ Progress details and dated findings: [PROGRESS.md](PROGRESS.md) · [Runtime test
 - Open an offline WebGL viewer for 42 supported static shapes from the local World 1 BFRES (70,193 vertices and 106,736 triangles), with route overlays and per-shape visibility controls.
 - Decode shared BC1/BC3 base-color textures for all 36 local W1 meshes with supported UVs, including alpha cutouts. Other texture formats and material effects remain approximations.
 - Pack scene geometry into compact typed buffers for the viewer; its generated page was about 8.1 MB for the supplied W1 model and decoded textures.
-- Run directed reachability checks for explicitly selected entry points and required locations with `validate-graph`.
+- Validate directed reachability with `validate-graph`, and block project exports when a new local destination lacks a route chain or an edited route disconnects a destination that was connected in the baseline.
 - Read and edit discovered camera-offset tables; analyze and round-trip event data offline.
 - Use the standalone Tk editor to inspect the map, edit supported fields, save project files, and undo or redo up to 31 recent edits with Ctrl+Z / Ctrl+Y.
 - Run the local automated suite against synthetic fixtures and the user-provided local dump.

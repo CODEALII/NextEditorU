@@ -224,3 +224,38 @@ camera behavior and a fully playable custom world remain open.
 - The full offline suite passed **102 tests in 99.180 seconds**; `compileall`
   passed. A fresh native editor window shows the controls disabled until the
   first edit, and the graph labels remain readable. Gameplay status is unchanged.
+
+## 2026-10-21 - Route connectivity guards project export
+
+- Connected native route validation to `WorldProject.validate()`, which is used
+  by the editor and export. Adding a same-world destination without a directed
+  segment chain is rejected; changing route edges rechecks baseline-connected
+  destinations and refuses an export if one is disconnected.
+- Kept pre-existing path gaps and cross-world endpoints out of new route errors.
+  The local W1 inventory includes two route endpoints from other worlds that do
+  not appear in this archive's BFRES, so the check only requires locally
+  resolvable endpoints and compares each existing destination against its own
+  baseline path.
+- On the local W1 archive, the stock project validates cleanly and removing any
+  of 84 route rows was detected to break at least one previously connected
+  destination. A regression test removes a discovered segment and verifies
+  project validation and export both reject it before writing output. A
+  synthetic three-node test covers the same guard without game files.
+- In-game route movement is still failed/unverified; this is a static export
+  safety check and does not establish runtime traversal or level launching.
+- Regression: **106 tests passed in 94.611 seconds**. `compileall`,
+  `git diff --check`, and local W1 `validate-graph --entry W101 --require
+  W102 --require W103` all passed.
+
+## 2026-10-21 - Radius-aware WebGL depth planes
+
+- The preview now derives its perspective near/far planes from the model radius
+  and current camera distance. This narrows the depth range at fit and zoom-out
+  while retaining a positive near floor when the camera moves inside the model
+  bounds. Missing, non-finite or non-positive radius data uses a safe default.
+- A Node-backed regression checks fit, maximum zoom-out, close-up and invalid
+  camera inputs. The generated page for the local W1 model passes `node --check`
+  with all 42 shapes and 17 textures (8,078,351 HTML characters).
+- Final local regression for these changes: **108 tests passed in 93.883
+  seconds**. `compileall`, the W1 `validate-graph` command and `git diff --check`
+  passed. Cemu rendering and user-browser GPU behavior remain unverified.
