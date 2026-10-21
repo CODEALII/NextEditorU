@@ -460,6 +460,16 @@ class WorldStudio(ttk.Frame):
         panel.bind("<Configure>", lambda event: sidebar_canvas.configure(scrollregion=sidebar_canvas.bbox("all")))
         sidebar_canvas.bind("<Configure>", lambda event: sidebar_canvas.itemconfigure(panel_window, width=event.width))
         ttk.Label(panel, text="Nodes and routes", font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        filter_row = ttk.Frame(panel)
+        filter_row.pack(fill="x", pady=(8, 2))
+        ttk.Label(filter_row, text="Filter IDs").pack(side="left", padx=(0, 8))
+        self.tree_filter_var = tk.StringVar(master=self.master, value="")
+        self.tree_filter_entry = ttk.Entry(filter_row, textvariable=self.tree_filter_var)
+        self.tree_filter_entry.pack(side="left", fill="x", expand=True)
+        self.tree_filter_entry.bind("<KeyRelease>", lambda event: self.refresh())
+        ttk.Button(filter_row, text="×", width=3, command=self.clear_tree_filter).pack(side="left", padx=(4, 0))
+        self.tree_filter_status = ttk.Label(panel, text="", foreground="#91a8ba")
+        self.tree_filter_status.pack(anchor="w", pady=(0, 4))
         tree_frame = ttk.Frame(panel)
         tree_frame.pack(fill="x", pady=8)
         self.tree = ttk.Treeview(tree_frame, columns=("type",), show="tree headings", height=12)
@@ -491,6 +501,34 @@ class WorldStudio(ttk.Frame):
         self.canvas.bind("<B1-Motion>", self.orbit)
         self.canvas.bind("<ButtonRelease-1>", self.release)
         self.canvas.bind("<MouseWheel>", self.zoom)
+
+    def clear_tree_filter(self):
+        self.tree_filter_var.set("")
+        self.refresh()
+
+    def _tree_filter_matches(self, name, kind):
+        query = self.tree_filter_var.get().strip().casefold()
+        return not query or query in str(name).casefold() or query in str(kind).casefold()
+
+    def _finish_tree_refresh(self, selection, shown, total):
+        if selection and self.tree.exists(selection[0]):
+            self.tree.selection_set(selection[0])
+            self.tree.see(selection[0])
+        else:
+            current_selection = self.tree.selection()
+            if current_selection:
+                self.tree.selection_remove(*current_selection)
+            self.selected = None
+            if hasattr(self, "native_selection"):
+                self.native_selection = None
+            if hasattr(self, "position_properties"):
+                self.position_properties = {}
+            for child in self.form.winfo_children():
+                child.destroy()
+            self.properties = {}
+        query = self.tree_filter_var.get().strip()
+        self.tree_filter_status.configure(
+            text=f"Showing {shown:,} of {total:,} items" if query else f"{total:,} items")
 
     def _capture_edit_state(self):
         if hasattr(self, "native"):
@@ -1062,10 +1100,17 @@ class WorldStudio(ttk.Frame):
         self.canvas.create_text(15, 15, anchor="nw", fill="#bdd0dd", text="EDITOR PREVIEW / perspective projection", tags=("viewport_caption",))
 
     def refresh(self):
+        selection = self.tree.selection()
         self.tree.delete(*self.tree.get_children())
+        shown = total = 0
         for kind, key in [("node", "nodes"), ("route", "routes")]:
             for index, item in enumerate(self.project.get(key, [])):
+                total += 1
+                if not self._tree_filter_matches(item["id"], kind):
+                    continue
                 self.tree.insert("", "end", iid=f"{kind}:{index}", text=item["id"], values=(kind,))
+                shown += 1
+        self._finish_tree_refresh(selection, shown, total)
         self.draw()
 
     def select_tree(self, event=None):
@@ -1506,18 +1551,25 @@ class NativeStudio(WorldStudio):
         self.project = self.view_project()
         selection = self.tree.selection()
         self.tree.delete(*self.tree.get_children())
+        shown = total = 0
         for kind, rows in [("point", self.native.points.rows), ("segment", self.native.routes.rows)]:
             for index, row in enumerate(rows):
                 name = row[1] if kind == "point" and len(row) > 1 else row[0]
+                total += 1
+                if not self._tree_filter_matches(name, kind):
+                    continue
                 self.tree.insert("", "end", iid=f"{kind}:{index}", text=name, values=(kind,))
+                shown += 1
         point_names = {row[1] for row in self.native.points.rows if len(row) > 1}
         for bone in self.native.skeletons.models[self.native.path_model]:
             if bone.name in self.native.positions and bone.name not in point_names and bone.name.startswith(("K", "R", "F")):
+                total += 1
+                if not self._tree_filter_matches(bone.name, "bone XYZ"):
+                    continue
                 self.tree.insert("", "end", iid=f"bone:{bone.name}", text=bone.name, values=("bone XYZ",))
-        if selection and self.tree.exists(selection[0]):
-            self.tree.selection_set(selection[0])
-            self.tree.see(selection[0])
-        else:
+                shown += 1
+        self._finish_tree_refresh(selection, shown, total)
+        if not selection or not self.tree.selection():
             self.tree.yview_moveto(0)
         self.draw()
 

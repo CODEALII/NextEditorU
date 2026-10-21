@@ -220,6 +220,39 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertIn("layout", nodes["Fbad"]["level"])
         self.assertEqual(sum(route.get("style") == "geometry" for route in self.app.project["routes"]), 1)
 
+    def test_native_tree_filter_searches_ids_without_mutating_resources(self):
+        points_before = [row[:] for row in self.native.points.rows]
+        routes_before = [row[:] for row in self.native.routes.rows]
+
+        self.app.tree_filter_var.set("w102")
+        self.app.refresh()
+
+        self.assertEqual(self.app.tree.get_children(), ("point:1",))
+        self.assertEqual(self.app.tree_filter_status.cget("text"), "Showing 1 of 7 items")
+        self.assertEqual(self.native.points.rows, points_before)
+        self.assertEqual(self.native.routes.rows, routes_before)
+
+        self.app.clear_tree_filter()
+        self.assertEqual(len(self.app.tree.get_children()), 7)
+        self.assertEqual(self.app.tree_filter_status.cget("text"), "7 items")
+
+    def test_native_tree_filter_clears_properties_when_selected_item_is_hidden(self):
+        self.app.tree.selection_set("bone:K001")
+        self.root.update()
+        self.assertEqual(self.app.native_selection, ("bone", "K001"))
+        self.assertTrue(self.app.form.winfo_children())
+
+        self.app.tree_filter_var.set("W101")
+        self.app.refresh()
+        self.root.update()
+
+        self.assertEqual(self.app.tree.get_children(), ("point:0",))
+        self.assertEqual(self.app.tree.selection(), ())
+        self.assertIsNone(self.app.selected)
+        self.assertIsNone(self.app.native_selection)
+        self.assertEqual(self.app.position_properties, {})
+        self.assertEqual(self.app.form.winfo_children(), [])
+
     def test_bone_edit_does_not_touch_csv_and_selection_survives(self):
         before = [row[:] for row in self.native.points.rows]
         segments = [row[:] for row in self.native.routes.rows]

@@ -78,6 +78,9 @@ compared.
   bounds, resizing and invalid coordinates.
 - Implemented: native graph labels route around point markers and each other, with
   contrast backing plates; checked in a fresh local editor window.
+- Implemented: live case-insensitive filtering across native point IDs, route
+  segments and supported BFRES bone XYZ entries; clearing a hidden selection also
+  clears its edit form and native selection state.
 - Implemented: bounded Ctrl+Z/Ctrl+Y history covers native point/route rows,
   BFRES position drafts, camera vectors and terrain imports; project switches
   reset the history and undo marks the project dirty.

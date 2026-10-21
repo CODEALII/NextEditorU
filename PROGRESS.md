@@ -880,3 +880,13 @@ camera behavior and a fully playable custom world remain open.
   coordinates. The full suite passed (**223 tests in 172.707 seconds**), with
   `compileall` and `git diff --check`.
 - This changes editor camera framing only; exported resource data is unchanged.
+
+## 2026-10-21 — Search the native editor tree
+
+- Added a live, case-insensitive filter for point IDs, route segments and
+  supported BFRES bone XYZ entries, with visible match counts and a clear action.
+- Filtering away the selected item now clears its property form and native
+  selection/position state, so hidden stale edits cannot be applied.
+- Tk editor smoke tests cover matching, clearing, unchanged source rows and
+  hidden-selection cleanup. The full suite passed (**225 tests in 172.973
+  seconds**), with `compileall` and `git diff --check`.
