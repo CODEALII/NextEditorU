@@ -50,8 +50,10 @@
   western plains. The target was later found to cover only a narrow strip of
   the model, so that run is not a valid full-island visual test. Mesh rendering,
   materials and culling are **not verified**.
-- A corrected export now targets the main grass shape and preserves the original
-  baked-light UV channel by nearest-surface projection. Its isolated test pack
+- A corrected export now targets the main grass shape and projects imported
+  vertices onto the closest non-degenerate source triangle in XZ, interpolating
+  the original baked-light UVs barycentrically. Ambiguous overlapping projections
+  and degenerate topology fall back to the nearest source vertex. Its isolated test pack
   is prepared at `build/cemu-island-mainlight`; this build has **not yet been
   visually compared** against the original map. The projected baked-light UV
   interpretation remains an implementation hypothesis pending that test.

@@ -1198,3 +1198,21 @@ camera behavior and a fully playable custom world remain open.
   including endpoint filtering, exact unchanged-field preservation, add/reorder,
   editor apply, and undo. The full suite passed **281 tests in 256.964 seconds**.
   Compile and whitespace checks are recorded after the final documentation pass.
+
+## 2026-10-21 — Triangle-based baked-light UV transfer
+
+- Replaced nearest-vertex `_u1` sampling with closest-surface projection onto
+  non-degenerate source triangles in XZ and barycentric UV interpolation. This
+  avoids snapping imported terrain UVs to individual source vertices.
+- Ambiguous overlapping projections and degenerate source topology fall back
+  to the bounded nearest-vertex tree. Invalid source index ranges, mismatched
+  position/UV arrays, and non-finite coordinates fail with explicit errors.
+- The export report records the projection method, maximum distance to the
+  projected surface, fallback count, and the existing configurable 128-unit
+  review threshold. This remains structural evidence; Cemu terrain appearance
+  and baked-light shader interpretation are still unverified.
+- Verification: **287 tests passed in 254.168 seconds**; the local
+  `test_terrain_project_roundtrip_export_and_reopen` passed separately in
+  19.988 seconds. Mesh tests (33), `compileall`, and `git diff --check` passed.
+- Next: inspect local `_c0` vertex-color layouts and add a clearly labeled
+  diagnostic preview if its format and viewer data path can be verified.

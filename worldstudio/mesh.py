@@ -271,6 +271,163 @@ def _nearest_uvs(points, source_points, source_uvs):
     return result, distances
 
 
+def _project_xz_triangle(point, triangle):
+    """Return closest-point distance and barycentric weights in the XZ plane."""
+    a, b, c = triangle
+    ax, az = a[0], a[2]
+    bx, bz = b[0], b[2]
+    cx, cz = c[0], c[2]
+    abx, abz = bx - ax, bz - az
+    acx, acz = cx - ax, cz - az
+    area = abx * acz - abz * acx
+    scale = max(abx * abx + abz * abz, acx * acx + acz * acz,
+                (cx - bx) ** 2 + (cz - bz) ** 2, 1.)
+    if abs(area) <= scale * 1e-12:
+        return None
+
+    px, pz = point[0], point[2]
+    apx, apz = px - ax, pz - az
+    weight_b = (apx * acz - apz * acx) / area
+    weight_c = (abx * apz - abz * apx) / area
+    weight_a = 1. - weight_b - weight_c
+    epsilon = 1e-10
+    if min(weight_a, weight_b, weight_c) >= -epsilon:
+        weights = [max(0., weight) for weight in (weight_a, weight_b, weight_c)]
+        total = sum(weights)
+        return 0., tuple(weight / total for weight in weights)
+
+    best_distance = float('inf')
+    best_weights = None
+    for first, second, first_weight, second_weight in (
+            (a, b, 0, 1), (b, c, 1, 2), (c, a, 2, 0)):
+        dx, dz = second[0] - first[0], second[2] - first[2]
+        length_squared = dx * dx + dz * dz
+        if length_squared <= scale * 1e-12:
+            continue
+        amount = max(0., min(1., ((px - first[0]) * dx +
+                                  (pz - first[2]) * dz) / length_squared))
+        closest_x = first[0] + amount * dx
+        closest_z = first[2] + amount * dz
+        distance = (px - closest_x) ** 2 + (pz - closest_z) ** 2
+        if distance < best_distance:
+            weights = [0., 0., 0.]
+            weights[first_weight] = 1. - amount
+            weights[second_weight] = amount
+            best_distance, best_weights = distance, tuple(weights)
+    if best_weights is None:
+        return None
+    return best_distance, best_weights
+
+
+def _nearest_triangle_uvs(points, source_points, source_uvs, source_indices):
+    """Transfer baked-light UVs over the closest projected source triangles.
+
+    Ambiguous overlapping projections and points with no non-degenerate source
+    triangle fall back to the exact nearest-vertex projection.
+    """
+    if len(source_points) != len(source_uvs):
+        raise ValueError('Original shape position and baked-light UV counts differ')
+    for label, values, dimensions in (
+            ('replacement point', points, 3),
+            ('source position', source_points, 3),
+            ('source baked-light UV', source_uvs, 2)):
+        for index, value in enumerate(values):
+            if len(value) < dimensions or not all(
+                    math.isfinite(component) for component in value[:dimensions]):
+                raise ValueError(f'{label} {index} contains invalid coordinates')
+    triangles = []
+    if len(source_indices) % 3:
+        raise ValueError('Original shape triangle index count is not divisible by three')
+    for offset in range(0, len(source_indices), 3):
+        indices = source_indices[offset:offset + 3]
+        if any(type(index) is not int or index < 0 or index >= len(source_points)
+               for index in indices):
+            raise ValueError('Original shape has an out-of-range triangle index')
+        triangle = tuple(source_points[index] for index in indices)
+        projected = _project_xz_triangle(triangle[0], triangle)
+        if projected is None:
+            continue
+        min_x = min(point[0] for point in triangle)
+        max_x = max(point[0] for point in triangle)
+        min_z = min(point[2] for point in triangle)
+        max_z = max(point[2] for point in triangle)
+        triangles.append((indices, triangle,
+                          tuple(source_uvs[index] for index in indices),
+                          min_x, max_x, min_z, max_z,
+                          (min_x + max_x) * .5, (min_z + max_z) * .5))
+
+    if not triangles:
+        projected, distances = _nearest_uvs(points, source_points, source_uvs)
+        return projected, distances, len(points)
+
+    def build_tree(items):
+        bounds = (min(item[3] for item in items), max(item[4] for item in items),
+                  min(item[5] for item in items), max(item[6] for item in items))
+        if len(items) <= 8:
+            return bounds, None, None, items
+        axis = 0 if bounds[1] - bounds[0] >= bounds[3] - bounds[2] else 1
+        items.sort(key=lambda item: item[7 + axis])
+        middle = len(items) // 2
+        return (bounds, build_tree(items[:middle]), build_tree(items[middle:]), None)
+
+    tree = build_tree(triangles)
+
+    def bounds_distance_squared(point, bounds):
+        dx = max(bounds[0] - point[0], 0., point[0] - bounds[1])
+        dz = max(bounds[2] - point[2], 0., point[2] - bounds[3])
+        return dx * dx + dz * dz
+
+    results = [None] * len(points)
+    distances = [None] * len(points)
+    fallback_points = []
+    fallback_indices = []
+    for point_index, point in enumerate(points):
+        best_distance = float('inf')
+        best_uv = None
+        ambiguous = False
+
+        def visit(node):
+            nonlocal best_distance, best_uv, ambiguous
+            if node is None or bounds_distance_squared(point, node[0]) > best_distance:
+                return
+            if node[3] is not None:
+                for item in node[3]:
+                    projection = _project_xz_triangle(point, item[1])
+                    if projection is None:
+                        continue
+                    distance, weights = projection
+                    uv = tuple(sum(weights[index] * item[2][index][axis]
+                                   for index in range(3)) for axis in range(2))
+                    tolerance = max(1e-12, best_distance * 1e-12)
+                    if best_uv is None or distance < best_distance - tolerance:
+                        best_distance, best_uv, ambiguous = distance, uv, False
+                    elif abs(distance - best_distance) <= tolerance and best_uv is not None:
+                        if max(abs(uv[axis] - best_uv[axis]) for axis in range(2)) > 1e-6:
+                            ambiguous = True
+                return
+            children = [node[1], node[2]]
+            children.sort(key=lambda child: bounds_distance_squared(point, child[0]))
+            for child in children:
+                if bounds_distance_squared(point, child[0]) <= best_distance:
+                    visit(child)
+
+        visit(tree)
+        if best_uv is None or ambiguous:
+            fallback_indices.append(point_index)
+            fallback_points.append(point)
+            continue
+        results[point_index] = best_uv
+        distances[point_index] = math.sqrt(max(0., best_distance))
+
+    if fallback_points:
+        fallback_uvs, fallback_distances = _nearest_uvs(
+            fallback_points, source_points, source_uvs)
+        for index, uv, distance in zip(fallback_indices, fallback_uvs, fallback_distances):
+            results[index] = uv
+            distances[index] = distance
+    return results, distances, len(fallback_indices)
+
+
 def _xz_distance_squared(point, source):
     return (point[0] - source[0]) ** 2 + (point[2] - source[2]) ** 2
 
@@ -612,14 +769,16 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
                      for i in range(capacity)]
     source_uvs = [tuple(value/65535. for value in struct.unpack_from(
         '>2H', data, start+i*stride+attrs['_u1'][0])) for i in range(capacity)]
-    lightmap_uvs, lightmap_projection_distances = _nearest_uvs(vertices, source_points, source_uvs)
+    source_indices = struct.unpack_from('>' + str(index_capacity) + 'H', data, index_start)
+    lightmap_uvs, lightmap_projection_distances, lightmap_uv_fallback_count = (
+        _nearest_triangle_uvs(vertices, source_points, source_uvs, source_indices))
     max_lightmap_projection_distance = max(lightmap_projection_distances, default=0.0)
     lightmap_projection_warning = None
     if max_lightmap_projection_distance > lightmap_projection_warning_distance:
         lightmap_projection_warning = (
             f'maximum XZ distance {max_lightmap_projection_distance:.3f} exceeds '
             f'the {lightmap_projection_warning_distance:g}-unit review threshold; '
-            'baked-light UVs use nearest source vertices and need visual review')
+            'baked-light UV projection needs visual review')
     sub = r.ptr(mesh+16)
     count = r.u16(mesh+12)
     r.bounds(sub, count*8)
@@ -665,10 +824,11 @@ def replace_rigid_mesh(data, vertices, faces, model=DEFAULT_MODEL, shape=DEFAULT
     return bytes(out), {'model':model,'shape':shape,'vertices':len(vertices),
         'triangles':len(indices)//3,'vertex_capacity':capacity,'index_capacity':index_capacity,
         'material_reused':True,'material':material_name,
-        'uvs':'OBJ vt or generated planar XZ; baked channel projected from original XZ mesh',
+        'uvs':'OBJ vt or generated planar XZ; baked channel interpolated from the original XZ mesh',
         'baked_uv_projection': {
-            'method': 'nearest source vertex in XZ',
+            'method': 'closest non-degenerate source triangle in XZ with barycentric UV interpolation; nearest-vertex fallback for ambiguous or degenerate projections',
             'max_xz_distance': max_lightmap_projection_distance,
+            'nearest_vertex_fallback_count': lightmap_uv_fallback_count,
             'warning_threshold': lightmap_projection_warning_distance,
             'warning': lightmap_projection_warning,
         },

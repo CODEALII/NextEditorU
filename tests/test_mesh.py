@@ -293,13 +293,115 @@ class MeshTests(unittest.TestCase):
             self.assertAlmostEqual(distance, math.sqrt(expected_distance))
         self.assertLess(distance_checks, len(points) * len(source_points) // 2)
 
+    def test_baked_uvs_interpolate_barycentrically_inside_source_triangle(self):
+        source_points = [(0., 0., 0.), (10., 0., 0.), (0., 0., 10.)]
+        source_uvs = [(0., 0.), (1., 0.), (0., 1.)]
+
+        uvs, distances, fallback_count = mesh._nearest_triangle_uvs(
+            [(2., 0., 3.)], source_points, source_uvs, (0, 1, 2))
+
+        self.assertEqual(fallback_count, 0)
+        self.assertEqual(uvs, [(0.2, 0.3)])
+        self.assertEqual(distances, [0.])
+
+    def test_baked_uvs_project_to_the_closest_triangle_edge(self):
+        source_points = [(0., 0., 0.), (10., 0., 0.), (0., 0., 10.)]
+        source_uvs = [(0., 0.), (1., 0.), (0., 1.)]
+
+        uvs, distances, fallback_count = mesh._nearest_triangle_uvs(
+            [(20., 0., 0.)], source_points, source_uvs, (0, 1, 2))
+
+        self.assertEqual(fallback_count, 0)
+        self.assertEqual(uvs, [(1., 0.)])
+        self.assertEqual(distances, [10.])
+
+    def test_baked_uv_projection_rejects_invalid_source_geometry(self):
+        points = [(0., 0., 0.), (1., 0., 0.), (0., 0., 1.)]
+        uvs = [(0., 0.), (1., 0.), (0., 1.)]
+        with self.assertRaisesRegex(ValueError, 'out-of-range triangle index'):
+            mesh._nearest_triangle_uvs(points[:1], points, uvs, (0, 1, 3))
+        with self.assertRaisesRegex(ValueError, 'counts differ'):
+            mesh._nearest_triangle_uvs(points[:1], points, uvs[:2], (0, 1, 2))
+        invalid_points = [(float('nan'), 0., 0.), *points[1:]]
+        with self.assertRaisesRegex(ValueError, 'invalid coordinates'):
+            mesh._nearest_triangle_uvs(points[:1], invalid_points, uvs, (0, 1, 2))
+
+    def test_baked_uvs_fall_back_for_degenerate_and_ambiguous_projections(self):
+        line_points = [(0., 0., 0.), (1., 0., 0.), (2., 0., 0.)]
+        line_uvs = [(0., 0.), (0.5, 0.5), (1., 1.)]
+        projected, distances, fallback_count = mesh._nearest_triangle_uvs(
+            [(0.9, 0., 0.)], line_points, line_uvs, (0, 1, 2))
+        self.assertEqual(fallback_count, 1)
+        self.assertEqual(projected, [(0.5, 0.5)])
+        self.assertAlmostEqual(distances[0], 0.1)
+
+        stacked_points = [(0., 0., 0.), (10., 0., 0.), (0., 0., 10.),
+                          (0., 5., 0.), (10., 5., 0.), (0., 5., 10.)]
+        stacked_uvs = [(0., 0.), (1., 0.), (0., 1.),
+                       (0.5, 0.5), (0.5, 1.), (1., 0.5)]
+        projected, distances, fallback_count = mesh._nearest_triangle_uvs(
+            [(2., 0., 3.)], stacked_points, stacked_uvs,
+            (0, 1, 2, 3, 4, 5))
+        self.assertEqual(fallback_count, 1)
+        self.assertEqual(projected, [(0., 0.)])
+        self.assertAlmostEqual(distances[0], math.sqrt(13.))
+
+    def test_baked_uv_triangle_bvh_limits_projection_checks(self):
+        side = 30
+        source_points = [(float(x), 0., float(z))
+                         for z in range(side + 1) for x in range(side + 1)]
+        source_uvs = [(x / side, z / side)
+                      for z in range(side + 1) for x in range(side + 1)]
+        source_indices = []
+        for z in range(side):
+            for x in range(side):
+                lower_left = z * (side + 1) + x
+                lower_right = lower_left + 1
+                upper_left = lower_left + side + 1
+                upper_right = upper_left + 1
+                source_indices.extend((lower_left, lower_right, upper_right,
+                                       lower_left, upper_right, upper_left))
+        points = [(0.37 + index % 25, 0., 0.61 + (index * 7) % 25)
+                  for index in range(80)]
+        calls = 0
+        original_project = mesh._project_xz_triangle
+
+        def counted_project(point, triangle):
+            nonlocal calls
+            calls += 1
+            return original_project(point, triangle)
+
+        with patch.object(mesh, '_project_xz_triangle', counted_project):
+            projected, distances, fallback_count = mesh._nearest_triangle_uvs(
+                points, source_points, source_uvs, source_indices)
+
+        self.assertEqual(len(projected), len(points))
+        self.assertEqual(len(distances), len(points))
+        self.assertEqual(fallback_count, 0)
+        self.assertLess(calls, len(points) * (len(source_indices) // 3) // 5)
+
+    def test_rigid_replacement_bakes_interpolated_u1_values(self):
+        data = bytearray(fixture())
+        for index, uv in enumerate(((0., 0.), (1., 0.), (0., 1.))):
+            struct.pack_into('>2H', data, 0x600 + index * 28 + 24,
+                             *(round(value * 65535) for value in uv))
+        vertices = [(0.5, 0., 0.5), (0.75, 0., 0.25), (0.2, 0., 0.75)]
+
+        exported, report = replace_rigid_mesh(bytes(data), vertices, self.faces)
+
+        self.assertEqual(struct.unpack_from('>2H', exported, 0x600 + 24),
+                         (round(0.25 * 65535), round(0.25 * 65535)))
+        self.assertEqual(report['baked_uv_projection']['method'].split(';')[0],
+                         'closest non-degenerate source triangle in XZ with barycentric UV interpolation')
+        self.assertEqual(report['baked_uv_projection']['nearest_vertex_fallback_count'], 0)
+
     def test_baked_uv_projection_warns_for_distant_geometry_and_accepts_threshold_override(self):
         far_vertices = [(1000., 0., 1000.), (1000., 0., 1002.), (1002., 0., 1000.)]
         _, report = replace_rigid_mesh(fixture(), far_vertices, self.faces)
         projection = report['baked_uv_projection']
         self.assertGreater(projection['max_xz_distance'], 128.)
         self.assertEqual(projection['warning_threshold'], 128.)
-        self.assertIn('nearest source vertices', projection['warning'])
+        self.assertIn('baked-light UV projection', projection['warning'])
 
         _, reviewed = replace_rigid_mesh(fixture(), far_vertices, self.faces,
                                           lightmap_projection_warning_distance=2000.)
