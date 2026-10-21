@@ -31,7 +31,7 @@ The WebGL viewer supports BC1/BC3 base-color maps, BC5 SNORM normal-map channels
 
 ## Current runtime status
 
-An earlier manual Cemu traversal check reported that **Mario does not move**. A later process-specific check of the isolated clean baseline stayed at `Press 2!`: Enter started the opening/demo sequence, and a Z press left the title unchanged. The map was not reached, so route traversal could not be retested and the cause of the earlier movement failure remains unknown. Level launch, unlock progression, save persistence, and camera behavior are not claimed to work. The terrain exporter reports distant baked-light UV projection for review, but the patched terrain's in-game appearance has not been visually confirmed. See [the integration log](docs/INTEGRATION.md).
+An earlier Cemu traversal check reported that **Mario does not move**. A later live observation reached the World 1 map with Mario at W101 in the clean profile; a separate patched-map observation showed the map loading at the tower. Short D taps changed facing without confirming travel from W101 to W102. The route failure therefore remains unresolved: reliable held input has not been demonstrated, and the active patched profile used `chain-quoted`, not the direct-route variant. Level launch, unlock progression, save persistence, and camera behavior are not claimed to work. The terrain exporter reports distant baked-light UV projection for review, but the patched terrain's in-game appearance has not been visually confirmed. See [the integration log](docs/INTEGRATION.md).
 
 ## Get started
 

@@ -1288,3 +1288,24 @@ camera behavior and a fully playable custom world remain open.
   local catalog reports 121 scripts, 993 commands and 276 recognized IDs, and
   `compileall` plus `git diff --check` passed.
 - Next: prioritize Cemu integration testing. The clean profile loads the world map, while the modified-chain profile also loads; route movement and game launches remain unverified. The current Computer Use window API lost foreground process identity, so resume with a stable input path before claiming movement.
+
+
+## 2026-10-21 — Cemu route retest preparation
+
+- Updated runtime status from the live observation: the clean Cemu profile
+  reached World 1 with Mario at W101; an earlier separate patched observation
+  loaded the map at the tower. Short D taps only changed facing, so movement
+  remains unverified. The active patched archive was `chain-quoted`; the direct
+  route variant had not been tested.
+- Regenerated both route variants from the current exporter in new folders and
+  ran `verify-export` on each. The chain archive matches its point-table-only
+  export; the direct archive matches its point, route and BFRES rename export.
+  Both pass static W101-to-W102-to-W103 reachability.
+- Prepared `build/cemu-direct-route-retest-20261021` as an isolated Cemu profile
+  with `World Studio Chain`, CrashFix and the generated GamePad keyboard mapping.
+  It has not been launched, and no traversal result is claimed.
+- The current Computer Use inventory returned no native app windows, so this
+  turn could not focus Cemu or issue the requested title click and sustained
+  WASD input. Resume the controlled in-game comparison when the Cemu window is
+  available; keep the route cause unresolved until baseline and patched input
+  are compared with the same held-key procedure.

@@ -87,8 +87,12 @@
 - The active patched test archive hash is
   `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`,
   matching `build/chain-quoted`; it is not `build/direct-route-v2`. The exact
-  direct-route variant therefore remains untested. The current live window is
-  the separate CrashFix-only baseline, currently at `Press 2!`, not the map.
+  direct-route variant therefore remains untested. A subsequent live UI
+  observation showed the clean CrashFix-only profile at the World 1 map, with
+  Mario at W101; this updates the earlier title-screen-only observation. No
+  sustained movement or arrival at W102 was observed. The latest Computer Use
+  inventory in this session returned no native app windows, so the requested
+  title click and held WASD test could not be issued or observed in this turn.
 
 Earlier attempts displayed black after initial dialogs. They were inconclusive:
 input setup, UI navigation and CSV quoting changed before the successful patched
