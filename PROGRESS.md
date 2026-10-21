@@ -203,3 +203,12 @@ Next: run the patched map with an input source Cemu actually accepts, record the
 stock route as a control, then retest Mario's movement and the corrected terrain
 against the same known Cemu profile. Level start, progression, persistence,
 camera behavior and a fully playable custom world remain open.
+
+## 2026-10-21 - Native graph label readability
+
+- The native graph now places route and point labels around node markers and
+  existing labels, using compact dark backing plates for contrast. This removes
+  the W1 label collisions observed in the prior editor screenshot.
+- Verified visually in a fresh native editor instance with the local `CS_W1.szs`;
+  Python `compileall` and `git diff --check` passed. The change affects editor
+  presentation only and provides no new evidence about game behavior.

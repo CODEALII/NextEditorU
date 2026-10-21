@@ -37,6 +37,8 @@ the title prompt. A working game input source is still needed before route QA.
 
 ## Editor and project workflow
 
+- Implemented: native graph labels route around point markers and each other, with
+  contrast backing plates; checked in a fresh local editor window.
 - Add reliable selection, transform controls, route drawing, undo/redo, and keyboard shortcuts with project-level regression tests.
 - Add recent projects, recoverable sessions, backup rotation, changed-file manifests, and export/reimport comparison.
 - Profile large models and projects before adding background parsing or more caching. Current local W1 preview data takes about 8.1 MB after typed-array packing.

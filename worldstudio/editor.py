@@ -351,6 +351,43 @@ class WorldStudio(ttk.Frame):
         scale = view_scale * 900 / max(100, 900 + z * view_scale)
         return self.canvas.winfo_width() / 2 + x * scale, self.canvas.winfo_height() / 2 - y * scale, z
 
+    def draw_clear_label(self, text, x, y, obstacles, offsets, *, fill="#ffffff", font=("Segoe UI", 9, "bold")):
+        """Place a readable canvas label without covering labels already drawn."""
+        width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
+        best = None
+        best_score = float("inf")
+        for dx, dy in offsets:
+            label_id = self.canvas.create_text(x + dx, y + dy, text=text, fill=fill,
+                                               font=font, justify="center")
+            bounds = self.canvas.bbox(label_id)
+            self.canvas.delete(label_id)
+            if not bounds:
+                continue
+            left, top, right, bottom = bounds
+            outside = max(0, 3 - left) + max(0, 3 - top) + max(0, right - width + 3) + max(0, bottom - height + 3)
+            collisions = sum(
+                left < other[2] + 4 and right + 4 > other[0] and
+                top < other[3] + 4 and bottom + 4 > other[1]
+                for other in obstacles
+            )
+            score = collisions * 1000 + outside * 100
+            if score < best_score:
+                best_score = score
+                best = (x + dx, y + dy, bounds)
+            if score == 0:
+                break
+
+        if best is None:
+            return
+        label_x, label_y, bounds = best
+        left, top, right, bottom = bounds
+        rectangle = self.canvas.create_rectangle(left - 4, top - 2, right + 4, bottom + 2,
+                                                  fill="#122330", outline="#31495a", width=1)
+        label_id = self.canvas.create_text(label_x, label_y, text=text, fill=fill,
+                                           font=font, justify="center")
+        self.canvas.tag_lower(rectangle, label_id)
+        obstacles.append(bounds)
+
     def draw(self):
         if not hasattr(self, "canvas"):
             return
@@ -366,26 +403,40 @@ class WorldStudio(ttk.Frame):
             coords = [value for i in face for value in transformed[i][:2]]
             self.canvas.create_polygon(coords, fill="#356d5a", outline="#71af89", width=1)
         nodes = {node["id"]: node for node in self.project.get("nodes", [])}
+        projected = {name: self.project_point(tuple(node[k] for k in ("x", "y", "z")))
+                     for name, node in nodes.items()}
+        label_obstacles = []
+        for name, (x, y, _) in projected.items():
+            node = nodes[name]
+            radius = 4 if node.get("style") == "geometry" else 8
+            label_obstacles.append((x - radius - 2, y - radius - 2, x + radius + 2, y + radius + 2))
         for route in self.project.get("routes", []):
             if route.get("start") not in nodes or route.get("end") not in nodes:
                 continue
-            a, b = [self.project_point(tuple(nodes[name][k] for k in ("x", "y", "z")))
-                    for name in (route["start"], route["end"])]
+            a, b = [projected[name] for name in (route["start"], route["end"])]
             geometry = route.get("style") == "geometry"
             self.canvas.create_line(a[:2], b[:2], fill="#65b9c6" if geometry else "#f2c65e",
                                     width=2 if geometry else 4, arrow="none" if geometry else "last")
             if not geometry:
-                self.canvas.create_text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 14,
-                                        text=route.get("unlock", route["id"]), fill="#f2deb3")
+                self.draw_clear_label(route.get("unlock", route["id"]),
+                                      (a[0] + b[0]) / 2, (a[1] + b[1]) / 2,
+                                      label_obstacles,
+                                      ((0, -16), (0, 16), (16, 0), (-16, 0),
+                                       (20, -18), (-20, -18), (20, 18), (-20, 18)),
+                                      fill="#f2deb3", font=("Segoe UI", 8, "bold"))
         for name, node in nodes.items():
-            x, y, _ = self.project_point(tuple(node[k] for k in ("x", "y", "z")))
+            x, y, _ = projected[name]
             auxiliary = node.get("style") == "geometry"
             selected = self.selected == ("node", name)
             color = "#ffffff" if selected else "#bc93e7" if node.get("fallback") else "#65b9c6" if auxiliary else "#f1c75f"
             radius = 4 if auxiliary and not selected else 8
             self.canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill=color, outline="#102332", width=2)
             if not auxiliary or selected or node.get("fallback"):
-                self.canvas.create_text(x, y - 21, text=f"{name}  {node.get('level', '')}", fill="#ffffff", font=("Segoe UI", 10, "bold"))
+                self.draw_clear_label(f"{name}  {node.get('level', '')}", x, y,
+                                      label_obstacles,
+                                      ((0, -22), (16, -17), (-16, -17), (0, 22),
+                                       (28, 0), (-28, 0), (0, -38), (26, -30),
+                                       (-26, -30), (0, 38), (38, 18), (-38, 18)))
             self.hit_points.append((x, y, name))
         self.canvas.create_text(15, 15, anchor="nw", fill="#bdd0dd", text="EDITOR PREVIEW / perspective projection", tags=("viewport_caption",))
 
