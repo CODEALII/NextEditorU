@@ -28,6 +28,10 @@
   archive (`8a473f413788cb5b3fab07f5f6ae174a6948159b39cc6019df97ef7ae24c3d35`);
   it remained in the title/demo flow and did not reach the map, so it provides
   no movement result.
+- In a later live check at Acorn Plains-2, two individual `W` presses changed
+  Mario's facing but did not move him off the node. The Computer Use key API
+  exposes only a press, not a timed hold, so these taps do not test the required
+  travel duration and do not show that the route is broken.
 - Before the latest Chain retest, Clean, Chain and Direct passed
   `tools/cemu_preflight.py` with current-run title/module and pack checks, and
   `--compare-save-to` confirmed byte-identical save snapshots. The current Chain

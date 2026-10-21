@@ -1397,3 +1397,15 @@ camera behavior and a fully playable custom world remain open.
   movement does not validate the modified W102-to-W103 link through
   `RW102W1T0` and `RW1T0W103`; testing that link from a known W102 state is now
   the next gameplay milestone.
+
+## 2026-10-21 — Follow-up input-duration check
+
+- Rechecked the live isolated Chain process (PID 19444). The game remains on
+  Acorn Plains-2 — Tilted Tunnel. Two individual `W` presses left Mario on the
+  same node and changed only his facing. No W102-to-W103 traversal was observed.
+- The Computer Use `press_key` API exposes a key/chord press but no duration or
+  held-key control. These short presses cannot substitute for the earlier
+  two-second `D` hold and cannot establish that the modified route is broken.
+  Keep the Cemu process and save isolated until a controlled hold can be run;
+  do not compare its save against the earlier snapshots while this session is
+  live.
