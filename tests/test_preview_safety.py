@@ -274,8 +274,10 @@ console.log(JSON.stringify([point,edge,meshIndexFromPixel([0,0,0,255])]));
             self.skipTest("Node.js is required to exercise viewer camera focus")
         page = build_document({"shapes": [], "nodes": [], "routes": []})
         start = page.index("const bounds=scene.bounds||")
-        end = page.index("\nfunction cameraPlanes", start)
-        helper = page[start:end]
+        end = page.index("\nfunction cameraPreset", start)
+        focus = re.search(r"function focusMesh\(mesh\)\{[^}]*\}", page)
+        self.assertIsNotNone(focus)
+        helper = page[start:end] + "\n" + focus.group(0)
         probe = "const scene={bounds:{center:[1,2,3],radius:100},camera:{}};\n" + helper + "\n" + \
                 "focusMesh({center:[20,30,40],radius:10});\nconsole.log(JSON.stringify([viewCenter,target,distance]))"
         result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
@@ -283,6 +285,27 @@ console.log(JSON.stringify([point,edge,meshIndexFromPixel([0,0,0,255])]));
         self.assertEqual(center, [20, 30, 40])
         self.assertEqual(target, [0, 0, 0])
         self.assertEqual(distance, 26.5)
+
+    def test_camera_presets_provide_front_side_and_top_orientations(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise viewer camera presets")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        for name in ("front", "side", "top"):
+            self.assertIn(f'data-camera-preset="{name}" aria-pressed="false"', page)
+        self.assertIn("button.addEventListener('click',()=>{const preset=cameraPreset(button.dataset.cameraPreset)", page)
+        self.assertIn("other.setAttribute('aria-pressed',String(active))", page)
+        start = page.index("function cameraPreset(name){")
+        end = page.index("\nconst cameraPresetButtons", start)
+        helper = page[start:end]
+        probe = helper + "\nconsole.log(JSON.stringify(['front','side','top','unknown'].map(cameraPreset)))"
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        front, side, top, unknown = json.loads(result.stdout)
+        self.assertEqual(front, [0, 0.12])
+        self.assertAlmostEqual(side[0], math.pi / 2)
+        self.assertEqual(side[1], 0.12)
+        self.assertEqual(top, [0, 1.25])
+        self.assertIsNone(unknown)
 
     def test_preview_light_controls_feed_a_normalized_shader_direction(self):
         node = shutil.which("node")

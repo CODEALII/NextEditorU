@@ -446,3 +446,13 @@ camera behavior and a fully playable custom world remain open.
 - Focused texture, BFRES-reference and WebGL checks: **60 passed**. Full
   regression: **154 tests passed in 94.857 seconds**. `compileall`,
   `git diff --check`, SVG parsing, and W101 → W102/W103 reachability passed.
+
+## 2026-10-21 — WebGL camera orientation presets
+
+- Added Front, Side and Top controls to the viewer's inspector panel. Presets
+  rotate around the current focus point; orbiting clears the selected state,
+  while Fit view restores the whole-scene default framing.
+- Added a Node-backed orientation test and UI wiring checks. Focused and full
+  viewer safety tests: **23 passed**. Full regression: **155 tests passed in
+  94.661 seconds**; `compileall`, `git diff --check`, and W101 → W102/W103
+  reachability passed.
