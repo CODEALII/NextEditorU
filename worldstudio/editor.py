@@ -1315,7 +1315,7 @@ class NativeStudio(WorldStudio):
         self.status.set(f"Loaded {native.source.name} • coordinates: " +
                         ("BFRES hierarchy-transformed rest pose; unsupported branches use labeled layouts" if native.positions else "editor layout only; game transforms unknown"))
         self.canvas.bind("<Map>", lambda event: self.fit(), add="+")
-        self._set_recovery_context(self.project_path, offer=True)
+        self._set_recovery_context(self.project_path or native.source, offer=True)
         recent_path = self.project_path or Path(native.source)
         if recent_path.is_file():
             self._record_recent_project(recent_path)
@@ -1715,7 +1715,7 @@ class NativeStudio(WorldStudio):
             child.destroy()
         self.status.set(f"Opened {native.source.name}; " + ("hierarchy-transformed BFRES rest pose; purple points use editor layout" if native.positions else "editor layout; game coordinates unavailable"))
         self._reset_edit_history()
-        self._set_recovery_context(project_path, offer=True)
+        self._set_recovery_context(project_path or native.source, offer=True)
 
     def open(self):
         if not self.may_discard():

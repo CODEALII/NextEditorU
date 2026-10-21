@@ -148,6 +148,40 @@ class EditorSmokeTests(unittest.TestCase):
             self.app._clear_recovery(project_path)
             self.app._set_recovery_context(None)
 
+    def test_native_session_from_szs_recovers_without_modifying_source(self):
+        root = Path(self.recent_tmp.name)
+        source_path = root / "world.szs"
+        original_source = b"synthetic source archive baseline"
+        source_path.write_bytes(original_source)
+        self.native.source = source_path
+        self.app.recovery_store = SessionRecovery(root / "recoveries")
+        self.app.recovery_delay_ms = 5
+        self.app.replace_native(self.native, None)
+        self.assertEqual(self.app._recovery_project_path, source_path)
+        try:
+            self.native.points.rows[0][2] = "unsaved draft"
+            self.app.dirty = True
+            self.app._record_edit()
+            deadline = time.monotonic() + 0.5
+            recovery_path = self.app.recovery_store.path_for(source_path, "native")
+            while not recovery_path.exists() and time.monotonic() < deadline:
+                self.root.update()
+                time.sleep(0.005)
+            self.assertTrue(recovery_path.is_file())
+            self.assertEqual(source_path.read_bytes(), original_source)
+
+            self.native.points.rows[0][2] = ""
+            self.app.dirty = False
+            with patch("worldstudio.editor.messagebox.askyesno", return_value=True):
+                self.app._offer_recovery()
+
+            self.assertEqual(self.native.points.rows[0][2], "unsaved draft")
+            self.assertTrue(self.app.dirty)
+            self.assertEqual(source_path.read_bytes(), original_source)
+        finally:
+            self.app._clear_recovery(source_path)
+            self.app._set_recovery_context(None)
+
     def test_auxiliary_uses_world_coordinates_and_omits_macro_points(self):
         self.assertEqual([node["id"] for node in self.app.project["nodes"]], ["W101", "W102"])
         self.app.show_auxiliary.set(True)

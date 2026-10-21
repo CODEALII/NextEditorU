@@ -731,18 +731,28 @@ camera behavior and a fully playable custom world remain open.
 
 ## 2026-10-21 — Recover saved-project editing sessions
 
-- Editing a saved native or lightweight-preview project now schedules a
-  checksummed recovery snapshot after a 750 ms quiet period. Snapshots are
-  stored outside the project under the user's local application data, bound to
-  the exact saved-file hash and editor kind, and limited to 64 MiB.
-- Opening a matching saved project offers an explicit restore prompt. Invalid,
-  stale, oversized, or mismatched snapshots are rejected; manual save or an
-  explicit discard removes recovery data. Projects loaded only from an SZS
-  remain unrecoverable until saved as a World Studio JSON project.
+- Editing a native session loaded from a saved JSON project or SZS source, and
+  editing a saved lightweight-preview project, schedules a checksummed recovery
+  snapshot after a 750 ms quiet period. Snapshots are stored outside project
+  and game files in the user's local application data, bound to the exact
+  source-file path/hash and editor kind, and limited to 64 MiB.
+- Reopening a matching source offers an explicit restore prompt. Invalid, stale,
+  oversized, or mismatched snapshots are rejected; manual save or an explicit
+  discard removes recovery data.
 - Unit and Tk smoke tests cover checksum/baseline validation, size caps, actual
-  debounced writing, restore acceptance, and discard cleanup for both native
+  debounced writing, restore acceptance, and discard cleanup for native JSON
   and lightweight-preview projects. The full suite passed (**209 tests in
   148.323 seconds**), with `compileall` and `git diff --check`.
+
+## 2026-10-21 — Recover native sessions opened from SZS
+
+- Extended native recovery to direct SZS sessions by binding snapshots to the
+  archive path and its exact baseline hash. Restoring edits never writes into
+  the original archive; saving to a native project JSON or explicitly
+  discarding the session removes the source-bound snapshot.
+- A Tk smoke test verifies that a raw-SZS session restores after reopening and
+  that the source archive bytes stay unchanged. The full suite passed
+  (**214 tests in 149.983 seconds**), with `compileall` and `git diff --check`.
 
 ## 2026-10-21 — Compare exports with a fresh project reimport
 
