@@ -1,5 +1,16 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Full regression and embedded-editor visual check
+
+- The full local suite passed: **352 tests in 334.371 seconds**. The worktree
+  was clean at `34107a4` before this verification note.
+- A desktop screenshot shows the W1 BFRES model, embedded 3D viewport, 2D
+  graph, and nodes/routes sidebar in the main World Studio window. Computer Use
+  returned Cemu accessibility text for the World Studio screenshot, so no
+  selection interaction was attempted and live highlight behavior was not
+  visually asserted. A current process inventory found no `Cemu.exe`; no new
+  gameplay run was started.
+
 ## 2026-10-22 — Reconcile the archived Chain movement evidence
 
 - Reopened the archived process-bound result and its three screenshots instead
