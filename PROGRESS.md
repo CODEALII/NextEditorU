@@ -766,6 +766,21 @@ camera behavior and a fully playable custom world remain open.
   a changed camera companion file. The full suite passed (**213 tests in
   149.962 seconds**), with `compileall` and `git diff --check`.
 
+## 2026-10-21 — Prepare a truly clean Cemu baseline
+
+- Audited the existing isolated Cemu settings and found that the folders named
+  `cemu-integration` and `cemu-island-baseline` both enable WorldStudioChain
+  alongside CrashFix. Their logs confirm the patch was active, so previous
+  references to those runs as clean baseline evidence are withdrawn.
+- Added `--baseline` to `tools/prepare_cemu.py`. It creates a separate MLC
+  without user saves, enables CrashFix only, omits the World Studio pack, and
+  tells the tester to confirm the keyboard stick assignment in Cemu 1.26.
+  `build/cemu-clean-baseline` is prepared but has not been launched.
+- The focused Cemu preparation suite passed (**8 tests**). The full suite is
+  green, and the full suite passed (**216 tests in 158.984 seconds**), with
+  `compileall` and `git diff --check`. Runtime movement remains unverified; no
+  emulator process was started for this audit.
+
 ## 2026-10-21 — Report unsupported OBJ features
 
 - OBJ imports now report when they ignore MTL/material assignments, vertex

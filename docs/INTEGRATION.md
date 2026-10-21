@@ -6,8 +6,20 @@
 - Isolated runtime: `build/cemu-integration`, own `mlc01`, original game RPX
   opened read-only. No installed update in the isolated MLC; log confirms v64
   module checksum `0x6caea914`.
-- Baseline uses only the copied installed Title Screen Crash Fix. Visually
-  reached Story Mode and World 1 at Crushing-Cogs Tower with animated scenery.
+- A later audit found that the folders previously named `cemu-integration` and
+  `cemu-island-baseline` both have `WorldStudioChain` and CrashFix enabled in
+  `settings.xml`; their logs confirm both packs. Their successful World 1 map
+  loads are patched-build observations, not a clean stock baseline. Earlier
+  notes calling those runs baseline are withdrawn.
+- A new `build/cemu-clean-baseline` folder is prepared from the same local
+  Cemu copy with CrashFix only, a separate MLC, and no copied user saves. It
+  has not been launched yet. Recreate it with:
+
+  ```powershell
+  python tools/prepare_cemu.py --cemu build/cemu-island-baseline --baseline --out build/cemu-clean-baseline
+  ```
+
+  Choose a new output name if the folder already exists.
 - Patched test logs explicitly activate **World Studio Chain** plus CrashFix.
   Resource SHA256 `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`
   identifies `build/chain-quoted/content/Common/course_select/CS_W1.szs`.
@@ -33,25 +45,23 @@
   controller/input state, map state, or the patched route. No traversal pass is
   claimed; reproduce with the active input profile and record the exact start
   node and attempted direction before changing route data.
-- Read-only input-profile check on 2026-10-21 found two different setups: the
-  isolated `build/cemu-island-baseline` profile is GamePad + Keyboard and maps
-  left/right to the arrow keys; the user's separate Cemu profile is GamePad +
-  DirectInput / Wireless Controller. Keyboard arrow presses would not exercise
-  that DirectInput profile. The running isolated process was the unpatched
-  baseline at the time of inspection. It is unknown which window/profile was
-  active during the failed manual test, so this is a plausible input mismatch,
-  not a confirmed root cause.
+- Read-only input-profile check found two different controller APIs: the
+  generated isolated profile is GamePad + Keyboard, while the separate user
+  profile is GamePad + DirectInput / Wireless Controller. The old isolated
+  profile maps arrows to D-pad and writes WASD to stick mapping IDs, but its
+  title does not prove which stick the installed Cemu 1.26 UI assigned them.
+  Verify the displayed left-stick binding before movement testing.
 - Offline validation of the exact mainlight pack archive found no broken graph
   references. W102 points to W103 through `RW102W1T0` and `RW1T0W103`, and both
   path bones are present. This proves the declared resource references exist,
   not that Cemu can move along them. The mainlight profile has no captured boot
   log, so activation and runtime behavior for that exact pack remain unverified.
-- On 2026-10-21, the isolated baseline process was selected by its exact path
-  (`build/cemu-island-baseline/Cemu.exe`) and shown at the Acorn Plains-1 node.
-  Its open input panel confirmed Wii U GamePad / Keyboard and `D` on the right
-  stick. After closing that panel, a `D` tap and a Right-arrow tap both left
-  Mario on the same node. This verifies neither map motion nor the patch; the
-  computer-use key taps are not reaching the emulated controller in this run.
+- A prior UI observation showed `D` beside the right-stick control and reported
+  that D/Right taps did not move Mario. The saved profile and settings belong
+  to a folder with WorldStudioChain enabled, so that observation is not a clean
+  baseline result and does not isolate route behavior. No Cemu process is
+  running now. The new baseline folder must first confirm its effective
+  keyboard-to-left-stick mapping in the installed UI.
 
 Earlier attempts displayed black after initial dialogs. They were inconclusive:
 input setup, UI navigation and CSV quoting changed before the successful patched
@@ -66,19 +76,21 @@ No crash stack or failing game function was identified.
 - Use native backslash graphic-pack filenames and make the generated pack
   default-enabled in the isolated test. Verify activation in the log.
 - Controller XML is visibly recognized by this installed binary. Legacy INI is
-  also generated for compatibility. Movement-axis and arrow-key mappings match;
-  an older integration profile has different face-button mappings for IDs 3/4,
-  while the later mainlight XML and INI match. The input dialog showed GamePad +
-  Keyboard with A=Z. Automated tap recognition was unreliable; menu click
-  navigation worked.
+  also generated for compatibility. The generated XML and INI contain matching
+  key mappings, but their effective stick assignment in Cemu 1.26 still needs
+  confirmation. An older integration profile has different face-button
+  mappings for IDs 3/4, while the later mainlight XML and INI match. Automated
+  tap recognition was unreliable; menu click navigation worked.
 
 ## Still required before declaring the prototype playable
 
-1. In one Cemu window/profile, verify baseline movement at W101 by holding `D`
-   briefly (left-stick right). Then load the patched archive in the same profile
-   and test W102→W103 with the same key. Record the active window/profile and
-   the displayed start and destination. Baseline motion with patched immobility
-   isolates a route/patch issue; failure in both leaves focus/input unresolved.
+1. Launch `build/cemu-clean-baseline` with the supplied RPX. In Input Settings,
+   confirm that the keyboard profile is active and W/A/S/D address the left
+   stick; remap it in that isolated profile if they do not. Hold D at W101 and
+   confirm Mario moves. Then test the patched archive with the same controller
+   profile and input. Record the exact window, profile, start, and destination.
+   A valid baseline movement followed by patched immobility isolates a
+   route/patch issue; failure in both leaves input unresolved.
 2. Confirm the displayed destination is Acorn Plains 3 and launch that level.
 3. On a fresh save, clear 1-1 then 1-2. Confirm the intended new unlocks and
    restrictions without relying on already-cleared tower flags.

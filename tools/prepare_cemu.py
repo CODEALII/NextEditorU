@@ -37,7 +37,7 @@ def xml_write(path, root):
     ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
 
 
-def configure(out: Path):
+def configure(out: Path, *, enabled_packs=("WorldStudioChain", "CrashFix")):
     """Write new configs only; safe for a folder pre-created by the caller."""
     for name in ("settings.xml", "controllerProfiles/controller0.xml", "controllerProfiles/controller0.txt"):
         if (out / name).exists():
@@ -57,7 +57,7 @@ def configure(out: Path):
     ET.SubElement(graphics, "api").text = "1"  # Vulkan, observed local setting.
     ET.SubElement(graphics, "GX2DrawdoneSync").text = "true"
     packs = ET.SubElement(root, "GraphicPack")
-    for name in ("WorldStudioChain", "CrashFix"):
+    for name in enabled_packs:
         ET.SubElement(packs, "Entry", filename=f"graphicPacks\\{name}\\rules.txt")
     account = ET.SubElement(root, "Account")
     ET.SubElement(account, "PersistentId").text = "2147483649"
@@ -85,16 +85,23 @@ def configure(out: Path):
         legacy_keyboard_profile(), encoding="utf-8")
 
 
-def prepare(cemu: Path, patch: Path, out: Path):
-    cemu, patch, out = cemu.resolve(), patch.resolve(), out.resolve()
+def prepare(cemu: Path, patch: Path | None, out: Path, *, baseline=False):
+    cemu, out = cemu.resolve(), out.resolve()
     source = cemu.parent if cemu.is_file() else cemu
     exe = source / "Cemu.exe"
-    if not exe.is_file() or not (patch / "content").is_dir():
-        raise ValueError("Cemu.exe and patch/content are required")
+    patch = patch.resolve() if patch is not None else None
+    if not exe.is_file():
+        raise ValueError("Cemu.exe is required")
+    if baseline and patch is not None:
+        raise ValueError("A clean baseline does not use --patch")
+    if not baseline and (patch is None or not (patch / "content").is_dir()):
+        raise ValueError("A patched test folder needs a patch/content directory")
     if out.exists():
         raise FileExistsError(f"Refusing existing output: {out}")
     # Do not allow the output inside either input tree.
     for original in (source, patch):
+        if original is None:
+            continue
         if out == original or original in out.parents:
             raise ValueError("Output must be separate from input trees")
     crashfix = source / "graphicPacks/downloadedGraphicPacks/NewSuperMarioBrosU/Workarounds/CrashFix"
@@ -109,20 +116,22 @@ def prepare(cemu: Path, patch: Path, out: Path):
     if (source / "resources").is_dir():
         shutil.copytree(source / "resources", out / "resources")
     shutil.copytree(crashfix, out / "graphicPacks/CrashFix")
-    pack = out / "graphicPacks/WorldStudioChain"
-    shutil.copytree(patch / "content", pack / "content")
-    # Generated test pack only; no unknown source graphic-pack settings copied.
-    (pack / "rules.txt").write_text(
-        '[Definition]\ntitleIds = 0005000010101D00\n'
-        'name = World Studio Three Level Chain\n'
-        'path = "New Super Mario Bros. U/Mods/World Studio Chain"\n'
-        'description = Experimental topology test.\nversion = 6\ndefault = 1\n', encoding="utf-8")
+    enabled_packs = ("CrashFix",) if baseline else ("WorldStudioChain", "CrashFix")
+    if not baseline:
+        pack = out / "graphicPacks/WorldStudioChain"
+        shutil.copytree(patch / "content", pack / "content")
+        # Generated test pack only; no unknown source graphic-pack settings copied.
+        (pack / "rules.txt").write_text(
+            '[Definition]\ntitleIds = 0005000010101D00\n'
+            'name = World Studio Three Level Chain\n'
+            'path = "New Super Mario Bros. U/Mods/World Studio Chain"\n'
+            'description = Experimental topology test.\nversion = 6\ndefault = 1\n', encoding="utf-8")
     # System font installation is optional and read-only copied. Never copy saves
     # or installed game updates, which could override the requested input dump.
     sys_title = source / "mlc01/sys/title"
     if sys_title.is_dir():
         shutil.copytree(sys_title, out / "mlc01/sys/title")
-    configure(out)
+    configure(out, enabled_packs=enabled_packs)
     (out / "launch.ps1").write_text(
         'param([Parameter(Mandatory=$true)][string]$GameRpx)\n'
         '$ErrorActionPreference = "Stop"\n'
@@ -130,21 +139,34 @@ def prepare(cemu: Path, patch: Path, out: Path):
         'Push-Location -LiteralPath $PSScriptRoot\n'
         'try { & "$PSScriptRoot/Cemu.exe" -g $GameRpx -m "$PSScriptRoot/mlc01" }\n'
         'finally { Pop-Location }\n', encoding="utf-8")
+    purpose = ("Clean baseline comparison folder. WorldStudioChain is disabled.\n"
+               if baseline else "Patched experimental topology test folder.\n")
+    pack_list = ", ".join(enabled_packs)
     (out / "README.txt").write_text(
-        "Isolated test folder. No emulator has been launched by this tool.\n"
-        "Run launch.ps1 -GameRpx <absolute path to supplied code/red-pro2.rpx>\n"
-        "Keyboard: Z=A, X=B, C=X, V=Y, Enter=Plus; arrows=D-pad; WASD=left stick.\n"
-        "Fresh saves and cache stay here. Source game files are not modified.\n"
-        "Only WorldStudioChain and CrashFix are enabled. Check log.txt after launch.\n",
+        purpose
+        + "Isolated test folder. No emulator has been launched by this tool.\n"
+        + "Run launch.ps1 -GameRpx <absolute path to supplied code/red-pro2.rpx>\n"
+        + "Keyboard: Z=A, X=B, C=X, V=Y, Enter=Plus; arrows=D-pad. Verify WASD is left stick in Input Settings.\n"
+        + "Fresh saves and cache stay here. Source game files are not modified.\n"
+        + f"Enabled graphic packs: {pack_list}. Check log.txt after launch.\n",
         encoding="utf-8")
     return {"output": str(out), "settings": str(out / "settings.xml"),
-            "launch": str(out / "launch.ps1"), "launched": False}
+            "launch": str(out / "launch.ps1"), "launched": False,
+            "baseline": baseline, "enabled_packs": list(enabled_packs)}
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cemu", required=True, type=Path)
-    parser.add_argument("--patch", required=True, type=Path)
+    parser.add_argument("--patch", type=Path,
+                        help="Patch folder with content/; required for patched tests")
+    parser.add_argument("--baseline", action="store_true",
+                        help="Prepare a clean baseline with CrashFix only; does not use --patch")
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
-    print(json.dumps(prepare(args.cemu, args.patch, args.out), indent=2))
+    if args.baseline and args.patch is not None:
+        parser.error("--baseline cannot be combined with --patch")
+    if not args.baseline and args.patch is None:
+        parser.error("--patch is required unless --baseline is selected")
+    print(json.dumps(prepare(args.cemu, args.patch, args.out,
+                             baseline=args.baseline), indent=2))

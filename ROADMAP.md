@@ -4,14 +4,14 @@ World Studio is an offline research prototype. Items below describe work still n
 
 ## Highest priority: verify route movement
 
-The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still failed. The isolated baseline window and keyboard mapping are now identified, yet computer-use taps do not reach the emulated controller. First obtain a working input source; then compare baseline and patched routes in the same profile and verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
+The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still unverified. A config audit found that the folder previously named `cemu-island-baseline` enables WorldStudioChain, so its movement result is not a clean baseline. `build/cemu-clean-baseline` is now prepared with CrashFix only and a separate MLC, but has not been launched. First verify its keyboard-to-left-stick mapping in Cemu and establish stock movement; then compare patched routes in the same profile and verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
 
 The isolated `cemu-island-mainlight` process has a log confirming both the
 World Studio Chain and crash-fix packs activated and reached the title screen.
-In the isolated baseline window, Cemu displayed Acorn Plains-1 with a Keyboard
-profile mapping `D` to right, but neither a `D` nor Right key tap moved Mario.
-Computer-use input is not a usable game controller here; a working input source
-is still needed before baseline/patch route QA.
+The earlier window called `cemu-island-baseline` also had the chain pack
+enabled, so its no-movement result cannot establish stock baseline behavior.
+The new CrashFix-only baseline folder is prepared; a human must verify the
+effective keyboard-to-left-stick mapping and movement before route comparison.
 
 ## Rendering fidelity
 

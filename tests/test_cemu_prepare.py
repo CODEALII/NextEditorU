@@ -80,6 +80,31 @@ class PrepareCemuTests(unittest.TestCase):
         self.assertIn("-g $GameRpx", launcher)
         self.assertIn('-m "$PSScriptRoot/mlc01"', launcher)
 
+    def test_clean_baseline_requires_no_patch_and_disables_world_studio_chain(self):
+        before_source = snapshot(self.source)
+        result = prepare(self.source, None, self.output, baseline=True)
+        self.assertTrue(result["baseline"])
+        self.assertEqual(result["enabled_packs"], ["CrashFix"])
+        self.assertEqual(snapshot(self.source), before_source)
+        settings = ET.parse(self.output / "settings.xml").getroot()
+        references = [entry.get("filename").replace("\\", "/")
+                      for entry in settings.findall("GraphicPack/Entry")]
+        self.assertEqual(references, ["graphicPacks/CrashFix/rules.txt"])
+        self.assertTrue((self.output / references[0]).is_file())
+        self.assertFalse((self.output / "graphicPacks/WorldStudioChain").exists())
+        self.assertFalse((self.output / "mlc01/usr").exists())
+        self.assertFalse((self.output / "graphicPacks/Cloudy").exists())
+        readme = (self.output / "README.txt").read_text(encoding="utf-8")
+        self.assertIn("Clean baseline", readme)
+        self.assertIn("Verify WASD is left stick in Input Settings", readme)
+        self.assertIn("Enabled graphic packs: CrashFix", readme)
+
+    def test_baseline_rejects_patch_and_output_inside_source(self):
+        with self.assertRaisesRegex(ValueError, "does not use --patch"):
+            prepare(self.source, self.patch, self.output, baseline=True)
+        with self.assertRaisesRegex(ValueError, "separate from input"):
+            prepare(self.source, None, self.source / "nested-baseline", baseline=True)
+
     def test_legacy_ini_and_xml_have_same_usable_keyboard_bindings(self):
         self.run_prepare()
         profile = configparser.ConfigParser()
@@ -101,6 +126,8 @@ class PrepareCemuTests(unittest.TestCase):
         # erroneous constant from passing merely because both serializers agree.
         self.assertEqual({k: xml[k] for k in (1, 2, 9, 11, 12, 13, 14)},
                          {1: 90, 2: 88, 9: 13, 11: 38, 12: 40, 13: 37, 14: 39})
+        self.assertEqual({k: xml[k] for k in (17, 18, 19, 20)},
+                         {17: 87, 18: 83, 19: 65, 20: 68})
 
     def test_refuses_existing_output_without_changing_anything(self):
         self.output.mkdir()
