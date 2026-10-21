@@ -277,7 +277,7 @@ console.log(JSON.stringify([point,edge,meshIndexFromPixel([0,0,0,255])]));
         end = page.index("\nfunction cameraPreset", start)
         focus = re.search(r"function focusMesh\(mesh\)\{[^}]*\}", page)
         self.assertIsNotNone(focus)
-        helper = page[start:end] + "\n" + focus.group(0)
+        helper = page[start:end] + "\nfunction syncCameraTargetInputs(){}\n" + focus.group(0)
         probe = "const scene={bounds:{center:[1,2,3],radius:100},camera:{}};\n" + helper + "\n" + \
                 "focusMesh({center:[20,30,40],radius:10});\nconsole.log(JSON.stringify([viewCenter,target,distance]))"
         result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
@@ -306,6 +306,32 @@ console.log(JSON.stringify([point,edge,meshIndexFromPixel([0,0,0,255])]));
         self.assertEqual(side[1], 0.12)
         self.assertEqual(top, [0, 1.25])
         self.assertIsNone(unknown)
+
+    def test_camera_target_inputs_update_preview_focus_and_reject_invalid_values(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise preview target controls")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        for control in ("target-x", "target-y", "target-z", "apply-camera-target"):
+            self.assertIn(f'id="{control}"', page)
+        self.assertIn("input.valueAsNumber", page)
+        self.assertIn("syncCameraTargetInputs();clearCameraPreset()", page)
+        start = page.index("function parseCameraTarget(values){")
+        end = page.index("\nfunction syncCameraTargetInputs", start)
+        helpers = page[start:end]
+        probe = "let viewCenter=[1,2,3],target=[8,9,10];\n" + helpers + r"""
+const valid=setCameraTarget([10,-4,2.5]);const validState=[viewCenter,target];
+const badNaN=setCameraTarget([NaN,0,0]),badRange=setCameraTarget([1000001,0,0]),badBlank=setCameraTarget(['',0,0]);
+console.log(JSON.stringify({valid,validState,badNaN,badRange,badBlank,afterInvalid:viewCenter}));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        output = json.loads(result.stdout)
+        self.assertTrue(output["valid"])
+        self.assertEqual(output["validState"], [[10, -4, 2.5], [0, 0, 0]])
+        self.assertFalse(output["badNaN"])
+        self.assertFalse(output["badRange"])
+        self.assertFalse(output["badBlank"])
+        self.assertEqual(output["afterInvalid"], [10, -4, 2.5])
 
     def test_preview_light_controls_feed_a_normalized_shader_direction(self):
         node = shutil.which("node")

@@ -456,3 +456,13 @@ camera behavior and a fully playable custom world remain open.
   viewer safety tests: **23 passed**. Full regression: **155 tests passed in
   94.661 seconds**; `compileall`, `git diff --check`, and W101 → W102/W103
   reachability passed.
+
+## 2026-10-21 — editable WebGL preview target
+
+- Added an expandable X/Y/Z target editor in model units. Applying coordinates
+  changes only the preview focus and clears pan; focusing a mesh and Fit view
+  keep the controls synchronized. Non-finite and out-of-range targets are
+  rejected without changing the current view target.
+- Focused viewer tests: **24 passed**. Full regression: **156 tests passed in
+  94.473 seconds**; `compileall`, `git diff --check`, and W101 → W102/W103
+  reachability passed.
