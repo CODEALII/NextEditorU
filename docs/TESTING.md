@@ -66,4 +66,6 @@ In the native graph, drag a point to move it on the camera-facing plane and drag
 
 Follow [INTEGRATION.md](INTEGRATION.md) to prepare an isolated profile and preserve the original game tree and saves. Use the normal game resources as a baseline before enabling a generated graphic pack. Record the active pack, input profile, starting node, exact direction tested, destination shown, level result and save/reload result.
 
+For the stock comparison, use `build/cemu-clean-baseline/launch.ps1` with the local RPX. Its separate MLC and settings enable CrashFix only. Check that profile's `log.txt` for the loaded RPX and active packs before testing. `build/cemu-island-baseline` is not a stock baseline: its current log shows World Studio Chain enabled.
+
 Do not treat a successful boot or rendered map as a traversal pass. Keep every export manifest's `game_tested` field false until route, level, progression, persistence and camera checks have actually been observed.

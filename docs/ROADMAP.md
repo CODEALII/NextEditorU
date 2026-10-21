@@ -4,13 +4,13 @@ This backlog follows verified project dependencies. “Done offline” means par
 
 ## Highest priority
 
-1. **Diagnose route movement in Cemu.** Reproduce the reported no-movement result from a known map node, record active focus/controller bindings, then test the unchanged graph and each isolated route experiment. Do not change topology until the input state is controlled.
+1. **Diagnose route movement in Cemu.** The separate `cemu-clean-baseline` profile has now loaded the supplied RPX with CrashFix only and its own MLC. Its first boot created a fresh save and stopped at the SpotPass information screen; input mapping, the map, and movement have not yet been observed there. Continue after resolving that first-run prompt, then record controller bindings and compare the unchanged graph with each isolated route experiment. Do not change topology until the input state is controlled.
 2. **Validate terrain rendering against a controlled baseline.** Compare the main-grass export with stock in the isolated profile and determine whether baked-light UVs, alpha/culling, shape bounds or geometry cause the dark patches.
 3. **Broaden the preview data model safely.** Preserve per-shape mesh/submesh, vertex-buffer, material and bone references. Add attribute codecs and hierarchy transforms only for layouts found in local resources; continue rejecting unsupported formats with a precise diagnostic.
 
 Implemented offline subcase: static W1 extraction and the selected-mesh inspector now decode all supported named `_uN` coordinate attributes. The local W1 inventory contains `_u1` on 42 shapes and `_u2` on 13; a selector compares each raw chart without assigning sampler meaning. The static geometry parser still rejects multi-mesh, multi-buffer, skinned and other unsupported BFRES layouts.
 
-Implemented offline subcase: the native preview chooses the `<archive>_World` model matching the opened course-select archive. The local W7 model produces 34 static shapes and 19 decoded BC1 base-color maps; W9a produces 3 shapes and 2 maps. Their 3D geometry and graph nodes share the tested W7 coordinate bounds. A read-only survey found the current rigid decoder fully supports W1, W7 and W9a; non-identity roots and unrecognized vertex layouts still reject other world models.
+Implemented offline subcase: the native preview chooses the `<archive>_World` model matching the opened course-select archive. The local W1/W3/W4/W7/W9a/W9b models produce 42/40/53/34/3/20 static shapes. W7 produces 19 decoded BC1 base-color maps and W9a produces 2; their 3D geometry and graph nodes share the tested W7 coordinate bounds. A read-only survey found remaining blockers including non-identity roots, non-root shape bindings and other vertex encodings.
 
 ## Next editing milestones
 

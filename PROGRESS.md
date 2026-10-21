@@ -918,3 +918,22 @@ camera behavior and a fully playable custom world remain open.
   `compileall` and `git diff --check` passed. Viewer/browser and in-game behavior
   were not tested; animation, general material fidelity, route movement and
   progression remain unverified.
+
+## 2026-10-21 — Decode half-float positions in additional BFRES worlds
+
+- Added a bounded decoder for GX2 format `0x80F` float16x4 positions. It uses
+  XYZ only when the stored homogeneous W is finite and exactly 1 within the
+  tested tolerance; unsupported W values fail with a shape-specific error.
+  The format enum is corroborated by the checked-in Tsuru GX2 header, and local
+  W3/W4/W9b position records all store W=1.
+- The static parser now extracts 40 W3, 53 W4 and 20 W9b shapes, in addition
+  to the previously supported W1/W7/W9a models. Synthetic tests cover valid and
+  rejected W values; local archive tests check every returned shape has finite
+  positions and triangle indices.
+- Full suite: **231 tests passed in 183.284 seconds**; compileall and
+  `git diff --check` passed. This remains offline static geometry validation.
+- Cemu audit: the separate `cemu-clean-baseline` profile loaded the supplied
+  RPX and its log confirms CrashFix only; first boot created a save and stopped
+  at a SpotPass information screen. The misleading `cemu-island-baseline`
+  profile has World Studio Chain enabled. No stock movement or terrain pass
+  was observed; in-game route behavior remains unverified.

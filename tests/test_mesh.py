@@ -118,6 +118,28 @@ class MeshTests(unittest.TestCase):
         self.assertEqual(shapes[0]['vertexAttributes']['_u1'],
                          {'format': 7, 'offset': 24})
 
+    def test_half_float_vec4_positions_decode_with_unit_homogeneous_w(self):
+        data = bytearray(fixture())
+        struct.pack_into('>I', data, 0x408, 0x80f)
+        for index, point in enumerate(((0, 0, 0), (0, 0, 2), (2, 0, 0), (0, 0, 1))):
+            struct.pack_into('>4e', data, 0x600 + index * 28, *point, 1.0)
+
+        shapes = extract_rigid_model(bytes(data))
+
+        self.assertEqual(shapes[0]['positions'][:4],
+                         [(0.0, 0.0, 0.0), (0.0, 0.0, 2.0),
+                          (2.0, 0.0, 0.0), (0.0, 0.0, 1.0)])
+
+    def test_half_float_vec4_positions_reject_non_unit_homogeneous_w(self):
+        data = bytearray(fixture())
+        struct.pack_into('>I', data, 0x408, 0x80f)
+        for index, point in enumerate(((0, 0, 0), (0, 0, 2), (2, 0, 0), (0, 0, 1))):
+            struct.pack_into('>4e', data, 0x600 + index * 28,
+                             *point, 2.0 if index == 0 else 1.0)
+
+        with self.assertRaisesRegex(ValueError, 'homogeneous W of 1'):
+            extract_rigid_model(bytes(data))
+
     def test_supported_gx2_uv_formats_decode_to_normalized_coordinates(self):
         encodings = (
             (0x80d, lambda data, at: struct.pack_into('>2f', data, at, .25, .75), (.25, .75)),
@@ -280,6 +302,23 @@ class LocalDumpMeshTests(unittest.TestCase):
         self.assertEqual(sum(bool(shape.get('texture')) for shape in shapes), 3)
         self.assertFalse(failed)
         self.assertEqual({texture['format'] for texture in textures.values()}, {0x31})
+
+    def test_local_w3_w4_and_w9b_world_static_meshes(self):
+        root = Path(__file__).resolve().parents[1]
+        expected_shapes = {'W3': 40, 'W4': 53, 'W9b': 20}
+        for world, expected_count in expected_shapes.items():
+            with self.subTest(world=world):
+                source = root / 'NSMBU Modding Project/content/Common/course_select' / f'CS_{world}.szs'
+                if not source.is_file():
+                    self.skipTest(f'User-provided local {world} dump unavailable')
+                archive = Archive(source.read_bytes())
+                model = archive.read(f'CS_{world}.bfres')
+                shapes = extract_rigid_model(model, f'CS_{world}_World')
+
+                self.assertEqual(len(shapes), expected_count)
+                self.assertTrue(all(shape['positions'] and shape['indices'] for shape in shapes))
+                self.assertTrue(all(math.isfinite(value)
+                                    for shape in shapes for point in shape['positions'] for value in point))
 
     def test_local_dump_in_memory_export_and_byte_boundaries(self):
         root=Path(__file__).resolve().parents[1]

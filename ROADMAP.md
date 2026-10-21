@@ -4,20 +4,20 @@ World Studio is an offline research prototype. Items below describe work still n
 
 ## Highest priority: verify route movement
 
-The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still unverified. A config audit found that the folder previously named `cemu-island-baseline` enables WorldStudioChain, so its movement result is not a clean baseline. A later live inspection of that patched profile confirmed W/A/S/D on the left stick and arrows on the D-pad; two short D taps changed Mario's facing but did not advance him to another node. That is not a sustained-input test, and the loaded archive hash matches `build/chain-quoted`, not the direct-route variant. `build/cemu-clean-baseline` has CrashFix only and a separate MLC. It was launched once, but the Cemu window showed the empty library and no RPX was loaded. UI state capture then failed with `foreground window did not report a process id`; no stock movement was observed. First load the supplied RPX and verify the keyboard-to-left-stick mapping in that clean profile before comparing stock and patched routes. Then verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
+The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still unverified. A config audit found that the folder previously named `cemu-island-baseline` enables WorldStudioChain, so its movement result is not a clean baseline. A later live inspection of that patched profile confirmed W/A/S/D on the left stick and arrows on the D-pad; two short D taps changed Mario's facing but did not advance him to another node. That is not a sustained-input test, and the loaded archive hash matches `build/chain-quoted`, not the direct-route variant. The separate CrashFix-only profile has now loaded the supplied RPX in its own MLC, and its log confirms no World Studio Chain pack. First boot created a fresh save and stopped at the SpotPass information screen, so stock-map input mapping and movement are still pending. Then verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
 
 The isolated `cemu-island-mainlight` process has a log confirming both the
 World Studio Chain and crash-fix packs activated and reached the title screen.
 The earlier window called `cemu-island-baseline` also had the chain pack
 enabled, so its no-movement result cannot establish stock baseline behavior.
-The new CrashFix-only baseline folder is prepared. It still needs the supplied
-RPX loaded and a verified keyboard-to-left-stick mapping before movement can be
-compared.
+The later `cemu-clean-baseline` launch loaded the supplied RPX and activated
+CrashFix only. Its first-run SpotPass notice still needs a human choice before
+the game reaches the map and keyboard-to-left-stick input can be checked.
 
 ## Rendering fidelity
 
 - Implemented: 42 rigid static shapes, 70,193 vertices, 106,736 triangles, route overlays, shape filtering, visibility toggles, and 20 shared BC1/BC3 albedos on all 42 W1 shapes with decoded UV attributes.
-- Implemented: native 3D preview selects the source archive's matching `<archive>_World` model when present. In addition to W1, the tested local W7 and W9a models render 34/3 static shapes and decode 19/2 supported base-color maps; unsupported worlds remain explicit parser errors.
+- Implemented: native 3D preview selects the source archive's matching `<archive>_World` model when present. The tested local W1, W3, W4, W7, W9a and W9b models decode 42/40/53/34/3/20 static shapes. W7 and W9a also decode 19/2 supported base-color maps; other worlds and unsupported BFRES layouts remain explicit parser errors.
 - Implemented: `_u0` vertex decoding for observed GX2 `0x80D` float32x2, `0x7` UNorm16x2, `0x207` SNorm16x2, and `0x4` UNorm8x2 formats. W1 inventory and synthetic normalization/bounds tests cover all four; shader UV transforms remain unknown.
 - Implemented: WebGL context, shader/program and mesh-initialization errors show a high-contrast overlay.
 - Implemented: perspective depth planes follow the model bounding radius and camera distance, with a safe near-plane floor while zoomed inside the scene bounds.

@@ -16,6 +16,18 @@ DEFAULT_MODEL = 'CS_W1_World'
 DEFAULT_SHAPE = 'polySurface1489__mtGrass'
 MAX_FACE_CORNERS = 1024
 _UV_ATTRIBUTE_BYTES = {0x80d: 8, 0x7: 4, 0x207: 4, 0x4: 2}
+_POSITION_ATTRIBUTE_BYTES = {0x811: 12, 0x80f: 8}
+
+
+def _decode_position(data, offset, fmt):
+    if fmt == 0x811:  # GX2 Format_32_32_32_Single
+        return struct.unpack_from('>3f', data, offset)
+    if fmt == 0x80f:  # GX2 Format_16_16_16_16_Single; observed W is 1.0
+        position = struct.unpack_from('>4e', data, offset)
+        if not math.isfinite(position[3]) or abs(position[3] - 1.0) > 1e-6:
+            raise ValueError('half-float position requires a finite homogeneous W of 1')
+        return position[:3]
+    raise ValueError(f'Unsupported position format 0x{fmt:x}')
 
 
 def _decode_uv_attribute(data, offset, fmt):
@@ -34,9 +46,9 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
     """Read static triangle shapes from a single identity-root Wii U model.
 
     This reader intentionally supports the tested world-model subset only:
-    big-endian float32x3 positions, packed 10:10:10:2 normals, and contiguous
-    u16 triangle lists. Textures, animations, skinning and non-identity root
-    transforms are not evaluated.
+    big-endian float32x3 or observed half-float4 (W=1) positions, packed
+    10:10:10:2 normals, and contiguous u16 triangle lists. Textures, animations,
+    skinning and non-identity root transforms are not evaluated.
     """
     r = Skeletons(data)
     if r.version != 0x03000001:
@@ -67,8 +79,9 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
             if data[attr+4] != 0:
                 raise ValueError(f'{shape_name}: multiple vertex buffers are not supported')
             attrs[name] = (r.u16(attr+6), r.u32(attr+8))
-        if attrs.get('_p0', (None, None))[1] != 0x811 or attrs.get('_n0', (None, None))[1] != 0x20b:
-            raise ValueError(f'{shape_name}: expected float positions and packed normals')
+        position_format = attrs.get('_p0', (None, None))[1]
+        if position_format not in _POSITION_ATTRIBUTE_BYTES or attrs.get('_n0', (None, None))[1] != 0x20b:
+            raise ValueError(f'{shape_name}: expected a supported float position format and packed normals')
         buffer = r.ptr(vertex+24)
         r.bounds(buffer, 24)
         size, stride = r.u32(buffer+4), r.u16(buffer+12)
@@ -77,7 +90,7 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
         count = r.u32(vertex+8)
         start = r.ptr(buffer+20)
         r.bounds(start, size)
-        for key, width in (('_p0', 12), ('_n0', 4)):
+        for key, width in (('_p0', _POSITION_ATTRIBUTE_BYTES[position_format]), ('_n0', 4)):
             if attrs[key][0] + width > stride or size < count * stride:
                 raise ValueError(f'{shape_name}: vertex attribute exceeds its allocation')
         uv_attributes = {
@@ -92,7 +105,10 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
         uv_values = {name: [] for name in uv_attributes}
         for index in range(count):
             base = start + index * stride
-            position = struct.unpack_from('>3f', data, base + attrs['_p0'][0])
+            try:
+                position = _decode_position(data, base + attrs['_p0'][0], position_format)
+            except ValueError as error:
+                raise ValueError(f'{shape_name}: {error}') from error
             packed = struct.unpack_from('>I', data, base + attrs['_n0'][0])[0]
             def signed10(value):
                 value &= 0x3ff
