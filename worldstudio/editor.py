@@ -1917,8 +1917,8 @@ class NativeStudio(WorldStudio):
 
         ttk.Label(
             body,
-            text=("Unused IDs already named in point path chains appear first. "
-                  "Other BFRES IDs follow. This adds a CSV row only; point paths are unchanged."),
+            text=("IDs already listed in point path fields appear first. Other BFRES IDs follow. "
+                  "This adds a CSV row only; point path fields remain unchanged."),
             wraplength=390,
         ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(5, 10))
 
@@ -1938,8 +1938,8 @@ class NativeStudio(WorldStudio):
                                 "Choose an unused BFRES route segment.")
                 create.state(["disabled"])
                 return
-            path_state = ("already appears in a point path chain" if row[0] in point_paths
-                          else "is not currently linked from a point path")
+            path_state = ("is also listed in native point path fields" if row[0] in point_paths
+                          else "is not listed in native point path fields")
             self.status.set(f"Ready to add {row[0]}; it {path_state}.")
             create.state(["!disabled"])
 

@@ -1150,7 +1150,8 @@ camera behavior and a fully playable custom world remain open.
   therefore does not establish that the game can traverse the segment.
 - In the W1 archive, ten of the thirteen available rows are already named in
   point path fields. The dialog lists these first and reports whether the
-  selected ID is already linked, distinguishing repairs from unused drafts.
+  selected ID occurs there. This is cross-table context only; it does not
+  imply that the route row is required by the engine or repairs a missing path.
 - Added synthetic graph checks and a Tk smoke test for selection, row creation,
   and undo. The focused graph-validation and editor smoke suites pass (22 and
   21 tests). The final full suite passed: **275 tests in 249.642 seconds**;
@@ -1170,5 +1171,14 @@ camera behavior and a fully playable custom world remain open.
   static validation issues, ten archives accepted one draft row, and W8a/W9a
   had no unused BFRES IDs to offer. Actual in-game movement remains untested.
 - Graph-validation and editor smoke tests pass (23 and 21); the full suite
-  passed **276 tests in 248.861 seconds**. `compileall` and `git diff --check`
+  passed **276 tests in 251.559 seconds**. `compileall` and `git diff --check`
   passed.
+
+## 2026-10-21 — Cemu window targeting check
+
+- Computer Use listed three Cemu instances. Two captures requested the exact
+  `build/cemu-clean-baseline/Cemu.exe` window but returned
+  `build/cemu-island-mainlight/Cemu.exe` and showed the dinner sequence.
+- A fresh `list_windows()` re-selection reproduced the same mismatch. No key
+  was sent, and this attempt produced no evidence about the clean title prompt
+  or route movement. Stop further UI input until exact window targeting works.

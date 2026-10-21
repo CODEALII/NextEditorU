@@ -75,7 +75,9 @@ of these unused BFRES-referenced IDs as a table row using an observed road type.
 An in-memory addition of `RF008W1C0` passes static project validation, but this
 does not wire a point destination/path chain or establish in-game traversal.
 Ten of the thirteen unused IDs already occur in native point path fields; the
-editor lists those first and identifies whether the selected ID is referenced.
+editor lists those first and identifies whether the selected ID is present in a
+point field. This cross-table match does not establish that a route-table row
+is required for the path or that adding one repairs traversal.
 
 ## BFRES observations
 

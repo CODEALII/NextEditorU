@@ -257,7 +257,7 @@ class EditorSmokeTests(unittest.TestCase):
             self.assertEqual(len(combos), 2)
             combos[0].set("RW102F001")
             combos[1].set("road")
-            self.assertIn("already appears in a point path chain",
+            self.assertIn("listed in native point path fields",
                           self.app.status.get())
             add_button = next(widget for widget in controls
                               if isinstance(widget, ttk.Button) and
