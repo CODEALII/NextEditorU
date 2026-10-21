@@ -13,6 +13,15 @@ import threading
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
+from .mesh import MAX_FACE_CORNERS
+
+
+MAX_OBJ_FILE_BYTES = 64 * 1024 * 1024
+MAX_OBJ_LINE_BYTES = 64 * 1024
+MAX_OBJ_LINES = 1_000_000
+MAX_OBJ_RECORDS = 500_000
+MAX_OBJ_FACES = 200_000
+MAX_OBJ_TOTAL_FACE_CORNERS = 500_000
 
 
 def camera_plane_world_delta(dx, dy, yaw, pitch, projection_scale):
@@ -34,61 +43,95 @@ def camera_plane_world_delta(dx, dy, yaw, pitch, projection_scale):
 
 
 def read_obj(path, include_attributes=False):
-    """Read Wavefront geometry and, on request, split OBJ corner attributes."""
+    """Read a bounded Wavefront OBJ and optionally split corner attributes."""
+    path = Path(path)
+    if path.stat().st_size > MAX_OBJ_FILE_BYTES:
+        raise ValueError(f"OBJ exceeds the {MAX_OBJ_FILE_BYTES // (1024 * 1024)} MiB file-size limit")
     vertices, texcoords, source_normals, raw_faces = [], [], [], []
-    for line in Path(path).read_text(encoding="utf-8-sig").splitlines():
-        fields = line.split("#", 1)[0].split()
-        if not fields:
-            continue
-        if fields[0] == "v":
-            xyz = tuple(float(value) for value in fields[1:4])
-            if len(xyz) != 3 or not all(math.isfinite(v) for v in xyz):
-                raise ValueError("OBJ vertex must contain three finite coordinates")
-            vertices.append(xyz)
-        elif fields[0] == "vt":
-            uv = tuple(float(value) for value in fields[1:3])
-            if len(uv) != 2 or not all(math.isfinite(v) for v in uv):
-                raise ValueError("OBJ texture coordinate must contain two finite values")
-            texcoords.append(uv)
-        elif fields[0] == "vn":
-            normal = tuple(float(value) for value in fields[1:4])
-            if len(normal) != 3 or not all(math.isfinite(v) for v in normal):
-                raise ValueError("OBJ normal must contain three finite values")
-            source_normals.append(normal)
-        elif fields[0] == "f":
-            face = []
-            for item in fields[1:]:
-                parts = item.split("/")
-                if len(parts) > 3 or not parts[0]:
-                    raise ValueError("Invalid OBJ face corner")
-                def resolve(raw, values, label):
-                    if not raw:
-                        return None
-                    index = int(raw)
-                    if index == 0:
-                        raise ValueError(f"OBJ {label} indices start at one")
-                    index = index - 1 if index > 0 else len(values) + index
-                    if not 0 <= index < len(values):
-                        raise ValueError(f"OBJ face references a missing {label}")
-                    return index
-                face.append((resolve(parts[0], vertices, "vertex"),
-                             resolve(parts[1] if len(parts) > 1 else "", texcoords, "texture"),
-                             resolve(parts[2] if len(parts) > 2 else "", source_normals, "normal")))
-            if len(face) < 3:
-                raise ValueError("OBJ face must contain at least three vertices")
-            raw_faces.append(tuple(face))
+    total_face_corners = 0
+    bytes_read = 0
+
+    def resolve(raw, values, label):
+        if not raw:
+            return None
+        index = int(raw)
+        if index == 0:
+            raise ValueError(f"OBJ {label} indices start at one")
+        index = index - 1 if index > 0 else len(values) + index
+        if not 0 <= index < len(values):
+            raise ValueError(f"OBJ face references a missing {label}")
+        return index
+
+    with path.open("rb") as stream:
+        for line_number, raw_line in enumerate(stream, 1):
+            if line_number > MAX_OBJ_LINES:
+                raise ValueError(f"OBJ exceeds the {MAX_OBJ_LINES:,} line limit")
+            bytes_read += len(raw_line)
+            if bytes_read > MAX_OBJ_FILE_BYTES:
+                raise ValueError(f"OBJ exceeds the {MAX_OBJ_FILE_BYTES // (1024 * 1024)} MiB file-size limit")
+            if len(raw_line) > MAX_OBJ_LINE_BYTES:
+                raise ValueError(f"OBJ line {line_number} exceeds the {MAX_OBJ_LINE_BYTES // 1024} KiB line limit")
+            try:
+                line = raw_line.decode("utf-8-sig" if line_number == 1 else "utf-8")
+            except UnicodeDecodeError as error:
+                raise ValueError(f"OBJ line {line_number} is not valid UTF-8 text") from error
+            fields = line.split("#", 1)[0].split()
+            if not fields:
+                continue
+            if fields[0] == "v":
+                if len(vertices) >= MAX_OBJ_RECORDS:
+                    raise ValueError(f"OBJ exceeds the {MAX_OBJ_RECORDS:,} vertex-record limit")
+                xyz = tuple(float(value) for value in fields[1:4])
+                if len(xyz) != 3 or not all(math.isfinite(value) and abs(value) <= 1e7 for value in xyz):
+                    raise ValueError("OBJ vertex must contain three finite coordinates within ±10,000,000")
+                vertices.append(xyz)
+            elif fields[0] == "vt":
+                if len(texcoords) >= MAX_OBJ_RECORDS:
+                    raise ValueError(f"OBJ exceeds the {MAX_OBJ_RECORDS:,} texture-coordinate-record limit")
+                uv = tuple(float(value) for value in fields[1:3])
+                if len(uv) != 2 or not all(math.isfinite(value) and abs(value) <= 1e5 for value in uv):
+                    raise ValueError("OBJ texture coordinate must contain two finite values within ±100,000")
+                texcoords.append(uv)
+            elif fields[0] == "vn":
+                if len(source_normals) >= MAX_OBJ_RECORDS:
+                    raise ValueError(f"OBJ exceeds the {MAX_OBJ_RECORDS:,} normal-record limit")
+                normal = tuple(float(value) for value in fields[1:4])
+                if len(normal) != 3 or not all(math.isfinite(value) and abs(value) <= 1e7 for value in normal):
+                    raise ValueError("OBJ normal must contain three finite coordinates")
+                source_normals.append(normal)
+            elif fields[0] == "f":
+                corner_count = len(fields) - 1
+                if corner_count > MAX_FACE_CORNERS:
+                    raise ValueError(f"OBJ face exceeds the {MAX_FACE_CORNERS}-corner limit")
+                if len(raw_faces) >= MAX_OBJ_FACES:
+                    raise ValueError(f"OBJ exceeds the {MAX_OBJ_FACES:,} face limit")
+                total_face_corners += corner_count
+                if total_face_corners > MAX_OBJ_TOTAL_FACE_CORNERS:
+                    raise ValueError(f"OBJ exceeds the {MAX_OBJ_TOTAL_FACE_CORNERS:,} total face-corner limit")
+                face = []
+                for item in fields[1:]:
+                    parts = item.split("/")
+                    if len(parts) > 3 or not parts[0]:
+                        raise ValueError("Invalid OBJ face corner")
+                    face.append((resolve(parts[0], vertices, "vertex"),
+                                 resolve(parts[1] if len(parts) > 1 else "", texcoords, "texture"),
+                                 resolve(parts[2] if len(parts) > 2 else "", source_normals, "normal")))
+                if len(face) < 3:
+                    raise ValueError("OBJ face must contain at least three vertices")
+                raw_faces.append(tuple(face))
     if not vertices or not raw_faces:
         raise ValueError("OBJ needs vertices and polygon faces")
     if not include_attributes:
         return vertices, [tuple(corner[0] for corner in face) for face in raw_faces]
-    # BFRES stores attributes per vertex; OBJ permits independent indices per
-    # face corner. Split seam vertices so each exported vertex has one UV/normal.
+    # BFRES stores one attribute set per vertex; OBJ permits independent corner attributes.
     split_vertices, split_uvs, split_normals, faces, remap = [], [], [], [], {}
     for face in raw_faces:
         split_face = []
         for position, uv, normal in face:
             key = position, uv, normal
             if key not in remap:
+                if len(split_vertices) >= MAX_OBJ_RECORDS:
+                    raise ValueError(f"OBJ exceeds the {MAX_OBJ_RECORDS:,} attribute-split vertex limit")
                 remap[key] = len(split_vertices)
                 split_vertices.append(vertices[position])
                 split_uvs.append(texcoords[uv] if uv is not None else None)
@@ -96,6 +139,12 @@ def read_obj(path, include_attributes=False):
             split_face.append(remap[key])
         faces.append(tuple(split_face))
     return split_vertices, faces, split_uvs, split_normals
+
+
+def obj_geometry_summary(vertices, faces):
+    """Describe OBJ source counts without implying native export support."""
+    label = "face" if len(faces) == 1 else "faces"
+    return f"{len(vertices):,} vertices · {len(faces):,} polygon {label}"
 
 
 def demo_project():
@@ -856,7 +905,7 @@ class WorldStudio(ttk.Frame):
                 self.dirty = True
                 self._record_edit()
                 self.fit()
-                self.status.set("Imported OBJ for preview only. BFRES export is not implemented.")
+                self.status.set(f"OBJ preview imported · {obj_geometry_summary(*mesh)}. BFRES export is not implemented.")
             except (OSError, ValueError) as error:
                 messagebox.showerror("Cannot import OBJ", str(error), parent=self)
 
@@ -1327,7 +1376,7 @@ class NativeStudio(WorldStudio):
                 self._record_edit()
                 self.refresh()
                 self.fit()
-                self.status.set("OBJ imported for preview only; experimental native mesh replacement is disabled.")
+                self.status.set(f"OBJ preview imported · {obj_geometry_summary(*mesh)}; native mesh replacement is disabled.")
             except (OSError, ValueError) as error:
                 messagebox.showerror("Cannot import OBJ", str(error), parent=self)
 
@@ -1382,7 +1431,8 @@ class NativeStudio(WorldStudio):
                 self._record_edit()
                 self.refresh()
                 self.fit()
-                self.status.set("Experimental OBJ selected: replaces one grass mesh in BFRES; other terrain remains. Capacity/layout checks run during export.")
+                self.status.set(f"Experimental OBJ candidate · {obj_geometry_summary(vertices, faces)}. "
+                                "Replaces one existing grass mesh; capacity and layout checks run during export.")
             except (OSError, ValueError) as error:
                 messagebox.showerror("Cannot use OBJ mesh", str(error), parent=self)
 

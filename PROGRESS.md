@@ -391,3 +391,17 @@ camera behavior and a fully playable custom world remain open.
   green-channel convention and NSMBU material settings remain unverified.
   Full regression: **136 tests passed in 91.231 seconds**; `compileall`,
   `git diff --check`, and the W101 → W102/W103 graph validator also passed.
+
+## 2026-10-21 — bounded OBJ import feedback
+
+- Changed OBJ parsing to stream UTF-8 lines and reject oversized files/lines,
+  excessive line/record/face/corner counts, and out-of-range coordinates before
+  conversion. UV-seam splitting has a separate vertex cap. These guards apply
+  to preview and experimental replacement inputs; they do not widen the
+  supported BFRES export layout.
+- Import status now reports vertex and polygon counts and labels preview-only
+  imports separately from an experimental main-grass replacement candidate.
+  Regression tests cover the limits and reparse the checked-in island OBJ
+  (29 vertices, 54 triangle faces).
+- Full suite: **141 tests passed in 91.322 seconds**; `compileall`,
+  `git diff --check`, and the W101 → W102/W103 graph validator passed.
