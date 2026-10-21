@@ -112,8 +112,10 @@ class EditorSmokeTests(unittest.TestCase):
         release = threading.Event()
         worker_results = []
 
-        def build(graph):
+        def build(graph, progress=None):
             worker_results.append((threading.current_thread(), graph))
+            if progress is not None:
+                progress("Preview: reading test geometry…")
             started.set()
             release.wait(2)
             return "3D preview opened · 1 shape · 1 triangle"
@@ -126,6 +128,11 @@ class EditorSmokeTests(unittest.TestCase):
         self.root.after(0, lambda: callbacks.append("responsive"))
         self.root.update()
         self.assertEqual(callbacks, ["responsive"])
+        deadline = time.monotonic() + 1
+        while "reading test geometry" not in self.app.status.get() and time.monotonic() < deadline:
+            self.root.update()
+            time.sleep(0.01)
+        self.assertIn("reading test geometry", self.app.status.get())
         self.assertIsNot(worker_results[0][0], threading.current_thread())
         self.assertEqual([node["id"] for node in worker_results[0][1]["nodes"]], ["W101", "W102"])
 

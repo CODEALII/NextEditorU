@@ -525,7 +525,8 @@ class WorldStudio(ttk.Frame):
 
         def worker():
             try:
-                result = self._build_3d_preview(graph)
+                result = self._build_3d_preview(
+                    graph, progress=lambda message: self.preview_results.put((None, message)))
                 self.preview_results.put((True, result))
             except Exception as error:
                 # The worker never calls Tk; completion and errors are handled
@@ -541,6 +542,10 @@ class WorldStudio(ttk.Frame):
         except queue.Empty:
             self.after(60, self.poll_preview)
             return
+        if succeeded is None:
+            self.status.set(result)
+            self.after(60, self.poll_preview)
+            return
         self.set_export_busy(False)
         if succeeded:
             self.status.set(result)
@@ -548,8 +553,12 @@ class WorldStudio(ttk.Frame):
             self.status.set(f"3D preview failed: {result}")
             messagebox.showerror("3D preview unavailable", str(result), parent=self)
 
-    def _build_3d_preview(self, graph):
+    def _build_3d_preview(self, graph, progress=None):
         """Build and open a preview using the locked editor's read-only state."""
+        def report(message):
+            if progress is not None:
+                progress(message)
+
         nodes, routes = [], []
         try:
             if hasattr(self, "native"):
@@ -558,6 +567,7 @@ class WorldStudio(ttk.Frame):
                                                attach_sampler_diagnostic_textures,
                                                attach_normal_map_textures,
                                                attach_texture_srt_parameters)
+                report("Preview: reading static BFRES geometry…")
                 shapes = extract_rigid_model(self.native.model)
                 textures = {}
                 normal_textures = {}
@@ -571,6 +581,7 @@ class WorldStudio(ttk.Frame):
                 warned_normal_materials = set()
                 warned_diagnostic_materials = set()
                 if self.native.geometry is None:
+                    report("Preview: decoding supported material and texture maps…")
                     textures, warned_materials = attach_base_color_textures(self.native.model, shapes)
                     normal_textures, warned_normal_materials = attach_normal_map_textures(
                         self.native.model, shapes)
@@ -586,6 +597,7 @@ class WorldStudio(ttk.Frame):
                     texture_srt_parameters = sum(len(values) for values in srt_by_material.values())
                     shader_source = self.native.game_root / "content/Common/shader/shaderfb.szs"
                     if shader_source.is_file():
+                        report("Preview: resolving local shader-interface metadata…")
                         try:
                             from .archive import Archive
                             from .bfres_shader import attach_shader_metadata
@@ -694,6 +706,7 @@ class WorldStudio(ttk.Frame):
                 model_name = "OBJ • 3D mesh preview"
                 badges = ["OBJ source", "Read-only preview"]
             from .preview3d import open_preview
+            report("Preview: packing geometry and opening the WebGL page…")
             all_points = [p for shape in shapes for p in shape["positions"]]
             all_points.extend((n["x"], n["y"], n["z"]) for n in nodes)
             low = [min(p[i] for p in all_points) for i in range(3)]

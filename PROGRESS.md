@@ -686,3 +686,13 @@ camera behavior and a fully playable custom world remain open.
   member hash and size from the source and reopened output archive. This makes
   exported CSV/BFRES changes auditable without treating byte changes as proof
   of game behavior.
+
+## 2026-10-21 — Report native preview build stages
+
+- The native 3D preview worker now reports its current stage through the Tk
+  event loop while reading BFRES geometry, decoding supported maps, resolving
+  local shader-interface metadata, and packing/opening the offline page.
+- The editor smoke test confirms a worker status update reaches the UI while
+  Tk continues servicing other events and edits remain locked until completion.
+- The focused editor smoke suite passed (**7 tests**); `compileall` and
+  `git diff --check` passed. Full-suite verification follows before push.
