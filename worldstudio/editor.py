@@ -1052,14 +1052,14 @@ class WorldStudio(ttk.Frame):
             return False
         try:
             destination = Path(path)
-            temporary = destination.with_suffix(destination.suffix + ".tmp")
             stored = copy.deepcopy(self.project)
-            from .project import store_project_path
+            from .project import save_project_bytes, store_project_path
             stored["terrain"] = store_project_path(stored.get("terrain"), destination)
-            temporary.write_text(json.dumps(stored, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            temporary.replace(destination)
+            content = (json.dumps(stored, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+            backup = save_project_bytes(destination, content)
             self.project_path, self.dirty = destination, False
-            self.status.set(f"Saved preview project: {destination}")
+            suffix = f" Previous version: {backup}" if backup else ""
+            self.status.set(f"Saved preview project: {destination}{suffix}")
             return True
         except OSError as error:
             messagebox.showerror("Cannot save project", str(error), parent=self)
@@ -1531,9 +1531,10 @@ class NativeStudio(WorldStudio):
         if not path:
             return False
         try:
-            self.native.save(path)
+            backup = self.native.save(path)
             self.project_path, self.dirty = Path(path), False
-            self.status.set(f"Saved native project: {path}")
+            suffix = f" Previous version: {backup}" if backup else ""
+            self.status.set(f"Saved native project: {path}{suffix}")
             return True
         except (OSError, ValueError) as error:
             messagebox.showerror("Cannot save project", str(error), parent=self)

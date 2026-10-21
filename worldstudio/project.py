@@ -51,6 +51,21 @@ def _atomic_replace(path, data):
             os.unlink(tmp)
 
 
+def save_project_bytes(path, data):
+    """Atomically save a JSON project and retain one changed prior version."""
+    path = Path(path)
+    if not isinstance(data, bytes):
+        raise TypeError('Project contents must be bytes')
+    backup = None
+    if path.is_file():
+        previous = path.read_bytes()
+        if previous != data:
+            backup = path.with_name(f'{path.stem}.backup{path.suffix}')
+            _atomic_replace(backup, previous)
+    _atomic_replace(path, data)
+    return backup
+
+
 def store_project_path(value, project_file):
     """Store asset references relative to the project whenever drives allow."""
     if not value:
@@ -382,13 +397,7 @@ class WorldProject:
             'geometry': self.geometry, 'bone_renames': self.bone_renames,
             'camera_edits': self.camera_edits,
             'camera_source_sha256': {n: sha(v) for n,v in self.camera_original.items()}}, indent=2)
-        encoded = content.encode('utf-8')
-        if path.is_file():
-            previous = path.read_bytes()
-            if previous != encoded:
-                backup = path.with_name(f'{path.stem}.backup{path.suffix}')
-                _atomic_replace(backup, previous)
-        _atomic_replace(path, encoded)
+        return save_project_bytes(path, content.encode('utf-8'))
 
     @classmethod
     def load(cls, path):

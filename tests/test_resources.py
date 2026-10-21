@@ -104,15 +104,15 @@ class LocalIntegrationTests(unittest.TestCase):
         project = WorldProject.open(DEFAULT_SOURCE)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'world.json'
-            project.save(path)
+            self.assertIsNone(project.save(path))
             first_save = path.read_bytes()
             backup = path.with_name('world.backup.json')
 
-            project.save(path)
+            self.assertIsNone(project.save(path))
             self.assertFalse(backup.exists(), 'an unchanged save should not replace the previous backup')
 
             project.points.rows[0][2] = 'saved-after-edit'
-            project.save(path)
+            self.assertEqual(project.save(path), backup)
             self.assertEqual(backup.read_bytes(), first_save)
             self.assertEqual(WorldProject.load(backup).points.rows[0][2], project.points.initial[0][2])
             self.assertEqual(WorldProject.load(path).points.rows[0][2], 'saved-after-edit')

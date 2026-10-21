@@ -22,7 +22,7 @@ The suite uses synthetic fixtures and, when present, the user-supplied files und
 
 Each export manifest keeps the backward-compatible `changed_entries` list and adds an `entry_changes` record for every changed archive member, including source/output SHA-256 hashes, byte sizes and size delta. The archive-level hashes and `game_tested: false` remain explicit. The local export regression recomputes these values from the source and reopened output archive.
 
-Saving over an existing native project atomically keeps its prior contents in the adjacent `name.backup.json` file when the new content differs. The backup remains a regular loadable project, so it appears in the existing `*.json` project picker; saving without changes leaves the prior backup untouched. `test_overwriting_project_creates_openable_previous_version_backup` exercises both cases against the local source resource.
+Saving changed native or OBJ-preview project content atomically keeps the prior contents in the adjacent `name.backup.json` file. The backup remains a regular loadable project, so it appears in the existing `*.json` picker; unchanged saves leave the prior backup untouched, and the status bar reports the created path. `test_overwriting_project_creates_openable_previous_version_backup` exercises native project reloads against the local source resource; the editor smoke test verifies the OBJ-preview save and status.
 
 Check a directed route from a declared start to one or more required points:
 

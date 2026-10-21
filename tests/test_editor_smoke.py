@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import tkinter as tk
 import threading
 import time
+import tempfile
 import unittest
 
 from worldstudio.editor import NativeStudio, ObjTransformDialog, WorldStudio
@@ -153,6 +154,28 @@ class EditorSmokeTests(unittest.TestCase):
         studio.open_3d_preview()
 
         self.assertEqual(status.value, "3D preview opened · imported OBJ")
+
+    def test_lightweight_preview_save_keeps_the_previous_project_and_reports_it(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "preview.json"
+            studio = object.__new__(WorldStudio)
+            studio.project_path = path
+            studio.project = {"format": "worldstudio-preview-v1", "terrain": None,
+                              "nodes": [], "routes": [], "camera": {}}
+            studio.dirty = True
+            status = SimpleNamespace(set=lambda value: setattr(status, "value", value))
+            studio.status = status
+
+            self.assertTrue(studio.save())
+            first_save = path.read_bytes()
+            studio.project["camera"]["yaw"] = 0.5
+            studio.dirty = True
+
+            self.assertTrue(studio.save())
+
+            backup = path.with_name("preview.backup.json")
+            self.assertEqual(backup.read_bytes(), first_save)
+            self.assertIn(str(backup), status.value)
 
     def test_dragging_a_native_root_point_is_one_undoable_edit(self):
         original = list(self.native.positions["W101"])
