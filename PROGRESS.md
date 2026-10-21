@@ -117,6 +117,23 @@ Completed:
   JavaScript passes `node --check`; browser-level rendering and gameplay are
   still unverified.
 
+## 2026-10-21 — Cemu movement test input audit
+
+- The user's report that Mario does not move remains a failed gameplay check.
+- Read-only inspection found two Cemu input profiles: the isolated baseline
+  copy uses a keyboard profile with arrow keys; the separate user Cemu profile
+  selects a DirectInput wireless controller. Keyboard input would not control
+  the latter. The isolated Cemu process running during this inspection was the
+  unpatched baseline; the exact window used for the prior test is unknown.
+- This narrows a possible cause but does not prove it. Retest the patched build
+  only after confirming the active Cemu window, its enabled World Studio pack,
+  and an input source accepted by that window. Keep route/gameplay status failed
+  until the character visibly traverses the expected nodes.
+- The exact mainlight archive passes `validate-graph --entry W101 --require
+  W102 --require W103`; W102's two existing path bones are present. This is
+  static reachability evidence only. The same-profile baseline-then-patch
+  movement check remains a human Cemu test.
+
 Not yet proven / outstanding:
 - Actual game traversal, level launch, clear-triggered unlock/save persistence,
   camera behavior and cutscene interactions for the topology experiment.

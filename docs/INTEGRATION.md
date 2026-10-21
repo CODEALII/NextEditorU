@@ -33,6 +33,19 @@
   controller/input state, map state, or the patched route. No traversal pass is
   claimed; reproduce with the active input profile and record the exact start
   node and attempted direction before changing route data.
+- Read-only input-profile check on 2026-10-21 found two different setups: the
+  isolated `build/cemu-island-baseline` profile is GamePad + Keyboard and maps
+  left/right to the arrow keys; the user's separate Cemu profile is GamePad +
+  DirectInput / Wireless Controller. Keyboard arrow presses would not exercise
+  that DirectInput profile. The running isolated process was the unpatched
+  baseline at the time of inspection. It is unknown which window/profile was
+  active during the failed manual test, so this is a plausible input mismatch,
+  not a confirmed root cause.
+- Offline validation of the exact mainlight pack archive found no broken graph
+  references. W102 points to W103 through `RW102W1T0` and `RW1T0W103`, and both
+  path bones are present. This proves the declared resource references exist,
+  not that Cemu can move along them. The mainlight profile has no captured boot
+  log, so activation and runtime behavior for that exact pack remain unverified.
 
 Earlier attempts displayed black after initial dialogs. They were inconclusive:
 input setup, UI navigation and CSV quoting changed before the successful patched
@@ -47,15 +60,19 @@ No crash stack or failing game function was identified.
 - Use native backslash graphic-pack filenames and make the generated pack
   default-enabled in the isolated test. Verify activation in the log.
 - Controller XML is visibly recognized by this installed binary. Legacy INI is
-  also generated for compatibility; both carry equivalent mappings. The input
-  dialog showed GamePad + Keyboard with A=Z. Input recognition of automated taps
-  was unreliable; menu touch/click navigation worked.
+  also generated for compatibility. Movement-axis and arrow-key mappings match;
+  an older integration profile has different face-button mappings for IDs 3/4,
+  while the later mainlight XML and INI match. The input dialog showed GamePad +
+  Keyboard with A=Z. Automated tap recognition was unreliable; menu click
+  navigation worked.
 
 ## Still required before declaring the prototype playable
 
-1. Reproduce the reported no-movement result from a known node and record the
-   active input profile; then determine whether the tower path blocks travel,
-   stops at the tower, or reaches W103.
+1. In one Cemu window/profile, verify baseline movement at W101 by holding `D`
+   briefly (left-stick right). Then load the patched archive in the same profile
+   and test W102→W103 with the same key. Record the active window/profile and
+   the displayed start and destination. Baseline motion with patched immobility
+   isolates a route/patch issue; failure in both leaves focus/input unresolved.
 2. Confirm the displayed destination is Acorn Plains 3 and launch that level.
 3. On a fresh save, clear 1-1 then 1-2. Confirm the intended new unlocks and
    restrictions without relying on already-cleared tower flags.
