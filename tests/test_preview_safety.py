@@ -459,7 +459,7 @@ console.log(JSON.stringify({direction:Array.from(previewLightDirection),intensit
         page = build_document(scene)
         script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
         subprocess.run([node, "--check", "-"], input=script, check=True,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8")
 
     def test_texture_srt_values_are_read_only_inspector_metadata(self):
         node = shutil.which("node")
@@ -485,6 +485,44 @@ console.log(JSON.stringify({direction:Array.from(previewLightDirection),intensit
             check=True, capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(result.stdout.strip(),
                          "texmtx0 \u00b7 mode 0 \u00b7 scale (1.000, 1.000) \u00b7 rotation 0.000 \u00b7 translation (0.000, -3.000)")
+
+    def test_raw_uv_diagnostic_reports_bounds_and_rejects_invalid_triangles(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise the UV diagnostic")
+        page = build_document({"shapes": [{"name": "mesh", "material": "mat",
+                                            "positions": [], "normals": [],
+                                            "indices": [0, 1, 2],
+                                            "uvs": [(0, 0), (1, 0), (2, -1)]}],
+                               "nodes": [], "routes": []})
+        self.assertIn("uvsPacked:shape.uvsPacked||null", page)
+        self.assertIn("Raw UV layout · untransformed", page)
+        self.assertIn("no texture SRT or sampler transform is applied", page)
+        self.assertIn("V increases upward", page)
+        start = page.index("function uvChartMetrics(")
+        end = page.index("\nfunction drawUvChart", start)
+        metrics_helper = page[start:end]
+        draw_start = page.index("function drawUvChart(")
+        draw_end = page.index("\nfunction selectMesh", draw_start)
+        draw_helper = page[draw_start:draw_end]
+        probe = metrics_helper + "\n" + draw_helper + r'''
+const uvs=new Float32Array([0,0,1,0,2,-1,NaN,0]);
+const indices=new Uint16Array([0,1,2,0,2,99,0,1,3]);
+const stats=uvChartMetrics(uvs,indices);
+const noop=()=>{};
+const context={clearRect:noop,fillRect:noop,beginPath:noop,moveTo:noop,lineTo:noop,
+  stroke:noop,strokeRect:noop,closePath:noop,fillText:noop};
+const canvas={width:360,height:203,getContext:()=>context};
+console.log(JSON.stringify({stats,drawn:drawUvChart(canvas,uvs,indices,stats)}));
+'''
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True,
+                                text=True, encoding="utf-8")
+        output = json.loads(result.stdout)
+        self.assertEqual(output["stats"], {
+            "vertexCount": 4, "finiteUvCount": 3, "outOfRangeCount": 1,
+            "triangleCount": 3, "validTriangleCount": 1,
+            "invalidTriangleCount": 2, "bounds": [0, -1, 2, 0]})
+        self.assertEqual(output["drawn"], 1)
 
     def test_shader_option_candidate_is_embedded_and_labeled_as_unresolved(self):
         metadata = {

@@ -775,11 +775,14 @@ camera behavior and a fully playable custom world remain open.
 - Added `--baseline` to `tools/prepare_cemu.py`. It creates a separate MLC
   without user saves, enables CrashFix only, omits the World Studio pack, and
   tells the tester to confirm the keyboard stick assignment in Cemu 1.26.
-  `build/cemu-clean-baseline` is prepared but has not been launched.
+  `build/cemu-clean-baseline` was launched once; its Cemu window showed the
+  empty library, and no RPX was loaded.
 - The focused Cemu preparation suite passed (**8 tests**). The full suite is
   green, and the full suite passed (**216 tests in 158.984 seconds**), with
-  `compileall` and `git diff --check`. Runtime movement remains unverified; no
-  emulator process was started for this audit.
+  `compileall` and `git diff --check`. Runtime movement remains unverified.
+- The later UI-control attempt could not continue after the clean window opened:
+  repeated state capture returned `foreground window did not report a process id`.
+  No control mapping or in-game movement result is claimed.
 
 ## 2026-10-21 — Protect native route bone identifiers
 
@@ -791,6 +794,24 @@ camera behavior and a fully playable custom world remain open.
   focused test and full suite passed (**217 tests in 150.266 seconds**), with
   `compileall` and `git diff --check`. This does not add route bones or establish
   traversal behavior.
+
+## 2026-10-21 — Add raw UV diagnostics to the 3D inspector
+
+- Selecting a mesh with stored UVs now shows a raw UV triangle chart, UV bounds,
+  vertices outside the 0–1 tile, and valid/invalid triangle counts. Dense charts
+  sample at most 20,000 triangles; extreme UV ranges are clipped visibly at
+  ±1,024 units.
+- The inspector labels the chart as raw coordinates and explicitly says no
+  texture SRT or sampler transform is applied. This exposes UV layout for
+  debugging without claiming shader-accurate texturing.
+- Synthetic Node tests cover bounds, out-of-range counts, invalid indices and
+  chart drawing; the focused preview safety suite passed (**29 tests**). The
+  full suite passed (**218 tests in 148.525 seconds**), with `compileall` and
+  `git diff --check`.
+- Headless Chrome/SwiftShader loaded the real 42-shape W1 page, selected
+  `beltmodel14__mtGrass`, and rendered its UV chart and stored bounds without a
+  WebGL error overlay. Screenshot: `local/evidence/preview-w1-uv-chart.png`
+  (ignored local evidence; this is not in-game rendering verification).
 
 ## 2026-10-21 — Report unsupported OBJ features
 

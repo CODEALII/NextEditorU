@@ -4,14 +4,15 @@ World Studio is an offline research prototype. Items below describe work still n
 
 ## Highest priority: verify route movement
 
-The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still unverified. A config audit found that the folder previously named `cemu-island-baseline` enables WorldStudioChain, so its movement result is not a clean baseline. `build/cemu-clean-baseline` is now prepared with CrashFix only and a separate MLC, but has not been launched. First verify its keyboard-to-left-stick mapping in Cemu and establish stock movement; then compare patched routes in the same profile and verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
+The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still unverified. A config audit found that the folder previously named `cemu-island-baseline` enables WorldStudioChain, so its movement result is not a clean baseline. `build/cemu-clean-baseline` has CrashFix only and a separate MLC. It was launched once, but the Cemu window showed an empty library and no RPX was loaded. UI state capture then failed with `foreground window did not report a process id`; no stock movement was observed. First load the supplied RPX and verify the keyboard-to-left-stick mapping in Cemu before comparing stock and patched routes. Then verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
 
 The isolated `cemu-island-mainlight` process has a log confirming both the
 World Studio Chain and crash-fix packs activated and reached the title screen.
 The earlier window called `cemu-island-baseline` also had the chain pack
 enabled, so its no-movement result cannot establish stock baseline behavior.
-The new CrashFix-only baseline folder is prepared; a human must verify the
-effective keyboard-to-left-stick mapping and movement before route comparison.
+The new CrashFix-only baseline folder is prepared. It still needs the supplied
+RPX loaded and a verified keyboard-to-left-stick mapping before movement can be
+compared.
 
 ## Rendering fidelity
 
@@ -33,6 +34,7 @@ effective keyboard-to-left-stick mapping and movement before route comparison.
 - Implemented: Front, Side and Top camera presets orient the viewer around its current focus point, expose their selected state accessibly, and clear that state when the user resumes orbiting.
 - Implemented: the camera panel exposes editable preview-target X/Y/Z coordinates in model units, updates after mesh focus and Fit view, and rejects non-finite or out-of-range values without changing the active target.
 - Implemented: selected-mesh texture cards report dimensions, supported stored formats, and exact sampler-symbol names when the BFRES material resolves to a local SHARCFB program. These labels describe declared shader interfaces; they do not reproduce the material's shader calculations.
+- Implemented: selecting a UV mesh shows a raw UV chart, 0–1 tile, stored bounds, out-of-range vertex count, and valid/invalid triangle counts. Dense charts are sampled; no SRT or sampler transform is applied.
 - Implemented: local W1 BC4 UNorm sampler maps in `_b0`, `_o1`, `_s0`, and `_x2` can be chosen in a diagnostic selector. The four slots expose 19 maps across 42 supported shapes. A 36-material/258-reference scan found no paired-table mismatches; four fixed BC4 sampler vectors cover the slots. The assigned shader declarations name `_b0`/`_b1` bake maps, `_s0` spec mask, and `_o1` edge mask; channel displays still show stored texels only.
 - Implemented: bounded, read-only extraction of type-31 `texmtxN` SRT fields for the tested W1 materials. The inspector displays stored mode, scale, rotation and translation without applying a UV matrix or assigning the parameter to a sampler.
 - Implemented: read-only BC3 UNorm thumbnails for the observed `_x0` and `_x1` sampler references. The preview preserves stored texels for inspection without applying them to material shading or assigning them shader meaning.

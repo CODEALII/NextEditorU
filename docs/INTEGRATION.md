@@ -13,7 +13,9 @@
   notes calling those runs baseline are withdrawn.
 - A new `build/cemu-clean-baseline` folder is prepared from the same local
   Cemu copy with CrashFix only, a separate MLC, and no copied user saves. It
-  has not been launched yet. Recreate it with:
+  was launched once and showed the empty Cemu library; no RPX was loaded. UI
+  state capture then failed with `foreground window did not report a process id`,
+  so the input mapping and stock movement remain unverified. Recreate it with:
 
   ```powershell
   python tools/prepare_cemu.py --cemu build/cemu-island-baseline --baseline --out build/cemu-clean-baseline
