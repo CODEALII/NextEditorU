@@ -116,6 +116,8 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertNotIn('https://', page)
         self.assertIn('<button id="wireframe">Wireframe off</button>', page)
         self.assertIn('gl.drawElements(showWireframe?gl.LINES:gl.TRIANGLES', page)
+        self.assertIn('<button id="normals">Normals off</button>', page)
+        self.assertIn('if(m.visible)drawOverlay(m.normalOverlay', page)
 
     def test_wireframe_edge_builder_deduplicates_triangle_edges(self):
         node = shutil.which("node")
@@ -123,11 +125,24 @@ class PreviewSafetyTests(unittest.TestCase):
             self.skipTest("Node.js is required to exercise viewer wireframe edge generation")
         page = build_document({"shapes": [], "nodes": [], "routes": []})
         start = page.index("function wireEdges(indices){")
-        end = page.index("\nlet meshes=[];", start)
+        end = page.index("\nconst normalVertexTotal=", start)
         helper = page[start:end]
         probe = helper + "\nconsole.log(JSON.stringify(Array.from(wireEdges([0,1,2,2,1,3]))))"
         result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
         self.assertEqual(json.loads(result.stdout), [0, 1, 1, 2, 0, 2, 1, 3, 2, 3])
+
+    def test_sampled_vertex_normal_vectors_follow_source_positions(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise viewer normal-vector generation")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        start = page.index("const normalVertexTotal=")
+        end = page.index("\nlet meshes=[];", start)
+        helper = page[start:end]
+        probe = ("const scene={stats:{vertices:2},bounds:{radius:10},shapes:[]};\n" + helper +
+                 "\nconsole.log(JSON.stringify(Array.from(makeNormalLines([0,0,0,2,0,0],[0,2,0,0,0,-3]))))")
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        self.assertEqual(json.loads(result.stdout), [0, 0, 0, 0, 1, 0, 2, 0, 0, 2, 0, -1])
 
     def test_generated_viewer_javascript_parses(self):
         node = shutil.which("node")

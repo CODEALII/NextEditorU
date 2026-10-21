@@ -274,12 +274,15 @@ camera behavior and a fully playable custom world remain open.
 - Added a wireframe mode with deduplicated triangle edges. A Node regression
   verifies its edge output while the generated page syntax test covers both
   controls.
+- Added a sampled vertex-normal overlay with model-scaled line length and a
+  scene-wide sampling cap; a Node regression verifies the generated vectors.
 - Local W1 `RouteW1_nml` fixture: 128x256, format `0x235`, pitch 32, nine mips
   reported, 32,768-byte top-level image. Raw and detiled hashes are recorded in
   `docs/RESEARCH.md`; synthetic and local tests cover signed endpoints, crops,
   malformed sizes, slot validation and shared GX2 addressing.
-- Focused texture, extractor, viewer and security tests: **41 passed**. The
-  full offline suite then passed **120 tests in 96.490 seconds**; `compileall`,
-  `git diff --check`, and the local W1 route-validation command passed. The
-  WebGL controls are automated-test-covered; their visible appearance in the
-  user's browser and Cemu is still unverified.
+- Focused texture, extractor and viewer tests: **42 passed**. The full offline
+  suite passed **121 tests in 95.439 seconds**; `compileall`, `git diff --check`,
+  and the local W1 route-validation command passed. The generated W1 page has
+  42 shapes, 17 albedos, six BC5 maps and valid inline JavaScript. The WebGL
+  controls are automated-test-covered; their visible appearance in the user's
+  browser and Cemu is still unverified.
