@@ -21,6 +21,8 @@ Repeat `--entry` to allow multiple starts and `--require` for each required dest
 
 The WebGL page is generated locally from parsed scene data. For the supplied W1 BFRES it decodes 17 shared BC1/BC3 albedo textures across all 36 shapes with UVs, applies a 50% alpha cutout, and packs geometry into little-endian typed buffers. Local W1 tests check the `Grass_alb` and `RouteW1_alb` raw/detiled hashes, then validate the complete texture catalog. To check generated viewer JavaScript against the actual dump, assemble a scene with `extract_rigid_model` and `attach_base_color_textures`, pass it to `build_document`, extract the inline script and run `node --check`. A headless Chrome run with SwiftShader rendered the full local scene and was visually inspected; user-browser hardware acceleration and interaction remain unchecked. BC4/BC5 maps, material parameters, UV transforms, light maps, game shaders and animation are not evaluated.
 
+The native editor has bounded undo/redo (`Ctrl+Z`, `Ctrl+Y`, or the toolbar). It covers point and route rows, BFRES local-position drafts, camera offset vectors, and terrain imports. Loading or reloading a project clears the history. Undo marks the project dirty; save and export still run their normal validation.
+
 ## Cemu integration checks
 
 Follow [INTEGRATION.md](INTEGRATION.md) to prepare an isolated profile and preserve the original game tree and saves. Use the normal game resources as a baseline before enabling a generated graphic pack. Record the active pack, input profile, starting node, exact direction tested, destination shown, level result and save/reload result.

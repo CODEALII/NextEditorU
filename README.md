@@ -20,7 +20,7 @@ Progress details and dated findings: [PROGRESS.md](PROGRESS.md) · [Runtime test
 - Pack scene geometry into compact typed buffers for the viewer; its generated page was about 8.1 MB for the supplied W1 model and decoded textures.
 - Run directed reachability checks for explicitly selected entry points and required locations with `validate-graph`.
 - Read and edit discovered camera-offset tables; analyze and round-trip event data offline.
-- Use the standalone Tk editor to inspect the map, edit supported fields, and save project files.
+- Use the standalone Tk editor to inspect the map, edit supported fields, save project files, and undo or redo up to 31 recent edits with Ctrl+Z / Ctrl+Y.
 - Run the local automated suite against synthetic fixtures and the user-provided local dump.
 
 The WebGL viewer supports BC1/BC3 base-color maps in the observed GX2 2D Thin1 layout. It does not evaluate material parameters, UV transforms, light maps, game shaders, animation, or arbitrary BFRES variants. The editor deliberately blocks unsupported node/index changes. Camera and event formats have offline tooling, but their in-game behavior and runtime integration are not verified. Read [Research and format findings](docs/RESEARCH.md), [Resource findings](docs/RESOURCE_FINDINGS.md), [Camera findings](docs/CAMERA_FINDINGS.md), and [Event findings](docs/EVENTS.md) for the evidence and limits of each feature.

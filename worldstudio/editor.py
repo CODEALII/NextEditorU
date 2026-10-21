@@ -139,6 +139,46 @@ def validate_preview(project):
     return issues
 
 
+class EditHistory:
+    """Bounded cursor over caller-owned snapshots for editor undo and redo."""
+
+    def __init__(self, initial_state, limit=32):
+        self.limit = max(2, int(limit))
+        self.states = [initial_state]
+        self.index = 0
+
+    @property
+    def can_undo(self):
+        return self.index > 0
+
+    @property
+    def can_redo(self):
+        return self.index < len(self.states) - 1
+
+    def push(self, state):
+        del self.states[self.index + 1:]
+        self.states.append(state)
+        if len(self.states) > self.limit:
+            del self.states[:len(self.states) - self.limit]
+        self.index = len(self.states) - 1
+
+    def reset(self, state):
+        self.states = [state]
+        self.index = 0
+
+    def undo(self):
+        if not self.can_undo:
+            return None
+        self.index -= 1
+        return self.states[self.index]
+
+    def redo(self):
+        if not self.can_redo:
+            return None
+        self.index += 1
+        return self.states[self.index]
+
+
 class WorldStudio(ttk.Frame):
     """Visual preview editor; native archive actions may be supplied by a caller."""
 
@@ -158,6 +198,11 @@ class WorldStudio(ttk.Frame):
         self._build()
         self._load_mesh()
         self.refresh()
+        self.history = EditHistory(self._capture_edit_state())
+        self._sync_history_buttons()
+        self.master.bind("<Control-z>", self._undo_shortcut)
+        self.master.bind("<Control-y>", self._redo_shortcut)
+        self.master.bind("<Control-Shift-Z>", self._redo_shortcut)
         master.protocol("WM_DELETE_WINDOW", self.close)
 
     def _build(self):
@@ -201,6 +246,12 @@ class WorldStudio(ttk.Frame):
                               ("Delete selected", self.delete), ("Validate", self.validate),
                               ("3D model preview", self.open_3d_preview), ("Fit view", self.fit)]:
             ttk.Button(bar, text=title, command=action).pack(side="left", padx=2)
+        history_bar = ttk.Frame(self, padding=(8, 0, 8, 4))
+        history_bar.pack(fill="x")
+        self.undo_button = ttk.Button(history_bar, text="Undo  Ctrl+Z", command=self.undo, state="disabled")
+        self.undo_button.pack(side="left", padx=2)
+        self.redo_button = ttk.Button(history_bar, text="Redo  Ctrl+Y", command=self.redo, state="disabled")
+        self.redo_button.pack(side="left", padx=2)
         self.viewport_hint = ttk.Label(self, text="Graph editor preview: drag to orbit · wheel to zoom · click a node to edit. "
                   "Use 3D model preview for depth-tested world geometry.", padding=(10, 5), foreground="#9fb4c7")
         self.viewport_hint.pack(fill="x")
@@ -251,6 +302,104 @@ class WorldStudio(ttk.Frame):
         self.canvas.bind("<B1-Motion>", self.orbit)
         self.canvas.bind("<ButtonRelease-1>", self.release)
         self.canvas.bind("<MouseWheel>", self.zoom)
+
+    def _capture_edit_state(self):
+        if hasattr(self, "native"):
+            native = self.native
+            return {
+                "kind": "native",
+                "points": copy.deepcopy(native.points.rows),
+                "routes": copy.deepcopy(native.routes.rows),
+                "positions": copy.deepcopy(native.positions),
+                "layout": copy.deepcopy(native.layout),
+                "terrain": native.terrain,
+                "geometry": native.geometry,
+                "bone_renames": copy.deepcopy(getattr(native, "bone_renames", [])),
+                "camera_edits": copy.deepcopy(getattr(native, "camera_edits", {})),
+                "mesh": self.mesh,
+            }
+        project = copy.deepcopy(self.project)
+        project.pop("camera", None)
+        return {"kind": "preview", "project": project, "mesh": self.mesh}
+
+    def _record_edit(self):
+        self.history.push(self._capture_edit_state())
+        self._sync_history_buttons()
+
+    def _reset_edit_history(self):
+        self.history.reset(self._capture_edit_state())
+        self._sync_history_buttons()
+
+    def _sync_history_buttons(self):
+        if not hasattr(self, "history"):
+            return
+        if hasattr(self, "undo_button") and self.undo_button.winfo_exists():
+            self.undo_button.configure(state="normal" if self.history.can_undo else "disabled")
+        if hasattr(self, "redo_button") and self.redo_button.winfo_exists():
+            self.redo_button.configure(state="normal" if self.history.can_redo else "disabled")
+
+    def _undo_shortcut(self, event=None):
+        self.undo()
+        return "break"
+
+    def _redo_shortcut(self, event=None):
+        self.redo()
+        return "break"
+
+    def _restore_edit_state(self, state, action):
+        if getattr(self, "exporting", False):
+            return
+        previous_mesh = self.mesh
+        if state["kind"] == "native":
+            native = self.native
+            native.points.rows = copy.deepcopy(state["points"])
+            native.routes.rows = copy.deepcopy(state["routes"])
+            native.positions = copy.deepcopy(state["positions"])
+            native.layout = copy.deepcopy(state["layout"])
+            native.terrain = state["terrain"]
+            native.geometry = state["geometry"]
+            if hasattr(native, "bone_renames"):
+                native.bone_renames = copy.deepcopy(state["bone_renames"])
+            if hasattr(native, "camera_edits"):
+                native.camera_edits = copy.deepcopy(state["camera_edits"])
+            self.mesh = state["mesh"]
+        else:
+            camera = copy.deepcopy(self.project.get("camera", {}))
+            self.project = copy.deepcopy(state["project"])
+            if camera:
+                self.project["camera"] = camera
+            self.mesh = state["mesh"]
+        self.dirty = True
+        self.selected = None
+        if hasattr(self, "native_selection"):
+            self.native_selection = None
+        selection = self.tree.selection()
+        if selection:
+            self.tree.selection_remove(*selection)
+        for child in self.form.winfo_children():
+            child.destroy()
+        self.properties = {}
+        if hasattr(self, "position_properties"):
+            self.position_properties = {}
+        self.refresh()
+        if self.mesh is not previous_mesh:
+            self.fit()
+        self.status.set(f"{action} applied; save the project to keep changes")
+        self._sync_history_buttons()
+
+    def undo(self):
+        if getattr(self, "exporting", False):
+            return
+        state = self.history.undo()
+        if state is not None:
+            self._restore_edit_state(state, "Undo")
+
+    def redo(self):
+        if getattr(self, "exporting", False):
+            return
+        state = self.history.redo()
+        if state is not None:
+            self._restore_edit_state(state, "Redo")
 
     def camera_change(self, key, value):
         self.project.setdefault("camera", {})[key] = float(value)
@@ -497,6 +646,7 @@ class WorldStudio(ttk.Frame):
             old.update(candidate)
             self.selected = kind, candidate["id"]
             self.dirty = True
+            self._record_edit()
             self.refresh()
             self.status.set("Preview properties updated; save the project to keep changes")
         except (ValueError, TypeError) as error:
@@ -511,6 +661,7 @@ class WorldStudio(ttk.Frame):
             return
         self.project["nodes"].append({"id": name.strip(), "x": 0, "y": 0, "z": 0, "level": ""})
         self.dirty = True
+        self._record_edit()
         self.refresh()
 
     def add_route(self):
@@ -533,6 +684,7 @@ class WorldStudio(ttk.Frame):
                 return
             self.project["routes"].append(route)
             self.dirty = True
+            self._record_edit()
             self.refresh()
             window.destroy()
         ttk.Button(window, text="Create route", command=submit).grid(row=4, columnspan=2, pady=8)
@@ -552,6 +704,7 @@ class WorldStudio(ttk.Frame):
             self.project["routes"] = [r for r in self.project["routes"] if name not in (r["start"], r["end"])]
         self.selected = None
         self.dirty = True
+        self._record_edit()
         for child in self.form.winfo_children():
             child.destroy()
         self.refresh()
@@ -612,6 +765,7 @@ class WorldStudio(ttk.Frame):
             self.selected, self.dirty = None, False
             self._load_mesh()
             self.refresh()
+            self._reset_edit_history()
 
     def open(self):
         if not self.may_discard():
@@ -633,6 +787,7 @@ class WorldStudio(ttk.Frame):
             self._load_mesh()
             self.refresh()
             self.status.set(f"Opened {path}")
+            self._reset_edit_history()
         except (OSError, ValueError, KeyError, TypeError) as error:
             messagebox.showerror("Cannot open project", str(error), parent=self)
 
@@ -662,6 +817,7 @@ class WorldStudio(ttk.Frame):
                 mesh = read_obj(path)
                 self.project["terrain"], self.mesh = str(Path(path).resolve()), mesh
                 self.dirty = True
+                self._record_edit()
                 self.fit()
                 self.status.set("Imported OBJ for preview only. BFRES export is not implemented.")
             except (OSError, ValueError) as error:
@@ -875,6 +1031,7 @@ class NativeStudio(WorldStudio):
         if kind == "bone":
             self.native.positions[index] = position
             self.dirty = True
+            self._record_edit()
             self.refresh()
             self.status.set(f"Updated {index} local XYZ; hierarchy rest positions refreshed. Animation behavior remains unverified.")
             return
@@ -885,6 +1042,7 @@ class NativeStudio(WorldStudio):
             target = self.native.positions if name in self.native.positions else self.native.layout
             target[name] = position
         self.dirty = True
+        self._record_edit()
         self.refresh()
         self.status.set("Native CSV updated. Validate before export; in-game behavior remains unverified.")
 
@@ -895,6 +1053,7 @@ class NativeStudio(WorldStudio):
         if name:
             self.native.points.rows.append([str(len(self.native.points.rows)), name.strip(), "", "", "", "", "", "", ""])
             self.dirty = True
+            self._record_edit()
             self.refresh()
             self.status.set("Draft point added. New engine indices require script remapping and cannot currently export.")
 
@@ -905,6 +1064,7 @@ class NativeStudio(WorldStudio):
         if name:
             self.native.routes.rows.append([name.strip(), "道", ""])
             self.dirty = True
+            self._record_edit()
             self.refresh()
 
     def delete(self):
@@ -921,6 +1081,7 @@ class NativeStudio(WorldStudio):
         del rows[index]
         self.native_selection = self.selected = None
         self.dirty = True
+        self._record_edit()
         self.refresh()
         for child in self.form.winfo_children():
             child.destroy()
@@ -974,6 +1135,7 @@ class NativeStudio(WorldStudio):
         for child in self.form.winfo_children():
             child.destroy()
         self.status.set(f"Opened {native.source.name}; " + ("hierarchy-transformed BFRES rest pose; purple points use editor layout" if native.positions else "editor layout; game coordinates unavailable"))
+        self._reset_edit_history()
 
     def open(self):
         if not self.may_discard():
@@ -1020,6 +1182,7 @@ class NativeStudio(WorldStudio):
                 self.native.geometry = None
                 self.mesh = mesh
                 self.dirty = True
+                self._record_edit()
                 self.refresh()
                 self.fit()
                 self.status.set("OBJ imported for preview only; experimental native mesh replacement is disabled.")
@@ -1058,6 +1221,7 @@ class NativeStudio(WorldStudio):
             messagebox.showerror("Direct route unavailable", str(error), parent=self)
             return
         self.dirty = True
+        self._record_edit()
         self.refresh()
         self.status.set("Experimental direct 1-2 → 1-3 applied: overwrote 3 progression rows and one path/segment; other drafts retained. Save and export separately; traversal remains unverified.")
 
@@ -1073,6 +1237,7 @@ class NativeStudio(WorldStudio):
                 self.native.terrain = str(Path(path).resolve())
                 self.mesh = vertices, faces
                 self.dirty = True
+                self._record_edit()
                 self.refresh()
                 self.fit()
                 self.status.set("Experimental OBJ selected: replaces one grass mesh in BFRES; other terrain remains. Capacity/layout checks run during export.")
@@ -1236,6 +1401,7 @@ class CameraDataWindow(tk.Toplevel):
             vector = [float(self.vector[key].get()) for key in ("x", "y", "z")]
             self.native.set_camera_vector(self.filename.get(), bank, index, vector)
             self.studio.dirty = True
+            self.studio._record_edit()
             self.reload()
             self.status.set(f"Applied {self.filename.get()} bank {bank}, record {index}. Final camera behavior remains unverified.")
             self.studio.status.set("Camera raw vector draft updated. Save the project and export companion files to test it.")

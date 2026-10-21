@@ -82,6 +82,29 @@ class EditorSmokeTests(unittest.TestCase):
         self.app.apply()
         self.assertEqual(self.app.tree.selection(), ("segment:0",))
 
+    def test_native_edits_support_undo_and_redo(self):
+        self.app.tree.selection_set("bone:K001")
+        self.app.select_tree()
+        self.app.position_properties["x"].set("50")
+        self.app.apply()
+        self.assertEqual(self.native.positions["K001"][0], 50)
+
+        self.app.undo()
+        self.assertEqual(self.native.positions["K001"][0], 20)
+        self.assertTrue(self.app.history.can_redo)
+        self.app.redo()
+        self.assertEqual(self.native.positions["K001"][0], 50)
+
+        self.app.tree.selection_set("segment:0")
+        self.app.select_tree()
+        self.app.properties[1].set("revised-road")
+        self.app.apply()
+        self.assertEqual(self.native.routes.rows[0][1], "revised-road")
+        self.app.undo()
+        self.assertEqual(self.native.routes.rows[0][1], "road")
+        self.app.redo()
+        self.assertEqual(self.native.routes.rows[0][1], "revised-road")
+
 
 if __name__ == "__main__":
     unittest.main()

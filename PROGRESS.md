@@ -212,3 +212,15 @@ camera behavior and a fully playable custom world remain open.
 - Verified visually in a fresh native editor instance with the local `CS_W1.szs`;
   Python `compileall` and `git diff --check` passed. The change affects editor
   presentation only and provides no new evidence about game behavior.
+
+## 2026-10-21 - Bounded editor undo and redo
+
+- Added `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z` and toolbar controls backed by a
+  32-state history. It covers native point and route rows, local BFRES position
+  drafts, camera offset vectors, and imported terrain geometry. Project load or
+  reload resets the history; restoring an edit marks the project dirty.
+- Regression coverage verifies branch truncation, history limits, reset, and
+  end-to-end native bone and route-row undo/redo in the hidden Tk editor.
+- The full offline suite passed **102 tests in 99.180 seconds**; `compileall`
+  passed. A fresh native editor window shows the controls disabled until the
+  first edit, and the graph labels remain readable. Gameplay status is unchanged.
