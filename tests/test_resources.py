@@ -100,6 +100,23 @@ class LocalIntegrationTests(unittest.TestCase):
                 loaded.export(out / 'CS_W1.szs')
         self.assertEqual(DEFAULT_SOURCE.read_bytes(), self.original)
 
+    def test_overwriting_project_creates_openable_previous_version_backup(self):
+        project = WorldProject.open(DEFAULT_SOURCE)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'world.json'
+            project.save(path)
+            first_save = path.read_bytes()
+            backup = path.with_name('world.backup.json')
+
+            project.save(path)
+            self.assertFalse(backup.exists(), 'an unchanged save should not replace the previous backup')
+
+            project.points.rows[0][2] = 'saved-after-edit'
+            project.save(path)
+            self.assertEqual(backup.read_bytes(), first_save)
+            self.assertEqual(WorldProject.load(backup).points.rows[0][2], project.points.initial[0][2])
+            self.assertEqual(WorldProject.load(path).points.rows[0][2], 'saved-after-edit')
+
     def test_bone_patch_changes_only_intended_bytes(self):
         p = WorldProject.open(DEFAULT_SOURCE)
         bone = p.skeletons.unique('W101')

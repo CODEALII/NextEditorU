@@ -696,3 +696,12 @@ camera behavior and a fully playable custom world remain open.
   Tk continues servicing other events and edits remain locked until completion.
 - The focused editor smoke suite passed (**7 tests**); `compileall` and
   `git diff --check` passed. Full-suite verification follows before push.
+
+## 2026-10-21 — Preserve the previous native project save
+
+- Saving changed project content over an existing file now atomically keeps
+  the old bytes beside it as `name.backup.json`. Unchanged saves do not replace
+  that backup, and the regular JSON project picker can open it for recovery.
+- A local regression reloads both the saved and backup projects and checks
+  that each contains the intended version. This keeps one previous version;
+  rotation and recent-project discovery remain open roadmap items.

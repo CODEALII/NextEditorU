@@ -78,7 +78,8 @@ is still needed before baseline/patch route QA.
   and records one undo step on release. Route drawing and placement of new
   engine-backed points remain blocked on native index/script-reference safety.
 - Add transform handles and route-edit controls with project-level regression tests.
-- Add recent projects, recoverable sessions, backup rotation, changed-file manifests, and export/reimport comparison.
+- Implemented: changed archive members have before/after hashes and sizes in the export manifest; overwriting a changed native project keeps one adjacent, openable previous-version backup.
+- Add recent projects, recoverable sessions, multi-version backup rotation, and export/reimport comparison.
 - Implemented: archive, camera companion and manifest export writes roll back files created by the current export if a later output write fails.
 - Profile large models and projects before adding background parsing or more caching. A current local W1 page embedding decoded maps measured 21.01 MiB; this is payload size, not a browser performance benchmark.
 

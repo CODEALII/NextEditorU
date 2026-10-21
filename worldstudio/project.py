@@ -37,6 +37,20 @@ def write_new(path, data):
         raise
 
 
+def _atomic_replace(path, data):
+    """Atomically replace one project file without exposing a partial write."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.worldstudio-')
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(data)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
 def store_project_path(value, project_file):
     """Store asset references relative to the project whenever drives allow."""
     if not value:
@@ -368,15 +382,13 @@ class WorldProject:
             'geometry': self.geometry, 'bone_renames': self.bone_renames,
             'camera_edits': self.camera_edits,
             'camera_source_sha256': {n: sha(v) for n,v in self.camera_original.items()}}, indent=2)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.worldstudio-')
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                f.write(content)
-            os.replace(tmp, path)
-        finally:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
+        encoded = content.encode('utf-8')
+        if path.is_file():
+            previous = path.read_bytes()
+            if previous != encoded:
+                backup = path.with_name(f'{path.stem}.backup{path.suffix}')
+                _atomic_replace(backup, previous)
+        _atomic_replace(path, encoded)
 
     @classmethod
     def load(cls, path):
