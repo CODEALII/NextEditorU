@@ -1,0 +1,82 @@
+"""Narrow extraction of static Wii U BFRES base-color textures.
+
+The layouts are cross-checked against the repository's pinned MIT BfresLibrary
+Wii U Material, TextureRef and FTEX readers. This helper intentionally supports
+only one non-array BC1 texture on a named material; it does not interpret
+samplers, light maps, shader parameters, animation or other surface formats.
+"""
+from .bfres import Skeletons
+
+
+def extract_bc1_base_texture(data, model_name, material_name, texture_name=None):
+    """Return raw GX2 BC1 base-color texture metadata and bytes for one material.
+
+    The supported surface is a single-slice 2D, one-sample, 2D Thin1 texture
+    stored in the BFRES image payload. The returned bytes remain GX2-tiled;
+    callers must deswizzle and decode them before display.
+    """
+    r = Skeletons(data)
+    textures = dict(r.dictionary(r.ptr(0x24)))
+    models = dict(r.dictionary(r.ptr(0x20)))
+    if model_name not in models:
+        raise ValueError(f'Missing BFRES model: {model_name}')
+    model = models[model_name]
+    materials = dict(r.dictionary(r.ptr(model + 24)))
+    if material_name not in materials:
+        raise ValueError(f'Missing BFRES material: {material_name}')
+    material = materials[material_name]
+    r.bounds(material, 0x48)
+    if data[material:material + 4] != b'FMAT':
+        raise ValueError(f'{material_name}: invalid BFRES material')
+    reference_count = data[material + 17]
+    reference_list = r.ptr(material + 40)
+    r.bounds(reference_list, reference_count * 8)
+    matches = []
+    for index in range(reference_count):
+        reference = reference_list + index * 8
+        name = r.string(r.ptr(reference))
+        texture = r.ptr(reference + 4)
+        if name not in textures or textures[name] != texture:
+            raise ValueError(f'{material_name}: texture reference does not match BFRES dictionary: {name}')
+        if (texture_name is not None and name == texture_name) or (
+                texture_name is None and name.lower().endswith('_alb')):
+            matches.append((name, texture))
+    if len(matches) != 1:
+        expected = texture_name if texture_name is not None else 'one *_alb reference'
+        raise ValueError(f'{material_name}: expected exactly {expected}, found {len(matches)}')
+
+    name, texture = matches[0]
+    r.bounds(texture, 0xB8)
+    if data[texture:texture + 4] != b'FTEX':
+        raise ValueError(f'{name}: invalid BFRES texture')
+    width, height, depth, mip_count = (r.u32(texture + offset) for offset in (8, 12, 16, 20))
+    surface_format = r.u32(texture + 24)
+    aa_mode, use, data_size = (r.u32(texture + offset) for offset in (28, 32, 36))
+    mip_size, tile_mode = r.u32(texture + 44), r.u32(texture + 52)
+    swizzle, pitch = r.u32(texture + 56), r.u32(texture + 64)
+    if not (1 <= width <= 16384 and 1 <= height <= 16384 and depth == 1):
+        raise ValueError(f'{name}: unsupported or unreasonable texture dimensions')
+    if surface_format != 0x31:
+        raise ValueError(f'{name}: expected GX2 BC1 UNorm (0x31), found 0x{surface_format:X}')
+    if aa_mode != 0 or use != 1 or tile_mode != 4:
+        raise ValueError(f'{name}: expected single-sample texture-use GX2 2D Thin1 layout')
+    if mip_count < 1 or pitch < (width + 3) // 4:
+        raise ValueError(f'{name}: invalid mip count or compressed-block pitch')
+    data_offset = r.ptr(texture + 0xB0)
+    r.bounds(data_offset, data_size)
+    if data_size == 0:
+        raise ValueError(f'{name}: empty image data')
+    return {
+        'name': name,
+        'width': width,
+        'height': height,
+        'depth': depth,
+        'mip_count': mip_count,
+        'format': surface_format,
+        'tile_mode': tile_mode,
+        'swizzle': swizzle,
+        'pitch': pitch,
+        'data_size': data_size,
+        'mip_size': mip_size,
+        'data': data[data_offset:data_offset + data_size],
+    }

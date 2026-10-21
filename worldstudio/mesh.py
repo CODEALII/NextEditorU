@@ -16,6 +16,125 @@ DEFAULT_MODEL = 'CS_W1_World'
 DEFAULT_SHAPE = 'polySurface1489__mtGrass'
 
 
+def extract_rigid_model(data, model=DEFAULT_MODEL):
+    """Read static triangle shapes from a single identity-root Wii U model.
+
+    This reader intentionally supports the tested world-model subset only:
+    big-endian float32x3 positions, packed 10:10:10:2 normals, and contiguous
+    u16 triangle lists. Textures, animations, skinning and non-identity root
+    transforms are not evaluated.
+    """
+    r = Skeletons(data)
+    if r.version != 0x03000001:
+        raise ValueError('3D preview only supports BFRES version 0x03000001')
+    models = dict(r.dictionary(r.ptr(32)))
+    if model not in models:
+        raise ValueError(f'Missing BFRES model: {model}')
+    model_offset = models[model]
+    roots = [bone for bone in r.models.get(model, ()) if bone.parent == -1]
+    if len(roots) != 1 or roots[0].index != 0 or roots[0].position != (0., 0., 0.) or \
+            roots[0].scale != (1., 1., 1.) or roots[0].rotation != (0., 0., 0., 1.):
+        raise ValueError('3D preview requires one identity root bone')
+    materials = r.dictionary(r.ptr(model_offset + 24))
+    result = []
+    for shape_name, shape in r.dictionary(r.ptr(model_offset + 20)):
+        r.bounds(shape, 64)
+        if data[shape:shape+4] != b'FSHP' or data[shape+22] or data[shape+23] != 1 or \
+                data[shape+24] or r.u16(shape+20):
+            raise ValueError(f'{shape_name}: skinned, morphed or multi-mesh shapes are not supported')
+        if r.u16(shape+16) != roots[0].index:
+            raise ValueError(f'{shape_name}: shape does not bind to the identity root')
+        vertex = r.ptr(shape+32)
+        r.bounds(vertex, 32)
+        if data[vertex:vertex+4] != b'FVTX' or data[vertex+5] != 1 or data[vertex+12]:
+            raise ValueError(f'{shape_name}: unsupported vertex-buffer layout')
+        attrs = {}
+        for name, attr in r.dictionary(r.ptr(vertex+20)):
+            if data[attr+4] != 0:
+                raise ValueError(f'{shape_name}: multiple vertex buffers are not supported')
+            attrs[name] = (r.u16(attr+6), r.u32(attr+8))
+        if attrs.get('_p0', (None, None))[1] != 0x811 or attrs.get('_n0', (None, None))[1] != 0x20b:
+            raise ValueError(f'{shape_name}: expected float positions and packed normals')
+        buffer = r.ptr(vertex+24)
+        r.bounds(buffer, 24)
+        size, stride = r.u32(buffer+4), r.u16(buffer+12)
+        if r.u16(buffer+14) != 1:
+            raise ValueError(f'{shape_name}: unexpected vertex-buffer memory pool')
+        count = r.u32(vertex+8)
+        start = r.ptr(buffer+20)
+        r.bounds(start, size)
+        for key, width in (('_p0', 12), ('_n0', 4)):
+            if attrs[key][0] + width > stride or size < count * stride:
+                raise ValueError(f'{shape_name}: vertex attribute exceeds its allocation')
+        uv_attribute = attrs.get('_u0')
+        if uv_attribute and uv_attribute[1] == 0x80d and (
+                uv_attribute[0] + 8 > stride or size < count * stride):
+            raise ValueError(f'{shape_name}: texture-coordinate attribute exceeds its allocation')
+        positions, normals = [], []
+        uvs = [] if uv_attribute and uv_attribute[1] == 0x80d else None
+        for index in range(count):
+            base = start + index * stride
+            position = struct.unpack_from('>3f', data, base + attrs['_p0'][0])
+            packed = struct.unpack_from('>I', data, base + attrs['_n0'][0])[0]
+            uv = struct.unpack_from('>2f', data, base + uv_attribute[0]) if uvs is not None else None
+            def signed10(value):
+                value &= 0x3ff
+                return value - 0x400 if value & 0x200 else value
+            normal = [signed10(packed >> shift) / 511. for shift in (0, 10, 20)]
+            norm = math.sqrt(sum(v*v for v in normal))
+            if not all(math.isfinite(v) and abs(v) <= 1e7 for v in position) or norm < 1e-6:
+                raise ValueError(f'{shape_name}: invalid position or normal at vertex {index}')
+            if uv is not None and not all(math.isfinite(v) and abs(v) <= 1e5 for v in uv):
+                raise ValueError(f'{shape_name}: invalid texture coordinates at vertex {index}')
+            positions.append(position)
+            normals.append(tuple(v / norm for v in normal))
+            if uv is not None:
+                uvs.append(uv)
+        mesh = r.ptr(shape+36)
+        r.bounds(mesh, 28)
+        if r.u32(mesh) != 4 or r.u32(mesh+4) != 4 or r.u32(mesh+24):
+            raise ValueError(f'{shape_name}: expected a zero-based u16 triangle list')
+        index_count = r.u32(mesh+8)
+        if index_count % 3:
+            raise ValueError(f'{shape_name}: index count is not a triangle list')
+        index_buffer = r.ptr(mesh+20)
+        r.bounds(index_buffer, 24)
+        if r.u16(index_buffer+14) != 1 or r.u32(index_buffer+4) < index_count * 2:
+            raise ValueError(f'{shape_name}: invalid index-buffer allocation')
+        index_start = r.ptr(index_buffer+20)
+        r.bounds(index_start, index_count * 2)
+        submeshes = r.ptr(mesh+16)
+        submesh_count = r.u16(mesh+12)
+        r.bounds(submeshes, submesh_count * 8)
+        expected_count = 0
+        for part in range(submesh_count):
+            offset, length = r.u32(submeshes+part*8), r.u32(submeshes+part*8+4)
+            if offset != expected_count * 2 or length % 3:
+                raise ValueError(f'{shape_name}: non-contiguous triangle submesh')
+            expected_count += length
+        if expected_count != index_count:
+            raise ValueError(f'{shape_name}: submeshes do not cover the index buffer')
+        indices = list(struct.unpack_from('>' + str(index_count) + 'H', data, index_start))
+        if any(index >= count for index in indices):
+            raise ValueError(f'{shape_name}: index exceeds vertex count')
+        material_index = r.u16(shape+14)
+        if material_index >= len(materials):
+            raise ValueError(f'{shape_name}: missing material reference')
+        extracted = {
+            'name': shape_name,
+            'material': materials[material_index][0],
+            'positions': positions,
+            'normals': normals,
+            'indices': indices,
+        }
+        if uvs is not None:
+            extracted['uvs'] = uvs
+        result.append(extracted)
+    if not result:
+        raise ValueError(f'{model}: no supported shapes found')
+    return result
+
+
 def _nearest_uvs(points, source_points, source_uvs):
     """Transfer baked-light UVs by nearest source XZ vertex using a grid."""
     cell_size = 128.

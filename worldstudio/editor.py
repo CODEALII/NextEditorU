@@ -92,27 +92,35 @@ def demo_project():
 
 
 def validate_preview(project):
-    if not isinstance(project, dict) or not isinstance(project.get("nodes"), list) or not isinstance(project.get("routes"), list):
+    if not isinstance(project, dict):
+        return ["Project must be a JSON object"]
+    if not isinstance(project.get("nodes"), list) or not isinstance(project.get("routes"), list):
         return ["Project must contain node and route lists"]
     if not all(isinstance(item, dict) for item in project["nodes"] + project["routes"]):
         return ["Nodes and routes must be objects"]
     issues, ids = [], set()
     for node in project.get("nodes", []):
         name = node.get("id", "")
-        if not name or name in ids:
-            issues.append(f"Empty or duplicate node: {name}")
-        ids.add(name)
-        if not all(isinstance(node.get(k), (int, float)) and math.isfinite(node[k]) for k in ("x", "y", "z")):
+        if not isinstance(name, str) or not name.strip():
+            issues.append("Node identifier must be a nonempty string")
+        elif name in ids:
+            issues.append(f"Duplicate node: {name}")
+        else:
+            ids.add(name)
+        if not all(type(node.get(k)) in (int, float) and math.isfinite(node[k]) for k in ("x", "y", "z")):
             issues.append(f"Invalid coordinates: {name}")
     adjacency = {name: set() for name in ids}
     route_ids = set()
     for route in project.get("routes", []):
         route_id = route.get("id", "")
-        if not route_id or route_id in route_ids:
-            issues.append(f"Empty or duplicate route: {route_id}")
-        route_ids.add(route_id)
+        if not isinstance(route_id, str) or not route_id.strip():
+            issues.append("Route identifier must be a nonempty string")
+        elif route_id in route_ids:
+            issues.append(f"Duplicate route: {route_id}")
+        else:
+            route_ids.add(route_id)
         a, b = route.get("start"), route.get("end")
-        if a not in ids or b not in ids:
+        if not isinstance(a, str) or not isinstance(b, str) or a not in ids or b not in ids:
             issues.append(f"Missing route endpoint: {route_id}")
         elif a == b:
             issues.append(f"Self route: {route_id}")
@@ -154,30 +162,60 @@ class WorldStudio(ttk.Frame):
 
     def _build(self):
         self.master.title("NSMBU World Studio — preview editor")
-        self.master.geometry("1250x780")
+        width = max(1040, min(1440, self.master.winfo_screenwidth() - 72))
+        height = max(680, min(920, self.master.winfo_screenheight() - 112))
+        self.master.geometry(f"{width}x{height}")
+        self.master.minsize(min(width, 1040), min(height, 680))
+        self.master.configure(background="#0f1720")
+        style = ttk.Style(self.master)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure(".", font=("Segoe UI", 10))
+        style.configure("TFrame", background="#0f1720")
+        style.configure("TLabel", background="#0f1720", foreground="#e4edf5")
+        style.configure("TButton", background="#1a2a38", foreground="#e7eff6",
+                        bordercolor="#334a5d", padding=(9, 6), relief="flat")
+        style.map("TButton", background=[("active", "#29445a"), ("disabled", "#1a222b")],
+                  foreground=[("disabled", "#8090a0")])
+        style.configure("TCheckbutton", background="#0f1720", foreground="#d8e3ec")
+        style.map("TCheckbutton", background=[("active", "#0f1720")])
+        style.configure("TEntry", fieldbackground="#172330", foreground="#edf4fa",
+                        insertcolor="#edf4fa", bordercolor="#34495c")
+        style.configure("TCombobox", fieldbackground="#172330", foreground="#edf4fa",
+                        arrowcolor="#d9e4ed")
+        style.configure("Treeview", background="#121e29", fieldbackground="#121e29",
+                        foreground="#dce7f0", rowheight=26, bordercolor="#263746")
+        style.map("Treeview", background=[("selected", "#1e5860")],
+                  foreground=[("selected", "#ffffff")])
+        style.configure("Treeview.Heading", background="#1b2b39", foreground="#d9e6f0",
+                        relief="flat", padding=(6, 7))
+        style.map("Treeview.Heading", background=[("active", "#263d4f")])
+        style.configure("TScale", background="#0f1720", troughcolor="#263747")
         bar = ttk.Frame(self, padding=8)
         bar.pack(fill="x")
         for title, action in [("New preview", self.new), ("Open project", self.open),
                               ("Save project", self.save), ("Import OBJ", self.import_obj),
                               ("Add node", self.add_node), ("Add route", self.add_route),
                               ("Delete selected", self.delete), ("Validate", self.validate),
-                              ("Fit view", self.fit)]:
+                              ("3D model preview", self.open_3d_preview), ("Fit view", self.fit)]:
             ttk.Button(bar, text=title, command=action).pack(side="left", padx=2)
-        self.viewport_hint = ttk.Label(self, text="3D preview: drag to orbit • mouse wheel to zoom • click a node to edit. "
-                  "OBJ terrain and preview project events are not game exports.", padding=(10, 5))
+        self.viewport_hint = ttk.Label(self, text="Graph editor preview: drag to orbit · wheel to zoom · click a node to edit. "
+                  "Use 3D model preview for depth-tested world geometry.", padding=(10, 5), foreground="#9fb4c7")
         self.viewport_hint.pack(fill="x")
         body = ttk.Panedwindow(self, orient="horizontal")
         body.pack(fill="both", expand=True, padx=8)
-        self.canvas = tk.Canvas(body, background="#142331", highlightthickness=0)
+        self.canvas = tk.Canvas(body, background="#101d29", highlightthickness=0)
         body.add(self.canvas, weight=4)
         sidebar = ttk.Frame(body, width=370)
         body.add(sidebar, weight=1)
-        sidebar_canvas = tk.Canvas(sidebar, width=350, highlightthickness=0, background="#f0f0f0")
+        sidebar_canvas = tk.Canvas(sidebar, width=350, highlightthickness=0, background="#0f1720")
         sidebar_canvas.pack(side="left", fill="both", expand=True)
         sidebar_scroll = ttk.Scrollbar(sidebar, orient="vertical", command=sidebar_canvas.yview)
         sidebar_scroll.pack(side="right", fill="y")
         sidebar_canvas.configure(yscrollcommand=sidebar_scroll.set)
-        panel = ttk.Frame(sidebar_canvas, padding=10)
+        panel = ttk.Frame(sidebar_canvas, padding=14)
         panel_window = sidebar_canvas.create_window(0, 0, window=panel, anchor="nw")
         panel.bind("<Configure>", lambda event: sidebar_canvas.configure(scrollregion=sidebar_canvas.bbox("all")))
         sidebar_canvas.bind("<Configure>", lambda event: sidebar_canvas.itemconfigure(panel_window, width=event.width))
@@ -223,9 +261,92 @@ class WorldStudio(ttk.Frame):
         path = self.project.get("terrain")
         if path:
             try:
-                self.mesh = read_obj(path)
+                from .project import resolve_project_path
+                terrain = resolve_project_path(path, self.project_path) if self.project_path else path
+                self.mesh = read_obj(terrain)
             except (OSError, ValueError) as error:
                 self.status.set(f"Terrain unavailable: {error}")
+
+    def open_3d_preview(self):
+        """Open the current model in an offline, depth-tested WebGL viewer."""
+        try:
+            nodes, routes = [], []
+            if hasattr(self, "native"):
+                import base64
+                from .bfres_texture import extract_bc1_base_texture
+                from .mesh import DEFAULT_SHAPE, _geometry, extract_rigid_model
+                from .texture_preview import decode_bc1, detile_bc1_thin1
+                shapes = extract_rigid_model(self.native.model)
+                texture_loaded = False
+                texture_notice = "Grass base texture unavailable; other materials are approximate."
+                if self.native.geometry is None:
+                    for shape in shapes:
+                        if shape["name"] != DEFAULT_SHAPE or shape["material"] != "mtGrass":
+                            continue
+                        texture = extract_bc1_base_texture(self.native.model, "CS_W1_World", "mtGrass")
+                        compact = detile_bc1_thin1(
+                            texture["data"], texture["width"], texture["height"], texture["pitch"],
+                            tile_mode=texture["tile_mode"], swizzle=texture["swizzle"],
+                            depth=texture["depth"], aa=0,
+                        )
+                        rgba = decode_bc1(compact, texture["width"], texture["height"])
+                        shape["texture"] = {
+                            "name": texture["name"], "width": texture["width"],
+                            "height": texture["height"],
+                            "rgbaBase64": base64.b64encode(rgba).decode("ascii"),
+                        }
+                        texture_loaded = True
+                        texture_notice = "Grass_alb BC1 base texture on the main grass mesh; other game materials, shaders and animation are not evaluated."
+                        break
+                if self.native.geometry is not None:
+                    geometry = self.native.geometry
+                    vertices, indices, normals, _ = _geometry(
+                        geometry["vertices"], geometry["faces"], geometry.get("uvs"), geometry.get("normals"))
+                    for shape in shapes:
+                        if shape["name"] == DEFAULT_SHAPE:
+                            shape.update(positions=vertices, normals=normals, indices=indices,
+                                         material="World Studio imported grass mesh")
+                            break
+                graph = self.view_project()
+                visible_nodes = {n["id"]: n for n in graph["nodes"]
+                                 if not n.get("fallback") and all(type(n.get(k)) in (int, float) for k in ("x", "y", "z"))}
+                nodes = [{"id": n["id"], "x": float(n["x"]), "y": float(n["y"]), "z": float(n["z"])}
+                         for n in visible_nodes.values()]
+                for route in graph["routes"]:
+                    if route.get("start") in visible_nodes and route.get("end") in visible_nodes:
+                        routes.append({"start": route["start"], "end": route["end"],
+                                       "kind": "secret" if route.get("unlock") == "secret" else "normal"})
+                title = f"{self.native.source.name} · W1 world"
+                model_name = "CS_W1_World • native BFRES static geometry"
+                badges = ["BFRES source", "Static rest pose",
+                          "Grass_alb BC1" if texture_loaded else "Approximate materials"]
+            else:
+                from .mesh import _geometry
+                vertices, indices, normals, _ = _geometry(self.mesh[0], self.mesh[1])
+                shapes = [{"name": "Imported OBJ", "material": "Preview mesh", "positions": vertices,
+                           "normals": normals, "indices": indices}]
+                title = "World Studio · imported mesh"
+                model_name = "OBJ • 3D mesh preview"
+                badges = ["OBJ source", "Read-only preview"]
+            from .preview3d import open_preview
+            all_points = [p for shape in shapes for p in shape["positions"]]
+            all_points.extend((n["x"], n["y"], n["z"]) for n in nodes)
+            low = [min(p[i] for p in all_points) for i in range(3)]
+            high = [max(p[i] for p in all_points) for i in range(3)]
+            center = [(low[i] + high[i]) / 2 for i in range(3)]
+            radius = max((sum((p[i] - center[i]) ** 2 for i in range(3)) ** .5 for p in all_points), default=500)
+            vertex_count = sum(len(shape["positions"]) for shape in shapes)
+            triangle_count = sum(len(shape["indices"]) // 3 for shape in shapes)
+            scene = {"title": title, "model": model_name, "badges": badges,
+                     "shapes": shapes, "nodes": nodes, "routes": routes, "showPaths": bool(nodes),
+                     "stats": {"vertices": vertex_count, "triangles": triangle_count},
+                     "bounds": {"center": center, "radius": max(radius, 10)}}
+            if hasattr(self, "native"):
+                scene["textureNotice"] = texture_notice
+            open_preview(scene)
+            self.status.set(f"3D preview opened · {len(shapes)} shapes · {triangle_count:,} triangles")
+        except (OSError, ValueError, KeyError, TypeError, OverflowError) as error:
+            messagebox.showerror("3D preview unavailable", str(error), parent=self)
 
     def project_point(self, point):
         camera = self.project.setdefault("camera", {})
@@ -321,6 +442,8 @@ class WorldStudio(ttk.Frame):
                 ids = {item["id"] for item in self.project["nodes"]}
                 if candidate.get("start") not in ids or candidate.get("end") not in ids:
                     raise ValueError("Route endpoints must reference existing nodes")
+                if candidate["start"] == candidate["end"]:
+                    raise ValueError("A route must connect two different nodes")
             if kind == "node" and candidate["id"] != name:
                 for route in self.project["routes"]:
                     for key in ("start", "end"):
@@ -375,6 +498,11 @@ class WorldStudio(ttk.Frame):
             return
         kind, name = self.selected
         key = "nodes" if kind == "node" else "routes"
+        affected = sum(name in (route.get("start"), route.get("end"))
+                       for route in self.project["routes"]) if kind == "node" else 0
+        if kind == "node" and affected and not messagebox.askyesno(
+                "Delete connected node?", f"This also removes {affected} connected route(s). Continue?", parent=self):
+            return
         self.project[key] = [item for item in self.project[key] if item["id"] != name]
         if kind == "node":
             self.project["routes"] = [r for r in self.project["routes"] if name not in (r["start"], r["end"])]
@@ -449,6 +577,8 @@ class WorldStudio(ttk.Frame):
             return
         try:
             project = json.loads(Path(path).read_text(encoding="utf-8"))
+            if not isinstance(project, dict):
+                raise ValueError("Not a World Studio preview project object")
             if project.get("format") != "worldstudio-preview-v1":
                 raise ValueError("Not a World Studio preview project")
             issues = validate_preview(project)
@@ -469,7 +599,10 @@ class WorldStudio(ttk.Frame):
         try:
             destination = Path(path)
             temporary = destination.with_suffix(destination.suffix + ".tmp")
-            temporary.write_text(json.dumps(self.project, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            stored = copy.deepcopy(self.project)
+            from .project import store_project_path
+            stored["terrain"] = store_project_path(stored.get("terrain"), destination)
+            temporary.write_text(json.dumps(stored, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             temporary.replace(destination)
             self.project_path, self.dirty = destination, False
             self.status.set(f"Saved preview project: {destination}")
@@ -562,7 +695,7 @@ class NativeStudio(WorldStudio):
 
     def _build(self):
         super()._build()
-        self.viewport_hint.configure(text="Drag to orbit • wheel to zoom • Import OBJ = preview • Use OBJ mesh = experimental native replacement of one grass mesh; other terrain remains.")
+        self.viewport_hint.configure(text="Graph editor: drag to orbit · wheel to zoom · click a point to edit. Open 3D model preview for depth-tested BFRES geometry.")
         self.description.configure(text="Native point/segment fields are saved to CSV and exported in the SZS archive. "
             "Known bone XYZ edits modify BFRES; model names and engine indices remain protected. "
             "Camera controls affect this viewport only. Import OBJ previews terrain. Use OBJ mesh replaces one existing grass mesh experimentally; other terrain remains.")

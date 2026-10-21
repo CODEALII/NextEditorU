@@ -1,9 +1,10 @@
 import struct
 import unittest
 import hashlib
+import math
 from pathlib import Path
 
-from worldstudio.mesh import DEFAULT_SHAPE, replace_rigid_mesh
+from worldstudio.mesh import DEFAULT_SHAPE, extract_rigid_model, replace_rigid_mesh
 from worldstudio.archive import Archive
 from worldstudio.bfres import Skeletons
 
@@ -50,6 +51,10 @@ def fixture():
     u(0x444,112);h(0x44c,28);h(0x44e,1);ptr(0x454,0x600)
     u(0x480,4);u(0x484,4);u(0x488,6);h(0x48c,1);ptr(0x490,0x4e0);ptr(0x494,0x4b0)
     u(0x4b4,12);h(0x4be,1);ptr(0x4c4,0x800);u(0x4e4,6)
+    for i, point in enumerate(((0,0,0),(0,0,2),(2,0,0),(0,0,1))):
+        struct.pack_into('>3f',b,0x600+i*28,*point)
+        struct.pack_into('>I',b,0x600+i*28+12,511<<10)
+    struct.pack_into('>6H',b,0x800,0,1,2,0,0,0)
     return bytes(b)
 
 
@@ -98,6 +103,15 @@ class MeshTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from('>I',after,0x600+12)[0],511<<20)
         self.assertTrue(report['imported_normals'])
 
+    def test_static_model_geometry_round_trips_from_supported_layout(self):
+        shapes = extract_rigid_model(fixture())
+        self.assertEqual(len(shapes), 1)
+        self.assertEqual(shapes[0]['name'], DEFAULT_SHAPE)
+        self.assertEqual(shapes[0]['material'], 'mtGrass')
+        self.assertEqual(shapes[0]['positions'][:3], self.vertices)
+        self.assertEqual(shapes[0]['indices'], [0, 1, 2, 0, 0, 0])
+        self.assertEqual(shapes[0]['normals'][0], (0., 1., 0.))
+
     def test_rejects_capacity_and_bad_input(self):
         with self.assertRaisesRegex(ValueError,'vertex capacity'):
             replace_rigid_mesh(fixture(),self.vertices*2,self.faces)
@@ -116,6 +130,20 @@ class MeshTests(unittest.TestCase):
 
 
 class LocalDumpMeshTests(unittest.TestCase):
+    def test_local_dump_world_model_extracts_static_shapes(self):
+        root=Path(__file__).resolve().parents[1]
+        source=root/'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W1 dump unavailable')
+        archive=Archive(source.read_bytes())
+        shapes=extract_rigid_model(archive.read('CS_W1.bfres'))
+        self.assertEqual(len(shapes),42)
+        self.assertGreater(sum(len(shape['positions']) for shape in shapes),70000)
+        self.assertGreater(sum(len(shape['indices']) for shape in shapes),300000)
+        grass=next(shape for shape in shapes if shape['name']=='polySurface1489__mtGrass')
+        self.assertEqual(len(grass['uvs']),len(grass['positions']))
+        self.assertTrue(all(all(math.isfinite(v) for v in uv) for uv in grass['uvs']))
+
     def test_local_dump_in_memory_export_and_byte_boundaries(self):
         root=Path(__file__).resolve().parents[1]
         source=root/'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'

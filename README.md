@@ -15,11 +15,14 @@ Progress details and dated findings: [PROGRESS.md](PROGRESS.md) · [Runtime test
 - Inspect supported BFRES skeletons and apply bounded bone-transform changes.
 - Export an experimental three-node progression patch using existing route data.
 - Import a bounded rigid OBJ mesh into a known grass shape while retaining its material and layout.
+- Open an offline WebGL viewer for 42 supported static shapes from the local World 1 BFRES (70,193 vertices and 106,736 triangles), with route overlays and per-shape visibility controls.
+- Decode and show the `Grass_alb` BC1 base texture on the main grass shape using its BFRES UVs; other materials remain approximate colors.
+- Run directed reachability checks for explicitly selected entry points and required locations with `validate-graph`.
 - Read and edit discovered camera-offset tables; analyze and round-trip event data offline.
 - Use the standalone Tk editor to inspect the map, edit supported fields, and save project files.
-- Run a 56-test local suite against synthetic fixtures and the user-provided local dump.
+- Run a 68-test local suite against synthetic fixtures and the user-provided local dump.
 
-The editor deliberately blocks unsupported node/index changes. Camera and event formats have offline tooling, but their in-game behavior and runtime integration are not verified. Read [Research and format findings](docs/RESEARCH.md), [Resource findings](docs/RESOURCE_FINDINGS.md), [Camera findings](docs/CAMERA_FINDINGS.md), and [Event findings](docs/EVENTS.md) for the evidence and limits of each feature.
+The WebGL viewer displays one supported BC1 base texture; other materials use approximate colors. It does not evaluate light maps, game shaders, animation or arbitrary BFRES variants. The editor deliberately blocks unsupported node/index changes. Camera and event formats have offline tooling, but their in-game behavior and runtime integration are not verified. Read [Research and format findings](docs/RESEARCH.md), [Resource findings](docs/RESOURCE_FINDINGS.md), [Camera findings](docs/CAMERA_FINDINGS.md), and [Event findings](docs/EVENTS.md) for the evidence and limits of each feature.
 
 ## Current runtime status
 
@@ -43,6 +46,14 @@ python -m worldstudio demo --out build/my-chain
 python -m worldstudio gui build/my-chain/three-level-chain.nws.json
 ```
 
+Check a route from an explicit start to required locations:
+
+```powershell
+python -m worldstudio validate-graph --entry W101 --require W102 --require W103
+```
+
+Pass a saved `.nws.json` project path as the first argument to validate edits. This verifies the declared graph only; it does not simulate in-game movement or unlock rules.
+
 The experimental mesh export accepts the included original sample island:
 
 ```powershell
@@ -58,7 +69,7 @@ python -m unittest discover -s tests -v
 python -m compileall -q worldstudio tests tools
 ```
 
-The latest verified local run passed **56 tests**. This confirms offline parsers, exporters, guards, and round-trips; it does not establish that the game accepts every patch or that gameplay works.
+The latest verified local run passed **78 tests**. This confirms offline parsers, exporters, guards, geometry and texture extraction, and round-trips; it does not establish browser rendering, game acceptance or gameplay. See [TESTING.md](docs/TESTING.md) for targeted graph and Cemu checks, and [ROADMAP.md](docs/ROADMAP.md) for the next milestones.
 
 ## Repository map
 

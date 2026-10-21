@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 from pathlib import Path
 from .project import WorldProject
 
@@ -53,6 +54,13 @@ def main():
     gui.add_argument('source', nargs='?', default=str(DEFAULT_SOURCE))
     inspect = sub.add_parser('inspect', help='Read archive and report graph/bones')
     inspect.add_argument('source', nargs='?', default=str(DEFAULT_SOURCE))
+    graph = sub.add_parser('validate-graph', help='Validate native references and optional directed reachability')
+    graph.add_argument('source', nargs='?', default=str(DEFAULT_SOURCE),
+                       help='World .szs archive or saved .nws.json project')
+    graph.add_argument('--entry', action='append', default=[], metavar='POINT',
+                       help='Playable entry point; repeat to specify multiple starts')
+    graph.add_argument('--require', action='append', default=[], metavar='POINT',
+                       help='Location that must be reachable from an entry; repeat as needed')
     demo = sub.add_parser('demo', help='Build experimental three-level progression patch')
     demo.add_argument('--source', default=str(DEFAULT_SOURCE))
     demo.add_argument('--out', required=True, type=Path)
@@ -72,6 +80,28 @@ def main():
                 'points': len(p.points.rows), 'segments': len(p.routes.rows),
                 'models': {k: len(v) for k,v in p.skeletons.models.items()},
                 'positions': p.positions, 'validation_errors': p.validate()}, indent=2))
+        elif args.command == 'validate-graph':
+            p = (WorldProject.load(args.source) if str(args.source).lower().endswith('.json')
+                 else WorldProject.open(args.source))
+            from .graph_validation import validate_native_world
+            references = set(p.references)
+            for rename in p.bone_renames:
+                references.discard(rename.get('old'))
+                if rename.get('new'):
+                    references.add(rename['new'])
+            world = re.search(r'pointW([1-9])', p.point_name)
+            issues = set(p.validate())
+            issues.update(validate_native_world(
+                p.points.rows, p.routes.rows, known_references=references,
+                initial_points=p.points.initial, initial_routes=p.routes.initial,
+                world_prefix=f'W{world[1]}' if world else None,
+                entry_points=args.entry, required_locations=args.require))
+            report = {'source': str(p.source), 'entry_points': args.entry,
+                      'required_locations': args.require, 'reachable_locations_checked': bool(args.require),
+                      'validation_errors': sorted(issues)}
+            print(json.dumps(report, indent=2))
+            if issues:
+                parser.exit(1, 'Graph validation failed.\n')
         elif args.command == 'demo':
             p = (direct_route_demo if args.direct_route else chain_demo)(WorldProject.open(args.source))
             if args.island:

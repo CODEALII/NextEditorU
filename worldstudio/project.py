@@ -26,6 +26,31 @@ def write_new(path, data):
         f.write(data)
 
 
+def store_project_path(value, project_file):
+    """Store asset references relative to the project whenever drives allow."""
+    if not value:
+        return value
+    asset = Path(value).resolve()
+    base = Path(project_file).resolve().parent
+    try:
+        return asset.relative_to(base).as_posix()
+    except ValueError:
+        try:
+            return os.path.relpath(asset, base)
+        except ValueError:
+            return str(asset)
+
+
+def resolve_project_path(value, project_file):
+    """Resolve relative project references while retaining v1 absolute paths."""
+    if not value:
+        return value
+    asset = Path(value)
+    if not asset.is_absolute():
+        asset = Path(project_file).resolve().parent / asset
+    return str(asset.resolve())
+
+
 class Table:
     def __init__(self, data):
         self.raw = data
@@ -215,10 +240,11 @@ class WorldProject:
         path = Path(path).resolve()
         if path == self.game_root or self.game_root in path.parents:
             raise ValueError('Store projects outside the source game resource directory')
+        terrain = store_project_path(self.terrain, path)
         content = json.dumps({'format': 'nsmbu-world-studio', 'version': 1,
             'source': str(self.source), 'source_sha256': self.source_sha256,
             'points': self.points.rows, 'routes': self.routes.rows,
-            'layout': self.layout, 'positions': self.positions, 'terrain': self.terrain,
+            'layout': self.layout, 'positions': self.positions, 'terrain': terrain,
             'geometry': self.geometry, 'bone_renames': self.bone_renames,
             'camera_edits': self.camera_edits,
             'camera_source_sha256': {n: sha(v) for n,v in self.camera_original.items()}}, indent=2)
@@ -244,7 +270,7 @@ class WorldProject:
         self.routes.rows = data['routes']
         self.layout = data.get('layout', {})
         self.positions.update(data.get('positions', {}))
-        self.terrain = data.get('terrain')
+        self.terrain = resolve_project_path(data.get('terrain'), path)
         self.geometry = data.get('geometry')
         self.bone_renames = data.get('bone_renames', [])
         self.camera_edits = data.get('camera_edits', {})

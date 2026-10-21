@@ -96,6 +96,27 @@ Completed:
 - New export report: `build/island-mainlight/`; its manifest correctly says
   `game_tested:false`. No game file or original save was overwritten.
 
+## 2026-10-21 — first native BFRES base texture in the preview
+
+- Parsed the local W1 BFRES material/FTEX references and inventoried 113 textures
+  across BC1, BC3, BC4, BC5 UNorm and BC5 SNORM. The main grass material's
+  `Grass_alb` is a 256x256 BC1 texture using GX2 2D Thin1 layout.
+- Added a bounds-checked extractor for that material reference, a BC1 decoder,
+  and a mode-4 GX2 detiler based on pinned BfresLibrary source. Known-address
+  vectors, synthetic tiled fixtures and the local W1 detiled hash are covered.
+- The offline WebGL preview now displays `Grass_alb` on the main grass mesh using
+  the BFRES `_u0` coordinates. Other materials still use approximate colors;
+  light maps, game shaders and animation are not evaluated.
+- The detiled texture matches SHA-256
+  `5b3259554630cc41ab604eefaa55cff6035e00db99ddde509c1ee0b60bf65220` and
+  decodes to 256x256 opaque RGBA pixels. WebGL mapping has not been visually
+  inspected in a browser, and Cemu terrain appearance remains unverified.
+- `texture_preview.py` handles only 2D Thin1, single-sample BC1. The four other
+  W1 formats and broader material support remain future work.
+- Full offline suite after this milestone: **78 tests passed**. Generated viewer
+  JavaScript passes `node --check`; browser-level rendering and gameplay are
+  still unverified.
+
 Not yet proven / outstanding:
 - Actual game traversal, level launch, clear-triggered unlock/save persistence,
   camera behavior and cutscene interactions for the topology experiment.
