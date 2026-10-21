@@ -2,23 +2,24 @@
 
 World Studio is an offline research prototype. Items below describe work still needed for a genuinely playable custom overworld; a passing parser or export test does not satisfy an in-game acceptance check.
 
-## Highest priority: verify route movement
+## Highest priority: get a route to launch its level
 
-The reported Cemu test says Mario does not move. Static validation confirms that the exported graph reaches W102 and W103 and that the required W102 path bones exist, but runtime movement is still unverified. A config audit found that the folder previously named `cemu-island-baseline` enables WorldStudioChain, so its movement result is not a clean baseline. A later live inspection of that patched profile confirmed W/A/S/D on the left stick and arrows on the D-pad; two short D taps changed Mario's facing but did not advance him to another node. That is not a sustained-input test, and the loaded archive hash matches `build/chain-quoted`, not the direct-route variant. The separate CrashFix-only profile has loaded the supplied RPX in its own MLC, with no World Studio Chain pack. SpotPass was declined and a fresh isolated save directory now exists. The current live baseline window is at `Press 2!`; its configured controller is Wii U GamePad + Keyboard, but neither the log nor current evidence establishes which input the title prompt expects. Establish a supported start input, then verify level launch, fresh progression unlock, save/reload, and camera transitions. Keep each result tied to the exact pack and input profile.
+A controlled Cemu retest on 2026-10-21 reached the World 1 map in both the
+CrashFix-only Clean profile and the World Studio Chain profile. Holding `D` for
+about two seconds moved Mario from the Crushing-Cogs Tower to the visible
+right-hand map node in both runs. This verifies movement with the configured
+keyboard GamePad profile in those runs, but does not identify the destination's
+exact point ID or show that the custom chain caused the movement. Pressing `Z`
+at the Chain destination left the map open; level launch remains unverified.
+The Direct profile used the expected hashed archive and active pack but stayed
+in the title/demo flow, so it has no movement result. The three isolated
+profiles retain byte-identical personal and common saves. These results
+supersede the historical no-input observations below.
 
-The isolated `cemu-island-mainlight` process has a log confirming both the
-World Studio Chain and crash-fix packs activated and reached the title screen.
-The earlier window called `cemu-island-baseline` also had the chain pack
-enabled, so its no-movement result cannot establish stock baseline behavior.
-The later `cemu-clean-baseline` launch loaded the supplied RPX and activated
-CrashFix only. SpotPass was declined, but the title still displays `Press 2!`.
-Its GamePad + Keyboard bindings include Enter for Plus, Z for A and WASD for
-the left stick. A fresh process-specific test confirmed that Enter starts the
-opening/demo sequence, then returns to the title; it did not reach the map. A
-later exact-window screenshot showed the opening dinner scene again. One Z
-press (configured as A) left the latest screenshot at `Press 2!` with no visible
-change. No controller-profile activation or input events appear in the log.
-Resolve the start prompt before drawing any conclusion about map movement.
+Next verify the exact destination point, level launch, fresh-save progression,
+save/reload, and camera transitions. Keep each result tied to the exact pack,
+input profile and save snapshot. See `docs/INTEGRATION.md` for process IDs,
+archive hashes, screenshot evidence and the remaining controlled-test steps.
 
 ## Rendering fidelity
 

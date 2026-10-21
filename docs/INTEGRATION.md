@@ -1,5 +1,39 @@
 # Runtime evidence and test protocol
 
+## Latest controlled retest — 2026-10-21
+
+- Used three isolated Cemu 1.26.2f profiles with separate MLC folders and the
+  same pre-test personal/common save snapshot. Preflight checks confirm all
+  three save files remain byte-identical after the runs.
+- Clean and Chain profiles both reached the World 1 map at the Crushing-Cogs
+  Tower. With the matching Cemu process focused, holding `D` for about two
+  seconds moved Mario to the visible right-hand map node in both profiles.
+  This verifies basic movement under the keyboard profile in these two runs;
+  the destination's exact point ID and whether the custom chain caused the
+  movement are not established.
+- The Chain profile activated CrashFix and World Studio Chain. Its packaged
+  `CS_W1.szs` SHA-256 is
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`, matching
+  the generated test archive. Screenshots are retained locally (ignored under
+  `build/`): `cemu-chain-map-stable.png`, `cemu-chain-after-d.png`, and
+  `cemu-chain-enter-node.png`; the clean movement comparison is
+  `cemu-clean-after-d-valid.png`.
+- Pressing `Z` at the right-hand node left the Chain run on the world map. A
+  level launch was not observed. The Direct profile activated the expected
+  archive (`8a473f413788cb5b3fab07f5f6ae174a6948159b39cc6019df97ef7ae24c3d35`);
+  it remained in the title/demo flow and did not reach the map, so it provides
+  no movement result.
+- Clean, Chain and Direct all pass `tools/cemu_preflight.py` with current-run
+  title/module and pack checks. `--compare-save-to` confirms byte-identical
+  saves among the test profiles. The clean run excludes World Studio Chain;
+  each modified profile enables it and its packaged archive matches the test
+  input exactly. No fresh-save progression or terrain-appearance result is
+  established.
+
+These observations supersede older statements below that no sustained input
+or traversal had been performed. The earlier notes remain as historical
+evidence for their respective, inconclusive runs.
+
 ## Confirmed in this run
 
 - Installed emulator binary identifies itself as **Cemu 1.26.2f**.
@@ -99,7 +133,7 @@ input setup, UI navigation and CSV quoting changed before the successful patched
 world-map observation. Do not attribute a root cause without a controlled replay.
 No crash stack or failing game function was identified.
 
-## Current process preflight
+## Original user Cemu process preflight
 
 A read-only check of the only currently running Cemu process found the user
 installation at `C:\Users\Ali\Documents\Cemu_2.6`. Its current log loads
@@ -107,16 +141,12 @@ NSMBU v64 but activates only graphics, LOD and CrashFix packs; it does not
 activate World Studio Chain. Its `controller0.txt` selects DirectInput and a
 Wireless Controller, not the keyboard GamePad profile. Therefore that live
 process is not a valid WASD test of the custom route. The isolated direct-route
-profile does contain the expected keyboard mappings and exact archive, but has
-not been launched. `build/cemu-clean-route-retest-20261021`,
+profile was subsequently launched as described above. The three isolated
+profiles are `build/cemu-clean-route-retest-20261021`,
 `build/cemu-chain-route-retest-20261021` and
-`build/cemu-direct-route-retest-20261021` are now prepared with identical copies
-of the same existing traversal save snapshot; hash checks confirmed the personal
-and common save files match across all three profiles. The clean profile's
-preflight excludes World Studio Chain, while both modified profiles enable it
-and contain their exact expected archives. All three use the keyboard left-
-stick mappings. None has a run log yet. This reused save is only for movement
-comparison, not a fresh-save progression test.
+`build/cemu-direct-route-retest-20261021`. All three have current run logs,
+configured keyboard left-stick mappings and matching save snapshots. This
+reused save is only for movement comparison, not a fresh-save progression test.
 
 ## Legacy emulator details actually encountered
 
@@ -134,17 +164,12 @@ comparison, not a fresh-save progression test.
 
 ## Still required before declaring the prototype playable
 
-1. At the `Press 2!` prompt, the user has instructed us to left-click inside
-   the Cemu game window to continue. This is the next interaction to verify;
-   earlier Enter/Z attempts did not confirm the prompt behavior. Launch each
-   prepared profile with the WASD GamePad keyboard mapping, wait for the map,
-   record Mario's start node, then hold D at W101 and observe whether he reaches
-   W102. Repeat with the chain and direct-route profiles from the same saved
-   starting state and comparable hold duration. Record the exact Cemu window,
-   profile, start, input duration and destination shown. A clean-profile pass
-   followed by patched immobility isolates a route/patch issue; failure in all
-   three profiles leaves the input path unresolved.
-2. Confirm the displayed destination is Acorn Plains 3 and launch that level.
+1. Re-run movement from the same recorded point and identify the exact point ID
+   at the right-hand destination. Compare the clean, Chain and Direct archives
+   from identical save snapshots and equal hold durations; current evidence
+   proves movement in Clean and Chain only and does not isolate the cause.
+2. Identify the destination node, activate it, and verify that it launches the
+   intended level. The current Chain `Z` attempt remained on the map.
 3. On a fresh save, clear 1-1 then 1-2. Confirm the intended new unlocks and
    restrictions without relying on already-cleared tower flags.
 4. Save/reload and check current node, completion and unlocking persistence.

@@ -1343,3 +1343,35 @@ camera behavior and a fully playable custom world remain open.
   game window at `Press 2!`, wait for the map, then use WASD. Updated the
   integration protocol accordingly. This interaction has not yet been observed
   in the game because Computer Use still reports no native window handles.
+
+## 2026-10-21 — Controlled Cemu movement comparison
+
+- Used separate Clean (PID 7144), Chain (PID 25328), and Direct (PID 32092)
+  Cemu 1.26.2f processes with isolated MLC folders. Clean and Chain each loaded
+  the World 1 map at the Crushing-Cogs Tower. With the corresponding Cemu
+  window focused, holding `D` for about two seconds moved Mario to the visible
+  right-hand node in both runs. This establishes movement in both profiles;
+  the node's exact point ID and whether the modified chain caused movement are
+  still unknown.
+- The Chain run activated World Studio Chain and CrashFix. Its `CS_W1.szs`
+  hash is `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`.
+  Pressing `Z` at the right-hand node left the map open, so level launch is not
+  verified. The Direct profile activated its exact archive
+  (`8a473f413788cb5b3fab07f5f6ae174a6948159b39cc6019df97ef7ae24c3d35`) but
+  stayed in title/demo flow; it has no movement result.
+- Screenshot evidence is retained locally, ignored under `build/`:
+  `cemu-clean-after-d-valid.png`, `cemu-chain-map-stable.png`,
+  `cemu-chain-after-d.png` and `cemu-chain-enter-node.png`. User Cemu was
+  restored after the isolated tests; the three test processes were closed
+  gracefully.
+- Added `--compare-save-to PROFILE` to `tools/cemu_preflight.py`. It hashes
+  NSMBU personal/common save files and fails readiness if either profile lacks
+  saves or the inventories differ. Rechecked all three profiles after testing:
+  Clean, Chain and Direct still contain matching save files. Their current-run
+  log, controller, pack and archive preflights all pass.
+- Added regression coverage for matching, changed and missing save inventories.
+  All 9 focused preflight tests pass; the full suite passed **300 tests in
+  193.153 seconds**; `compileall` and `git diff --check` pass.
+  Historical notes that no sustained input had been tested are superseded by
+  this controlled observation; level entry, progression, fresh-save behavior,
+  persistence and terrain appearance remain open.

@@ -8,7 +8,7 @@ from tools.cemu_preflight import inspect_profile
 class CemuPreflightTests(unittest.TestCase):
     def make_profile(self, root, *, api='Keyboard', mapping='key_68', active=True):
         profile = Path(root)
-        (profile / 'controllerProfiles').mkdir()
+        (profile / 'controllerProfiles').mkdir(parents=True)
         (profile / 'graphicPacks/WorldStudioChain/content/Common/course_select').mkdir(parents=True)
         (profile / 'graphicPacks/WorldStudioChain/rules.txt').write_text(
             '[Definition]\nname = World Studio Three Level Chain\n', encoding='utf-8')
@@ -31,6 +31,13 @@ class CemuPreflightTests(unittest.TestCase):
             '------- Activate graphic packs -------\n' + active_line +
             '------- Run title -------\n', encoding='utf-8')
         return profile
+
+    def write_save_snapshot(self, profile, *, personal=b'personal', common=b'common'):
+        save_root = Path(profile) / 'mlc01/usr/save/00050000/10101D00/user'
+        (save_root / '80000001').mkdir(parents=True)
+        (save_root / 'common').mkdir()
+        (save_root / '80000001/rp_personal_savedata.dat').write_bytes(personal)
+        (save_root / 'common/rp_savedata.dat').write_bytes(common)
 
     def test_ready_profile_checks_keyboard_pack_log_and_archive_copy(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -100,6 +107,50 @@ class CemuPreflightTests(unittest.TestCase):
         self.assertFalse(report['ready'])
         self.assertTrue(report['forbidden_pack_present_or_enabled'])
         self.assertIn("Forbidden graphic pack 'World Studio Chain' is present or enabled",
+                      report['issues'])
+
+    def test_save_comparison_requires_identical_personal_and_common_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = self.make_profile(root / 'profile')
+            reference = self.make_profile(root / 'reference')
+            self.write_save_snapshot(profile)
+            self.write_save_snapshot(reference)
+
+            report = inspect_profile(profile, compare_save_to=reference)
+
+        self.assertTrue(report['ready'], report['issues'])
+        self.assertTrue(report['save_comparison']['matches'])
+        self.assertEqual(set(report['save_comparison']['profile_files']), {
+            '80000001/rp_personal_savedata.dat', 'common/rp_savedata.dat'})
+
+    def test_save_comparison_rejects_a_changed_save_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = self.make_profile(root / 'profile')
+            reference = self.make_profile(root / 'reference')
+            self.write_save_snapshot(profile)
+            self.write_save_snapshot(reference, common=b'other save')
+
+            report = inspect_profile(profile, compare_save_to=reference)
+
+        self.assertFalse(report['ready'])
+        self.assertFalse(report['save_comparison']['matches'])
+        self.assertIn('NSMBU user-save files differ from the reference profile',
+                      report['issues'])
+
+    def test_save_comparison_rejects_missing_save_inventory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = self.make_profile(root / 'profile')
+            reference = self.make_profile(root / 'reference')
+            self.write_save_snapshot(profile)
+
+            report = inspect_profile(profile, compare_save_to=reference)
+
+        self.assertFalse(report['ready'])
+        self.assertFalse(report['save_comparison']['matches'])
+        self.assertIn('Reference Cemu profile has no NSMBU user-save files to compare',
                       report['issues'])
 
 

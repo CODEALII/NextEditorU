@@ -41,8 +41,31 @@ def _pack_key(value):
     return re.sub(r'[^a-z0-9]', '', value.casefold())
 
 
+def _save_inventory(profile):
+    """Hash files in this title's isolated MLC user-save tree."""
+    save_root = (profile / 'mlc01/usr/save/00050000/10101D00/user').resolve()
+    if not save_root.is_dir():
+        return {}
+    inventory = {}
+    for path in sorted(save_root.rglob('*')):
+        if path.is_symlink():
+            continue
+        if not path.is_file():
+            continue
+        digest = hashlib.sha256()
+        with path.open('rb') as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b''):
+                digest.update(chunk)
+        inventory[path.relative_to(save_root).as_posix()] = {
+            'size': path.stat().st_size,
+            'sha256': digest.hexdigest(),
+        }
+    return inventory
+
+
 def inspect_profile(profile, *, expected_pack=None, archive=None,
-                    forbidden_pack=None, require_keyboard=False, require_run=False):
+                    forbidden_pack=None, require_keyboard=False, require_run=False,
+                    compare_save_to=None):
     profile = Path(profile).resolve(strict=True)
     if not profile.is_dir():
         raise ValueError('Cemu profile must be a directory')
@@ -138,6 +161,27 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
         if forbidden_pack and forbidden_active:
             issues.append(f'Forbidden graphic pack {forbidden_pack!r} is active in log.txt')
 
+    save_comparison = None
+    if compare_save_to is not None:
+        reference_profile = Path(compare_save_to).resolve(strict=True)
+        if not reference_profile.is_dir():
+            raise ValueError('Save comparison reference must be a Cemu profile directory')
+        current_saves = _save_inventory(profile)
+        reference_saves = _save_inventory(reference_profile)
+        matches = bool(current_saves) and current_saves == reference_saves
+        save_comparison = {
+            'reference_profile': str(reference_profile),
+            'profile_files': current_saves,
+            'reference_files': reference_saves,
+            'matches': matches,
+        }
+        if not current_saves:
+            issues.append('Current Cemu profile has no NSMBU user-save files to compare')
+        elif not reference_saves:
+            issues.append('Reference Cemu profile has no NSMBU user-save files to compare')
+        elif not matches:
+            issues.append('NSMBU user-save files differ from the reference profile')
+
     return {
         'profile': str(profile),
         'enabled_pack_paths': enabled_pack_paths,
@@ -155,6 +199,7 @@ def inspect_profile(profile, *, expected_pack=None, archive=None,
         'forbidden_pack_active_in_log': forbidden_active,
         'run_log_present': bool(current_run_log),
         'archive': archive_report,
+        'save_comparison': save_comparison,
         'gameplay_verified': False,
         'issues': issues,
         'ready': not issues,
@@ -174,13 +219,16 @@ def main(argv=None):
                         help='Require WASD to map to the GamePad left stick')
     parser.add_argument('--require-run', action='store_true',
                         help='Require v64 and the expected pack in log.txt')
+    parser.add_argument('--compare-save-to', type=Path, metavar='PROFILE',
+                        help='Require byte-identical NSMBU user-save files to another Cemu profile')
     args = parser.parse_args(argv)
     try:
         report = inspect_profile(args.profile, expected_pack=args.expect_pack,
                                  archive=args.archive,
                                  forbidden_pack=args.forbid_pack,
                                  require_keyboard=args.require_keyboard,
-                                 require_run=args.require_run)
+                                 require_run=args.require_run,
+                                 compare_save_to=args.compare_save_to)
     except (OSError, ValueError) as error:
         parser.exit(2, f'Preflight failed: {error}\n')
     print(json.dumps(report, indent=2))
