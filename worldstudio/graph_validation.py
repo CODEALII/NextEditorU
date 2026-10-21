@@ -245,6 +245,26 @@ def _macro_path_reaches(path_names, start, target):
     return False
 
 
+def native_macro_path_chain_reaches(path_value, start, destinations, known_references):
+    """Return static endpoint-chain status for one native point path field.
+
+    True/False means the selected IDs are known and describe the ordered
+    source-to-destination chain (or a definitive mismatch). None means the
+    available BFRES name inventory or destination list is insufficient.
+    This checks encoded names only; it does not establish runtime behavior.
+    """
+    if not isinstance(path_value, str) or not isinstance(start, str):
+        return None
+    targets = _tokens(destinations) if isinstance(destinations, str) else []
+    if len(targets) != 1 or not _POINT_ID.fullmatch(start) or not _POINT_ID.fullmatch(targets[0]):
+        return None
+    paths = _tokens(path_value)
+    references = set(known_references or ())
+    if any(not _ROUTE_ID.fullmatch(path) or path not in references for path in paths):
+        return None
+    return _macro_path_reaches(paths, start, targets[0])
+
+
 def _known_local_inventory(point_rows, route_rows, known_references, world_prefix):
     """Check local point and route row structure without rejecting old gaps."""
     if known_references is None or not world_prefix:

@@ -309,6 +309,28 @@ class EditorSmokeTests(unittest.TestCase):
 
         self.assertEqual(dialog.result, original)
 
+    def test_path_chain_dialog_refreshes_static_route_status_when_order_changes(self):
+        def status(tokens):
+            reaches = tokens == ["RW101K001", "RK001W103"]
+            if reaches:
+                return "Ordered chain reaches W103", "#8fd6a4"
+            return "Order does not reach W103", "#ffba86"
+
+        def reorder_and_check():
+            dialog = next(child for child in self.root.winfo_children()
+                          if isinstance(child, PathChainDialog))
+            self.assertEqual(dialog.status_label.cget("text"), "Ordered chain reaches W103")
+            dialog.items.selection_set(0)
+            dialog.move_selected(1)
+            self.assertEqual(dialog.status_label.cget("text"), "Order does not reach W103")
+            dialog.cancel()
+
+        dialog = PathChainDialog(
+            self.root, "RW101K001,RK001W103", ["RW101K001", "RK001W103"],
+            chain_status=status)
+        self.root.after(0, reorder_and_check)
+        self.root.wait_window(dialog)
+
     def test_point_path_picker_updates_the_selected_row_and_undo_restores_it(self):
         before = self.native.points.rows[0][4]
         self.app.tree.selection_set("point:0")

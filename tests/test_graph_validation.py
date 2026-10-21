@@ -3,6 +3,7 @@ import unittest
 from worldstudio.graph_validation import (
     build_native_route_row,
     native_macro_path_choices,
+    native_macro_path_chain_reaches,
     native_point_path_route_ids,
     native_route_segment_choices,
     validate_native_world,
@@ -14,6 +15,22 @@ def point(index, name, normal="", paths="", secret="", secret_paths=""):
 
 
 class NativeRouteDraftTests(unittest.TestCase):
+    def test_macro_chain_status_checks_direct_and_multihop_order(self):
+        refs = {"RW101K001", "RK001W103"}
+        self.assertTrue(native_macro_path_chain_reaches(
+            "RW101K001,RK001W103", "W101", "W103", refs))
+        self.assertFalse(native_macro_path_chain_reaches(
+            "RK001W103,RW101K001", "W101", "W103", refs))
+
+    def test_macro_chain_status_is_unknown_for_ambiguous_or_unresolved_data(self):
+        refs = {"RW101K001", "RK001W103"}
+        self.assertIsNone(native_macro_path_chain_reaches(
+            "RW101K001,RK001W103", "W101", "W103,W104", refs))
+        self.assertIsNone(native_macro_path_chain_reaches(
+            "RW101K001,RK001W103", "W101", "W103", {"RW101K001"}))
+
+
+class NativeGraphValidationTests(unittest.TestCase):
     def test_route_choices_require_unused_bfres_ids_and_resolvable_endpoints(self):
         references = {"RW101W102", "RW102W103", "RW103W104", "RW103W201",
                       "RW103K009", "RK999W103", "not-a-route"}

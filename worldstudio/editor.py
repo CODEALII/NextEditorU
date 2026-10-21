@@ -19,6 +19,7 @@ from .gltf import read_glb
 from .graph_validation import (
     build_native_route_row,
     native_macro_path_choices,
+    native_macro_path_chain_reaches,
     native_point_path_route_ids,
     native_route_segment_choices,
 )
@@ -1816,7 +1817,40 @@ class NativeStudio(WorldStudio):
         world_match = re.search(r"pointW([1-9])", getattr(self.native, "point_name", ""))
         world_prefix = f"W{world_match[1]}" if world_match else None
         route_ids = native_macro_path_choices(references, bones, world_prefix)
-        dialog = PathChainDialog(self.winfo_toplevel(), variable.get(), route_ids)
+        chain_context = None
+        selection = getattr(self, "native_selection", None)
+        if selection and selection[0] == "point":
+            point_index = selection[1]
+            point_rows = self.native.points.rows
+            if 0 <= point_index < len(point_rows):
+                row = point_rows[point_index]
+                path_column = next((column for column, field in self.properties.items()
+                                    if field is variable), None)
+                if path_column in (4, 7):
+                    destination_column = path_column - 1
+                    chain_context = (row[1], row[destination_column], references)
+
+        def chain_status(tokens):
+            if chain_context is None:
+                return None
+            start, destinations, known_references = chain_context
+            reaches = native_macro_path_chain_reaches(
+                ",".join(tokens), start, destinations, known_references)
+            target_list = ([value.strip() for value in destinations.split(",") if value.strip()]
+                           if isinstance(destinations, str) else [])
+            if reaches is True:
+                return (f"Static BFRES names form an ordered chain: {start} → {target_list[0]}. "
+                        "This does not confirm in-game movement.", "#8fd6a4")
+            if reaches is False:
+                target = target_list[0] if len(target_list) == 1 else "the selected destination"
+                return (f"Stored order does not form an ordered chain from {start} to {target}.",
+                        "#ffba86")
+            return ("Cannot confirm from names: destination is ambiguous or one or more IDs "
+                    "are unresolved/branched.", "#ffd18a")
+
+        dialog = PathChainDialog(
+            self.winfo_toplevel(), variable.get(), route_ids,
+            chain_status=chain_status if chain_context is not None else None)
         self.wait_window(dialog)
         if dialog.result is not None:
             variable.set(dialog.result)
@@ -2261,12 +2295,13 @@ class NativeStudio(WorldStudio):
 class PathChainDialog(tk.Toplevel):
     """Edit the order of BFRES route IDs in one native point path field."""
 
-    def __init__(self, parent, current_value, route_ids):
+    def __init__(self, parent, current_value, route_ids, chain_status=None):
         super().__init__(parent)
         self.original = current_value
         self.route_ids = tuple(sorted(set(route_ids)))
         self.changed = False
         self.result = None
+        self.chain_status = chain_status
         self.title("Edit point path order")
         self.resizable(False, False)
         self.transient(parent.winfo_toplevel())
@@ -2280,6 +2315,11 @@ class PathChainDialog(tk.Toplevel):
                   "Choosing a BFRES ID does not confirm its game behavior."),
             wraplength=480,
         ).pack(anchor="w", padx=14, pady=(0, 8))
+
+        self.status_label = None
+        if self.chain_status is not None:
+            self.status_label = ttk.Label(self, text="", wraplength=480)
+            self.status_label.pack(anchor="w", padx=14, pady=(0, 8))
 
         content = ttk.Frame(self, padding=(14, 0))
         content.pack(fill="both", expand=True)
@@ -2357,6 +2397,11 @@ class PathChainDialog(tk.Toplevel):
             "!disabled" if selected is not None and selected + 1 < len(tokens)
             else "disabled"
         ])
+        if self.status_label is not None:
+            status = self.chain_status(tokens)
+            if status:
+                text, color = status
+                self.status_label.configure(text=text, foreground=color)
 
     def add_selected(self):
         candidate = self.route_choice.get()
