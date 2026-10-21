@@ -14,6 +14,9 @@
   different source world opens and reports the required static paths without
   implying event, unlock, or save behavior. Tk regressions confirm selection
   and that failed checks block the output picker.
+- Full repository regression after this editor integration: **343 tests passed
+  in 272.426 seconds**. This validates local code paths only; Cemu traversal,
+  level entry, clear/unlock progression, and save/reload remain open.
 
 ## 2026-10-22 — Resolve ambiguous local albedo references
 
