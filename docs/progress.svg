@@ -44,7 +44,7 @@
   <rect x="32" y="377" width="250" height="139" rx="8" fill="url(#grid)"/>
   <text class="label" x="49" y="404">VISUAL EDITOR</text>
   <text class="copy" x="49" y="431">42 static BFRES shapes · routes</text>
-  <text class="copy" x="49" y="451">17 albedos · BC5 channel diagnostics</text>
+  <text class="copy" x="49" y="451">17 albedos · BC4 / BC5 channel diagnostics</text>
   <text class="tiny" x="49" y="487">Chrome / SwiftShader preview checked</text>
 
   <rect class="tile" x="290" y="377" width="256" height="139" rx="8" fill="#9e6a03"/>

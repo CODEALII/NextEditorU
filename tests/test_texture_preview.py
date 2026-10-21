@@ -4,10 +4,12 @@ import unittest
 from worldstudio.texture_preview import (
     decode_bc1,
     decode_bc3,
+    decode_bc4_unorm,
     decode_bc5_snorm,
     decode_bc5_unorm,
     detile_bc1_thin1,
     detile_bc3_thin1,
+    detile_bc4_thin1,
     detile_bc5_snorm_thin1,
     detile_bc5_unorm_thin1,
 )
@@ -182,6 +184,28 @@ class Bc5UnormDecodeTests(unittest.TestCase):
             decode_bc5_unorm(block[:-1], 4, 4)
 
 
+class Bc4UnormDecodeTests(unittest.TestCase):
+    def test_unsigned_endpoints_expand_to_a_grayscale_diagnostic(self):
+        block = bytes((255, 0, 0, 0, 0, 0, 0, 0))
+        rgba = decode_bc4_unorm(block, 4, 4)
+        self.assertEqual(rgba[:4], bytes((255, 255, 255, 255)))
+        self.assertEqual(set(rgba[0::4]), {255})
+        self.assertEqual(rgba[0::4], rgba[1::4])
+        self.assertEqual(rgba[1::4], rgba[2::4])
+        with self.assertRaisesRegex(ValueError, "exactly 8 bytes"):
+            decode_bc4_unorm(block[:-1], 4, 4)
+
+    def test_unsigned_interpolation_and_low_endpoint_mode(self):
+        indices = sum((pixel % 8) << (3 * pixel) for pixel in range(16))
+        interpolated = decode_bc4_unorm(bytes((200, 20)) + indices.to_bytes(6, 'little'), 4, 4)
+        expected = [200, 20, 174, 148, 122, 97, 71, 45]
+        self.assertEqual(list(interpolated[0::4])[:8], expected)
+
+        low_mode_indices = sum(index << (3 * pixel) for pixel, index in enumerate([6, 7] * 8))
+        low_mode = decode_bc4_unorm(bytes((0, 255)) + low_mode_indices.to_bytes(6, 'little'), 4, 4)
+        self.assertEqual(list(low_mode[0::4])[:4], [0, 255, 0, 255])
+
+
 class Bc1Thin1Tests(unittest.TestCase):
     def test_known_gx2_address_vectors(self):
         # Expected offsets are manually evaluated from the pinned C# branches:
@@ -285,6 +309,15 @@ class Bc5UnormThin1Tests(unittest.TestCase):
         linear = bytes((i * 31 + 23) & 255 for i in range(blocks_w * blocks_h * 16))
         tiled = tiled_bc3_from_linear(linear, width, height, pitch, swizzle)
         self.assertEqual(detile_bc5_unorm_thin1(tiled, width, height, pitch, swizzle=swizzle), linear)
+
+
+class Bc4UnormThin1Tests(unittest.TestCase):
+    def test_same_64_bpp_thin1_layout_roundtrips_bc4_blocks(self):
+        width, height, pitch, swizzle = 129, 65, 64, 0xD0300
+        blocks_w, blocks_h = (width + 3) // 4, (height + 3) // 4
+        linear = bytes((i * 37 + 11) & 255 for i in range(blocks_w * blocks_h * 8))
+        tiled = tiled_from_linear(linear, width, height, pitch, swizzle)
+        self.assertEqual(detile_bc4_thin1(tiled, width, height, pitch, swizzle=swizzle), linear)
 
 
 if __name__ == "__main__":

@@ -8,8 +8,9 @@ from worldstudio.bfres_texture import (extract_base_color_texture, extract_bc1_b
                                        extract_normal_map_texture, extract_sampler_diagnostic_texture)
 from worldstudio.preview_textures import (attach_base_color_textures, attach_normal_map_textures,
                                           attach_sampler_diagnostic_textures)
-from worldstudio.texture_preview import (decode_bc1, decode_bc3, decode_bc5_snorm, decode_bc5_unorm,
-                                         detile_bc1_thin1, detile_bc3_thin1,
+from worldstudio.texture_preview import (decode_bc1, decode_bc3, decode_bc4_unorm,
+                                         decode_bc5_snorm, decode_bc5_unorm,
+                                         detile_bc1_thin1, detile_bc3_thin1, detile_bc4_thin1,
                                          detile_bc5_snorm_thin1, detile_bc5_unorm_thin1)
 from tests.test_mesh import fixture as bfres_fixture
 
@@ -54,7 +55,7 @@ def texture_fixture(surface_format, texture_name='Grass_alb', sampler_name=None)
         dictionary(0x840, [(sampler_name, 0xA80)])
     data[0xA00:0xA04] = b'FTEX'
     for offset, value in ((8, 4), (12, 4), (16, 1), (20, 1), (24, surface_format),
-                          (28, 0), (32, 1), (36, 4096 if surface_format == 0x31 else 8192),
+                          (28, 0), (32, 1), (36, 4096 if surface_format in (0x31, 0x34) else 8192),
                           (44, 0), (52, 4), (56, 0), (64, 32)):
         u32(0xA00 + offset, value)
     pointer(0xAB0, 0xB80)
@@ -145,6 +146,12 @@ class SyntheticSamplerDiagnosticTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'supported diagnostic map format'):
             extract_sampler_diagnostic_texture(
                 texture_fixture(0x235, 'Mask', '_o0'), 'CS_W1_World', 'mtGrass')
+        texture = extract_sampler_diagnostic_texture(
+            texture_fixture(0x34, 'RouteW1_msk', '_o1'), 'CS_W1_World', 'mtGrass', '_o1')
+        self.assertEqual((texture['name'], texture['format']), ('RouteW1_msk', 0x34))
+        with self.assertRaisesRegex(ValueError, 'supported diagnostic map format'):
+            extract_sampler_diagnostic_texture(
+                texture_fixture(0x35, 'RouteW1_msk', '_o1'), 'CS_W1_World', 'mtGrass', '_o1')
 
     def test_diagnostic_catalog_attaches_bounded_channel_preview(self):
         shape = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
@@ -159,6 +166,13 @@ class SyntheticSamplerDiagnosticTests(unittest.TestCase):
             texture_fixture(0x35, 'Mask', '_o0'), [limited], max_texture_pixels=15)
         self.assertFalse(textures)
         self.assertEqual(failed, {'mtGrass'})
+        shape = {'material': 'mtGrass', 'uvs': [(0.0, 0.0)]}
+        textures, failed = attach_sampler_diagnostic_textures(
+            texture_fixture(0x34, 'RouteW1_msk', '_o1'), [shape], sampler_slot='_o1')
+        self.assertEqual(set(textures), {'RouteW1_msk'})
+        self.assertEqual(shape['maskTexture'], 'RouteW1_msk')
+        self.assertEqual(textures['RouteW1_msk']['samplerSlot'], '_o1')
+        self.assertFalse(failed)
 
 
 class LocalTextureReferenceTests(unittest.TestCase):
@@ -313,6 +327,39 @@ class LocalTextureReferenceTests(unittest.TestCase):
         for shape in mapped:
             payload = textures[shape['diagnosticTexture']]
             self.assertEqual(len(payload['rgbaBase64']), ((payload['width'] * payload['height'] * 4 + 2) // 3) * 4)
+
+    def test_local_w1_o1_bc4_unorm_route_map_is_visible_as_diagnostic(self):
+        from worldstudio.mesh import extract_rigid_model
+
+        root = Path(__file__).resolve().parents[1]
+        source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W1 dump unavailable')
+        model = Archive(source.read_bytes()).read('CS_W1.bfres')
+        shapes = extract_rigid_model(model)
+        textures, failed = attach_sampler_diagnostic_textures(model, shapes, sampler_slot='_o1')
+        mapped = [shape for shape in shapes if shape.get('maskTexture')]
+        self.assertEqual(set(textures), {'RouteW1_msk'})
+        self.assertEqual(len(mapped), 7)
+        self.assertTrue(failed)
+        route_map = extract_sampler_diagnostic_texture(
+            model, 'CS_W1_World', 'mtRW101W102a', '_o1')
+        self.assertEqual((route_map['name'], route_map['format'], route_map['width'],
+                          route_map['height'], route_map['pitch']),
+                         ('RouteW1_msk', 0x34, 128, 256, 32))
+        self.assertEqual(hashlib.sha256(route_map['data']).hexdigest(),
+                         'ee18565ca6c3a515954e2ad9b188b22a2a9b1678cdef688a5a8e107b6f4df629')
+        compact = detile_bc4_thin1(
+            route_map['data'], route_map['width'], route_map['height'], route_map['pitch'],
+            tile_mode=route_map['tile_mode'], swizzle=route_map['swizzle'],
+            depth=route_map['depth'])
+        self.assertEqual(hashlib.sha256(compact).hexdigest(),
+                         'b91f8d978978b099630b23c97cf2ce3ad47dabbe08cae6b6759bd605961d11a6')
+        rgba = decode_bc4_unorm(compact, route_map['width'], route_map['height'])
+        self.assertEqual(len(rgba), 128 * 256 * 4)
+        self.assertEqual(rgba[0::4], rgba[1::4])
+        self.assertEqual(rgba[1::4], rgba[2::4])
+        self.assertEqual(set(rgba[3::4]), {255})
 
 
 if __name__ == '__main__':

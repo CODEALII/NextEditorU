@@ -432,3 +432,17 @@ camera behavior and a fully playable custom world remain open.
 - Focused texture, BFRES-reference and WebGL tests: **56 passed**. Full
   regression: **150 tests passed in 93.243 seconds**; `compileall`,
   `git diff --check`, and W101 → W102/W103 reachability passed.
+
+## 2026-10-21 — BC4 UNorm `_o1` diagnostics
+
+- Added BC4 UNorm block decoding, 64-bpp GX2 Thin1 detiling, and a grayscale
+  sampler-view mode separate from `_o0` BC5 and `_n0` normal-map controls.
+  Material inspection and search now show each supported sampler map explicitly.
+- The supplied W1 tables map `RouteW1_msk` (128×256, pitch 32) to `_o1` on six
+  materials and seven UV meshes. Raw/detiled hashes are in `docs/RESEARCH.md`.
+  Chrome/SwiftShader loaded all 42 shapes, enabled the `_o1` mode and displayed
+  the route channel with no WebGL error overlay; evidence is in ignored
+  `local/evidence/preview-w1-bc4-o1-diagnostic.png`.
+- Focused texture, BFRES-reference and WebGL checks: **60 passed**. Full
+  regression: **154 tests passed in 94.857 seconds**. `compileall`,
+  `git diff --check`, SVG parsing, and W101 → W102/W103 reachability passed.

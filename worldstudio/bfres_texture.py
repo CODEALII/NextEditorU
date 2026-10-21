@@ -2,15 +2,19 @@
 
 The layouts are cross-checked against the repository's pinned MIT BfresLibrary
 Wii U Material, TextureRef and FTEX readers. This helper intentionally supports
-only one non-array BC1/BC3 albedo or BC5 SNORM normal map on a named material;
-it does not interpret samplers, light maps, shader parameters or animation.
+one non-array BC1/BC3 albedo, BC5 SNORM `_n0` map, or evidenced local W1 BC5
+UNorm `_o0` / BC4 UNorm `_o1` diagnostic map. It does not infer sampler
+semantics or interpret light maps, shader parameters or animation.
 """
 from .bfres import Skeletons
 
 
 _BASE_COLOR_FORMATS = {0x31: "BC1 UNorm", 0x33: "BC3 UNorm"}
 _NORMAL_MAP_FORMATS = {0x235: "BC5 SNORM"}
-_DIAGNOSTIC_MAP_FORMATS = {0x35: "BC5 UNorm"}
+_BC4_DIAGNOSTIC_FORMATS = {0x34: "BC4 UNorm"}
+_BC5_DIAGNOSTIC_FORMATS = {0x35: "BC5 UNorm"}
+_DIAGNOSTIC_SLOT_FORMATS = {"_o0": _BC5_DIAGNOSTIC_FORMATS,
+                            "_o1": _BC4_DIAGNOSTIC_FORMATS}
 
 
 def _extract_material_texture(data, model_name, material_name, texture_name, *, suffix,
@@ -126,16 +130,17 @@ def extract_normal_map_texture(data, model_name, material_name, texture_name=Non
 
 
 def extract_sampler_diagnostic_texture(data, model_name, material_name, sampler_slot="_o0"):
-    """Return one BC5 UNorm texture by observed sampler slot for inspection.
+    """Return one supported BC texture by observed local W1 sampler slot.
 
     Sampler and texture-reference order must correspond and the table sizes
-    must agree. This identifies the stored texture and slot only; it does not
-    infer the shader meaning of the slot.
+    must agree. `_o0` currently accepts BC5 UNorm and `_o1` accepts BC4 UNorm.
+    This identifies the stored format and slot only; it does not infer shader
+    meaning. Those mappings are only evidenced for the supplied W1 file.
     """
-    if not isinstance(sampler_slot, str) or not sampler_slot:
-        raise ValueError("A non-empty BFRES sampler slot is required")
+    if not isinstance(sampler_slot, str) or sampler_slot not in _DIAGNOSTIC_SLOT_FORMATS:
+        raise ValueError("Supported diagnostic sampler slots are _o0 and _o1")
     return _extract_material_texture(data, model_name, material_name, None, suffix=None,
-                                    formats=_DIAGNOSTIC_MAP_FORMATS,
+                                    formats=_DIAGNOSTIC_SLOT_FORMATS[sampler_slot],
                                     kind="diagnostic map", expected_slot=sampler_slot)
 
 

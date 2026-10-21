@@ -96,7 +96,7 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn('"RouteW1_alb":{"name":"RouteW1_alb"', page)
         self.assertIn("scene.textures?.[shape.texture]", page)
         self.assertIn("textureCache.set(key,texture)", page)
-        self.assertIn("mesh.normalTextureName+' '+mesh.diagnosticTextureName).toLowerCase()", page)
+        self.assertIn("mesh.normalTextureName+' '+mesh.diagnosticTextureName+' '+mesh.maskTextureName).toLowerCase()", page)
 
     def test_viewer_exposes_bc5_diagnostic_and_optional_approximate_lighting(self):
         page = build_document({
@@ -104,21 +104,29 @@ class PreviewSafetyTests(unittest.TestCase):
                                                 "height": 1, "rgbaBase64": "AAAAAA=="}},
             "diagnosticTextures": {"MaskOpaque": {"name": "MaskOpaque", "width": 1,
                                                      "height": 1, "rgbaBase64": "AAAAAA=="}},
+            "maskTextures": {"RouteW1_msk": {"name": "RouteW1_msk", "width": 1,
+                                               "height": 1, "rgbaBase64": "AAAAAA=="}},
             "normalTextureNotice": "BC5 SNORM channels are diagnostic only.",
             "diagnosticTextureNotice": "BC5 UNorm _o0 channels are diagnostic only.",
+            "maskTextureNotice": "BC4 UNorm _o1 channels are diagnostic only.",
             "shapes": [{"name": "route-mesh", "material": "mtRoute", "uvs": [[0, 0]],
                         "normalTexture": "RouteW1_nml", "diagnosticTexture": "MaskOpaque",
+                        "maskTexture": "RouteW1_msk",
                         "positions": [[0, 0, 0]],
                         "normals": [[0, 1, 0]], "indices": [0]}],
             "nodes": [], "routes": []})
         self.assertIn('<button id="bc5-view" disabled>BC5 SNORM off</button>', page)
         self.assertIn('<button id="normal-map" disabled>BC5 lighting off</button>', page)
         self.assertIn('<button id="sampler-view" disabled>_o0 BC5 UNorm off</button>', page)
+        self.assertIn('<button id="bc4-view" disabled>_o1 BC4 off</button>', page)
         self.assertIn('scene.normalTextures?.[shape.normalTexture]', page)
         self.assertIn('scene.diagnosticTextures?.[shape.diagnosticTexture]', page)
+        self.assertIn('scene.maskTextures?.[shape.maskTexture]', page)
         self.assertIn('uniform float uShowNormalTexture', page)
         self.assertIn('uniform float uShowDiagnosticTexture', page)
+        self.assertIn('uniform float uShowMaskTexture', page)
         self.assertIn('texture2D(uDiagnosticTexture,vUv)', page)
+        self.assertIn('texture2D(uMaskTexture,vUv)', page)
         self.assertIn('uniform float uUseNormalMap', page)
         self.assertIn('attribute vec4 aTangent', page)
         self.assertIn('sqrt(max(0.0,1.0-dot(xy,xy)))', page)
@@ -126,7 +134,9 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn('BC5 SNORM channels are diagnostic only.', page)
         self.assertIn('normalTextureName', page)
         self.assertIn('diagnosticTextureName', page)
+        self.assertIn('maskTextureName', page)
         self.assertIn('BC5 UNorm _o0 · diagnostic', page)
+        self.assertIn('BC4 UNorm _o1 · diagnostic', page)
         self.assertIn('sampler channels are shown for inspection only; material meaning is unverified.', page)
         self.assertIn('R/G channels are shown as diagnostic colors only', page)
         self.assertNotIn('https://', page)

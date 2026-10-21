@@ -5,9 +5,10 @@ import base64
 
 from .bfres_texture import (extract_base_color_texture, extract_normal_map_texture,
                             extract_sampler_diagnostic_texture)
-from .texture_preview import (decode_bc1, decode_bc3, decode_bc5_snorm, decode_bc5_unorm,
-                              detile_bc1_thin1, detile_bc3_thin1,
-                              detile_bc5_snorm_thin1, detile_bc5_unorm_thin1)
+from .texture_preview import (decode_bc1, decode_bc3, decode_bc4_unorm, decode_bc5_snorm,
+                              decode_bc5_unorm, detile_bc1_thin1, detile_bc3_thin1,
+                              detile_bc4_thin1, detile_bc5_snorm_thin1,
+                              detile_bc5_unorm_thin1)
 
 
 def attach_base_color_textures(model_data, shapes, *, max_texture_pixels=4 * 1024 * 1024,
@@ -127,11 +128,15 @@ def attach_normal_map_textures(model_data, shapes, *, max_texture_pixels=4 * 102
 def attach_sampler_diagnostic_textures(model_data, shapes, *, sampler_slot="_o0",
                                        max_texture_pixels=4 * 1024 * 1024,
                                        max_scene_pixels=8 * 1024 * 1024):
-    """Attach BC5 UNorm textures from one verified sampler slot as diagnostics.
+    """Attach supported BC channel maps from an observed W1 sampler slot.
 
-    The W1 viewer currently uses `_o0` evidence. It displays the stored R/G
-    channels only and makes no claim about the slot's rendering semantics.
+    `_o0` supplies BC5 UNorm and `_o1` supplies BC4 UNorm in the local W1 file.
+    `_o0` maps attach as ``diagnosticTexture`` and `_o1` maps as ``maskTexture``.
+    Stored channel values are shown without claiming a rendering role.
     """
+    if sampler_slot not in ("_o0", "_o1"):
+        raise ValueError("Supported diagnostic sampler slots are _o0 and _o1")
+    shape_field = "diagnosticTexture" if sampler_slot == "_o0" else "maskTexture"
     if type(max_texture_pixels) is not int or max_texture_pixels <= 0:
         raise ValueError("max_texture_pixels must be a positive integer")
     if type(max_scene_pixels) is not int or max_scene_pixels <= 0:
@@ -155,15 +160,26 @@ def attach_sampler_diagnostic_textures(model_data, shapes, *, sampler_slot="_o0"
                         raise ValueError(f"{texture['name']}: diagnostic texture exceeds the pixel limit")
                     if decoded_pixels + pixels > max_scene_pixels:
                         raise ValueError("diagnostic textures exceed the scene pixel limit")
-                    compact = detile_bc5_unorm_thin1(
-                        texture["data"], texture["width"], texture["height"], texture["pitch"],
-                        tile_mode=texture["tile_mode"], swizzle=texture["swizzle"],
-                        depth=texture["depth"], aa=0,
-                    )
-                    rgba = decode_bc5_unorm(compact, texture["width"], texture["height"])
+                    if texture["format"] == 0x35:
+                        compact = detile_bc5_unorm_thin1(
+                            texture["data"], texture["width"], texture["height"], texture["pitch"],
+                            tile_mode=texture["tile_mode"], swizzle=texture["swizzle"],
+                            depth=texture["depth"], aa=0,
+                        )
+                        rgba = decode_bc5_unorm(compact, texture["width"], texture["height"])
+                    elif texture["format"] == 0x34:
+                        compact = detile_bc4_thin1(
+                            texture["data"], texture["width"], texture["height"], texture["pitch"],
+                            tile_mode=texture["tile_mode"], swizzle=texture["swizzle"],
+                            depth=texture["depth"], aa=0,
+                        )
+                        rgba = decode_bc4_unorm(compact, texture["width"], texture["height"])
+                    else:
+                        raise ValueError(f"{texture['name']}: unsupported diagnostic preview format")
                     textures[texture["name"]] = {
                         "name": texture["name"], "width": texture["width"],
                         "height": texture["height"],
+                        "format": texture["format"], "samplerSlot": sampler_slot,
                         "rgbaBase64": base64.b64encode(rgba).decode("ascii"),
                     }
                     decoded_pixels += pixels
@@ -173,5 +189,5 @@ def attach_sampler_diagnostic_textures(model_data, shapes, *, sampler_slot="_o0"
                 failed_materials.add(material)
         texture_name = material_textures[material]
         if texture_name:
-            shape["diagnosticTexture"] = texture_name
+            shape[shape_field] = texture_name
     return textures, failed_materials

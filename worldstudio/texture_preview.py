@@ -1,4 +1,4 @@
-"""Small, strict decoders for BC1/BC3/BC5 textures and one verified GX2 layout.
+"""Small, strict decoders for BC1/BC3/BC4/BC5 textures and one GX2 layout.
 
 The Thin1 address calculation is based on the pinned source
 ``external/BfresLibrary/BfresLibrary/WiiU/Texture/GX2/GX2.cs`` at commit
@@ -6,9 +6,9 @@ The Thin1 address calculation is based on the pinned source
 handling in ``swizzleSurf``, BC block indexing in
 ``computePixelIndexWithinMicroTile``, and the 2D macro-tiled address path in
 ``computeSurfaceAddrFromCoordMacroTiled``. This module supports only single
-sample, single-layer GX2 2D Thin1 (tileMode 4) BC1, BC3 and BC5 levels. BC5
-SNORM output is diagnostic; it is not used for lighting because tangent data
-and channel orientation are unverified.
+sample, single-layer GX2 2D Thin1 (tileMode 4) BC1, BC3, BC4 UNorm, and BC5
+UNorm/SNorm levels. Normal and sampler-map outputs are diagnostic; they do not
+reproduce game material behavior.
 """
 from __future__ import annotations
 
@@ -249,6 +249,37 @@ def decode_bc5_unorm(data, width, height):
     return bytes(output)
 
 
+def decode_bc4_unorm(data, width, height):
+    """Decode BC4 UNorm to a grayscale diagnostic image."""
+    width = _positive_int(width, "width")
+    height = _positive_int(height, "height")
+    source = _byte_view(data)
+    blocks_w = (width + 3) // 4
+    blocks_h = (height + 3) // 4
+    expected = blocks_w * blocks_h * _BLOCK_BYTES
+    if len(source) != expected:
+        raise ValueError(f"BC4 UNORM data must be exactly {expected} bytes for {width}x{height}; got {len(source)}")
+
+    output = bytearray(width * height * 4)
+    for by in range(blocks_h):
+        for bx in range(blocks_w):
+            offset = (by * blocks_w + bx) * _BLOCK_BYTES
+            palette, indices = _bc4_unorm_palette(source[offset:offset + _BLOCK_BYTES])
+            for py in range(_TEXELS_PER_BLOCK):
+                y = by * _TEXELS_PER_BLOCK + py
+                if y >= height:
+                    break
+                for px in range(_TEXELS_PER_BLOCK):
+                    x = bx * _TEXELS_PER_BLOCK + px
+                    if x >= width:
+                        break
+                    pixel = py * _TEXELS_PER_BLOCK + px
+                    value = palette[(indices >> (3 * pixel)) & 7]
+                    target = (y * width + x) * 4
+                    output[target:target + 4] = bytes((value, value, value, 255))
+    return bytes(output)
+
+
 def _bc1_thin1_block_offset(x, y, pitch, swizzle):
     """Port the pinned GX2 macro-tile address for one compressed BC1 block."""
     # 64 bpp here means one 8-byte BC1 block on the block grid. GX2's
@@ -324,6 +355,23 @@ def detile_bc1_thin1(
     bits 8 and 9..10; the local BFRES 0x20000 marker is accepted as inert
     metadata because the reference address function does not consume it.
     """
+    return _detile_bc_thin1(data, width, height, pitch, 8, tile_mode=tile_mode,
+                            swizzle=swizzle, dimension=dimension, depth=depth, aa=aa)
+
+
+def detile_bc4_thin1(
+    data,
+    width,
+    height,
+    pitch,
+    *,
+    tile_mode=4,
+    swizzle=0,
+    dimension=1,
+    depth=1,
+    aa=0,
+):
+    """Return compact row-major BC4 UNorm data from GX2 2D Thin1 storage."""
     return _detile_bc_thin1(data, width, height, pitch, 8, tile_mode=tile_mode,
                             swizzle=swizzle, dimension=dimension, depth=depth, aa=aa)
 
