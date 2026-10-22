@@ -20,6 +20,21 @@
   browser blocked opening the generated `file:` URL, so this turn did not
   visually verify the new page or prove that every road artifact is resolved.
 
+## 2026-10-22 — Sample route-mask diagnostics with the bound UV set
+
+- Local W1 shader metadata binds `cTexMapRouteMask` through the route-mask UV
+  input, whose observed BFRES source attribute is `_u2`. The diagnostic viewer
+  had been sampling `_o0` with `_u0` for every material. It now follows the
+  assigned program's recorded source UV where available, with a validated
+  `_u0` fallback for other materials.
+- The route-mask map remains a diagnostic texture. Its shader formula and
+  contribution to the visible road are still unknown, so this does not claim
+  that missing in-map road fragments are fixed.
+- Preview tests pass (**46**) and editor smoke tests pass (**49**). A generated
+  embedded page passes `node --check`, and the packed `_u2` floats match the
+  source fixture. No new browser render was run because local `file:` navigation
+  was blocked by the browser security policy.
+
 ## 2026-10-22 — Dock the graph and verify a custom course start in Cemu
 
 - The integrated graph now uses a dedicated, full-height side dock within the

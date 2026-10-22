@@ -71,6 +71,27 @@ console.log(JSON.stringify([
         result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
         self.assertEqual(json.loads(result.stdout), [[-10, 20], [10, 60], [-10, 60]])
 
+    def test_o0_sampler_diagnostic_uses_its_bound_uv_attribute(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise sampler UV binding")
+        page = build_document({"shapes": [], "nodes": [], "routes": []}, embedded=True)
+        start = page.index("function resolveDiagnosticUvs(")
+        end = page.index("\nfunction uvChartMetrics", start)
+        helper = page[start:end]
+        probe = r"""
+function unpackArray(payload,Type){const bytes=Buffer.from(payload,'base64');return new Type(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength))}
+""" + helper + r"""
+const routeUv=new Float32Array([12,22,13,23]);
+const packed=Buffer.from(routeUv.buffer).toString('base64');
+const shape={shaderMetadata:{attributeBindings:{_u4:{source_attribute:'_u2'}}},uvAttributesPacked:{_u2:packed}};
+console.log(JSON.stringify(Array.from(resolveDiagnosticUvs(shape,new Float32Array([0,0,1,1]),new Float32Array(6)))));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        self.assertEqual(json.loads(result.stdout), [12, 22, 13, 23])
+        self.assertIn("attribute vec2 aDiagnosticUv", page)
+        self.assertIn("texture2D(uDiagnosticTexture,vDiagnosticUv)", page)
+
     def test_preview_project_rejects_invalid_saved_terrain_transform(self):
         project = {"format": "worldstudio-preview-v1", "nodes": [], "routes": [],
                    "terrain_transform": {"scale": [1, 0, 1],
@@ -445,7 +466,7 @@ console.log(JSON.stringify({mipmaps:mipmaps.length,filters}));
         self.assertIn('uniform float uShowNormalTexture', page)
         self.assertIn('uniform float uShowDiagnosticTexture', page)
         self.assertIn('uniform float uShowMaskTexture', page)
-        self.assertIn('texture2D(uDiagnosticTexture,vUv)', page)
+        self.assertIn('texture2D(uDiagnosticTexture,vDiagnosticUv)', page)
         self.assertIn('texture2D(uMaskTexture,vUv)', page)
         self.assertIn('uniform float uUseNormalMap', page)
         self.assertIn('attribute vec4 aTangent', page)
