@@ -1407,14 +1407,17 @@ class WorldStudio(ttk.Frame):
                 normal_textured_shapes = sum(bool(shape.get("normalTexture")) for shape in shapes)
                 texture_notice = (
                     f"BC1/BC3 base-color maps: {len(textures)} unique textures on {textured_shapes} UV meshes. "
-                    "Alpha below 50% is cut out; material settings, light maps, game shaders and animation are not evaluated."
+                    "Alpha below 50% is cut out on ordinary textured shapes; native route meshes blend their albedo alpha "
+                    "over the opaque world. Material settings, light maps, game shaders and animation are not evaluated."
                 )
                 if warned_materials:
                     texture_notice += (f" {len(warned_materials)} material(s) use approximate colors; "
                                        "select an affected shape to see the fallback reason.")
                 if texture_srt_parameters:
                     texture_notice += (f" {texture_srt_parameters} stored texmtx SRT parameter(s) are shown "
-                                       "read-only in the inspector; none are applied to the preview.")
+                                       "read-only in the inspector; supported mode-0 route texmtx0 scale/translation "
+                                       "is applied to route texture sampling and picking. Other modes and rotations "
+                                       "remain unapplied.")
                 if texture_srt_failures:
                     texture_notice += f" {len(texture_srt_failures)} material(s) have unsupported texture SRT data."
                 shader_metadata_shapes = sum(bool(shape.get("shaderMetadata")) for shape in shapes)

@@ -1,5 +1,30 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Recheck route preview evidence and refresh the Cemu test gate
+
+- Built the current W1 scene from the local archive and exercised it in
+  installed Chrome/SwiftShader: 42 shapes and 106,736 triangles loaded, three
+  zoom steps and orbit drags rendered without JavaScript errors or a WebGL
+  error overlay. A same-angle comparison of standard versus alpha-coverage
+  mipmaps measured 63.6 dB PSNR and showed no clear visual gain, so the
+  coverage-mipmap experiment was discarded rather than added to the renderer.
+- Corrected the viewport notice: ordinary textured shapes retain the 50% alpha
+  cutoff, native route meshes blend their albedo alpha, and only supported
+  mode-0 route `texmtx0` scale/translation is applied. A W1-backed editor smoke
+  check covers this user-facing description.
+- The sole running Cemu process is PID 18168 on
+  `build/cemu-terrain-projection-20261022-v3`. Its active `WorldStudioChain`
+  pack copy hashes to
+  `5af4ad56ec51285fa642672782b770d487b524ac68c0710215f7addce00dc567`, while
+  the current workspace `CS_W1.szs` hashes to
+  `d2547f5bfa9963d05916816301a0b53e8916ab62628210409be232228b117cf0`.
+  `cemu_preflight.py --expect-pack WorldStudioChain --require-run --archive …`
+  correctly refuses this mismatch. Cemu remains open at its title prompt; the
+  Computer Use snapshot returned a Python window handle for the Cemu screenshot
+  on two observations, so no input was sent. This profile cannot provide a
+  valid test of the current workspace archive; rerun only after an isolated
+  profile contains the exact archive hash.
+
 ## 2026-10-22 — Smooth native route texture edges in the embedded viewport
 
 - The route albedo contains partially transparent edge pixels and is mipmapped.

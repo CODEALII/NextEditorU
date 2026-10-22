@@ -902,6 +902,23 @@ class EditorSmokeTests(unittest.TestCase):
         finally:
             top.destroy()
 
+    def test_local_w1_texture_notice_matches_route_alpha_and_srt_rendering(self):
+        root = Path(__file__).resolve().parents[1]
+        source = root / "NSMBU Modding Project/content/Common/course_select/CS_W1.szs"
+        if not source.is_file():
+            self.skipTest("User-provided local W1 dump unavailable")
+        top = tk.Toplevel(self.root)
+        top.withdraw()
+        studio = NativeStudio(top, WorldProject.open(source))
+        try:
+            scene = studio._build_3d_preview(studio.view_project())
+            notice = scene["textureNotice"]
+            self.assertIn("native route meshes blend their albedo alpha", notice)
+            self.assertIn("supported mode-0 route texmtx0 scale/translation is applied", notice)
+            self.assertIn("RouteW1_alb", scene["textures"])
+        finally:
+            top.destroy()
+
     def test_local_static_object_bone_edits_update_preview_and_export(self):
         root = Path(__file__).resolve().parents[1]
         source = root / "NSMBU Modding Project/content/Common/course_select/CS_W5a.szs"
