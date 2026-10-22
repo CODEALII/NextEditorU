@@ -1,5 +1,13 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Add a focused 3D viewport layout
+
+- Added a persistent **Hide 2D graph / Show 2D graph** control beside Undo/Redo.
+  Hiding the secondary graph lets the embedded WebGL world use the full editor
+  work area; restoring it returns to the synchronized split layout.
+- Added a Tk regression covering both pane states and button labels. The change
+  only affects editor layout and does not imply new in-game verification.
+
 ## 2026-10-22 — Verify glTF sidecar changes against preview projects
 
 - Added an editor-level regression that opens a JSON glTF backed by a local

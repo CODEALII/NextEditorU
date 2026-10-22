@@ -664,6 +664,21 @@ class EditorSmokeTests(unittest.TestCase):
         ready_callback = calls[-1][1]
         ready_callback()
 
+    def test_graph_can_be_hidden_to_maximize_3d_and_restored(self):
+        self.root.update()
+        self.assertTrue(self.app.graph_visible)
+        self.assertIn(str(self.app.graph_frame), self.app.view_split.panes())
+
+        self.app.toggle_graph_view()
+        self.assertFalse(self.app.graph_visible)
+        self.assertNotIn(str(self.app.graph_frame), self.app.view_split.panes())
+        self.assertEqual(self.app.graph_view_button.cget("text"), "Show 2D graph")
+
+        self.app.toggle_graph_view()
+        self.assertTrue(self.app.graph_visible)
+        self.assertIn(str(self.app.graph_frame), self.app.view_split.panes())
+        self.assertEqual(self.app.graph_view_button.cget("text"), "Hide 2D graph")
+
     def test_webview_host_frame_keeps_viewport_pane_managed(self):
         class FakeWebView:
             def __init__(self, frame, **_kwargs):

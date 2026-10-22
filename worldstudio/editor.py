@@ -465,6 +465,8 @@ class WorldStudio(ttk.Frame):
         self._embedded_preview_revision = 0
         self._webview_host = None
         self._runtime_cleanup_done = False
+        self.graph_visible = True
+        self._view_split_after_id = None
         self._build()
         self._load_mesh()
         self.refresh()
@@ -526,6 +528,9 @@ class WorldStudio(ttk.Frame):
         self.undo_button.pack(side="left", padx=2)
         self.redo_button = ttk.Button(history_bar, text="Redo  Ctrl+Y", command=self.redo, state="disabled")
         self.redo_button.pack(side="left", padx=2)
+        self.graph_view_button = ttk.Button(
+            history_bar, text="Hide 2D graph", command=self.toggle_graph_view)
+        self.graph_view_button.pack(side="left", padx=(12, 2))
         self.viewport_hint = ttk.Label(self, text="3D world viewport · drag to orbit · right-drag to pan · wheel to zoom · select points in the viewport or list.", padding=(10, 5), foreground="#9fb4c7")
         self.viewport_hint.pack(fill="x")
         body = ttk.Panedwindow(self, orient="horizontal")
@@ -617,6 +622,28 @@ class WorldStudio(ttk.Frame):
                 self.view_split.sashpos(0, int(width * 0.64))
             except tk.TclError:
                 pass
+
+    def toggle_graph_view(self):
+        """Temporarily maximize the embedded 3D viewport or restore the graph."""
+        if self.graph_visible:
+            self.view_split.forget(self.graph_frame)
+            self.graph_visible = False
+            self.graph_view_button.configure(text="Show 2D graph")
+            return
+
+        self.view_split.add(self.graph_frame, weight=2)
+        self.graph_visible = True
+        self.graph_view_button.configure(text="Hide 2D graph")
+        if self._view_split_after_id is not None:
+            try:
+                self.after_cancel(self._view_split_after_id)
+            except tk.TclError:
+                pass
+        self._view_split_after_id = self.after_idle(self._restore_view_split_position)
+
+    def _restore_view_split_position(self):
+        self._view_split_after_id = None
+        self._set_initial_view_split()
 
     def clear_tree_filter(self):
         self.tree_filter_var.set("")
@@ -1900,7 +1927,7 @@ class WorldStudio(ttk.Frame):
             return
         self._runtime_cleanup_done = True
         for callback_name in ("_preview_poll_after", "_preview_update_after", "_preview_open_after",
-                              "_fit_after_id", "_recovery_after_id"):
+                              "_fit_after_id", "_recovery_after_id", "_view_split_after_id"):
             callback_id = getattr(self, callback_name, None)
             if callback_id is not None:
                 try:
