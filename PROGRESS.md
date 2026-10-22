@@ -8,12 +8,15 @@
   chain before applying, adds missing route-table rows using a source road
   type, and groups all edits into one Undo step. Replacing a populated field
   pair requires explicit confirmation. Ambiguous, unreachable, or unresolvable
-  chains remain unavailable.
+  chains remain unavailable. A follow-up audit found and closed a cross-world
+  edge case: foreign `W2`-style endpoints cannot be used as hidden hops inside
+  a local `W1` draft, while non-world helper bones remain supported.
 - The non-mutating draft builder has focused checks for direct/multi-hop
   chains, normal/secret columns, reusing existing route rows, unchanged source
-  tables before apply, and ambiguous paths. The editor exposes the workflow on
-  selected point properties. Focused validation/UI checks passed **26 tests**;
-  the full suite passed **374 tests** in 317.977 seconds. This uses static
+  tables before apply, and rejection of tied or cross-world paths. The editor
+  exposes the workflow on selected point properties. Focused validation/UI
+  checks passed **27 tests**; the full suite passed **375 tests** in 318.739
+  seconds. This uses static
   names only and does not verify traversal, level launch, progression, or saves
   in Cemu.
 

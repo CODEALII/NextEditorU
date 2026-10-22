@@ -60,6 +60,13 @@ class NativeRouteDraftTests(unittest.TestCase):
                 points, [], {"RW101W103"}, {"W101", "W103"},
                 0, "W103", "normal", "", "W1")
 
+    def test_connection_draft_does_not_route_through_another_world(self):
+        points = [point(0, "W101"), point(1, "W103")]
+        with self.assertRaisesRegex(ValueError, "unique shortest"):
+            build_native_connection_draft(
+                points, [], {"RW101W201", "RW201W103"},
+                {"W101", "W103"}, 0, "W103", "normal", "road", "W1")
+
     def test_macro_chain_status_checks_direct_and_multihop_order(self):
         refs = {"RW101K001", "RK001W103"}
         self.assertTrue(native_macro_path_chain_reaches(

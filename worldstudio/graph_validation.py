@@ -186,6 +186,13 @@ def build_native_connection_draft(point_rows, route_rows, known_references,
         raise ValueError("Choose one other point in the same world")
 
     path_ids = native_macro_path_choices(known_references, known_bones, world_prefix)
+    # General path pickers preserve valid links into other worlds. A local
+    # connection draft must not route through a remote world because the local
+    # route graph deliberately excludes those edges. Keep non-world helper
+    # bones (for example F001) while removing segments with foreign W endpoints.
+    path_ids = [route_id for route_id in path_ids
+                if all(not endpoint.startswith("W") or endpoint.startswith(world_prefix)
+                       for endpoint in (route_id[1:5], route_id[5:9]))]
     chain = suggest_native_macro_path_chain(path_ids, source_name, target)
     if not chain:
         raise ValueError("No unique shortest BFRES path chain reaches this destination")
