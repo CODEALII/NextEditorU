@@ -1,5 +1,17 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Accept GLB primitives with optional UV/normal gaps
+
+- GLB primitive collections may now mix presence of `NORMAL` and
+  `TEXCOORD_0`. The parser keeps missing values explicit, reports generated
+  smooth normals and planar terrain-UV fallback, and reuses the import/export
+  pipeline's existing per-vertex fallback handling. Materials and textures are
+  still ignored; absent UVs do not imply material fidelity.
+- Verification: `python -m unittest tests.test_gltf tests.test_mesh` — 57 tests
+  passed; `python -m compileall -q worldstudio/gltf.py tests/test_gltf.py` and
+  `git diff --check` passed. Terrain appearance/collision remain untested in
+  Cemu.
+
 ## 2026-10-22 — Expand repeated static GLB meshes per scene node
 
 - The GLB importer now duplicates a shared static mesh for each distinct active

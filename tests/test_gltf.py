@@ -191,11 +191,18 @@ class GlbReaderTests(unittest.TestCase):
         self.assertEqual(geometry[2][3:], [(0., 0.), (0., 1.), (1., 0.)])
         self.assertIn("GLB materials and textures are ignored", warnings[0])
 
-    def test_rejects_mixed_primitive_attributes_and_compressed_buffer_views(self):
+    def test_mixed_primitive_optional_attributes_use_documented_fallbacks(self):
         document, binary = _fixture()
         document["meshes"][0]["primitives"].append({"attributes": {"POSITION": 0}, "indices": 3})
-        with self.assertRaisesRegex(ValueError, "consistently provide NORMAL and TEXCOORD_0"):
-            parse_glb(_glb(document, binary))
+        geometry, warnings = parse_glb(_glb(document, binary))
+        self.assertEqual(len(geometry[0]), 6)
+        self.assertEqual(geometry[1], [(0, 1, 2), (3, 4, 5)])
+        self.assertEqual(geometry[2][:3], [(0., 0.), (0., 1.), (1., 0.)])
+        self.assertEqual(geometry[2][3:], [None] * 3)
+        self.assertEqual(geometry[3][:3], [(0., 1., 0.)] * 3)
+        self.assertEqual(geometry[3][3:], [None] * 3)
+        self.assertTrue(any("without NORMAL" in warning for warning in warnings))
+        self.assertTrue(any("without TEXCOORD_0" in warning for warning in warnings))
         document, binary = _fixture()
         document["bufferViews"][0]["extensions"] = {"EXT_meshopt_compression": {}}
         with self.assertRaisesRegex(ValueError, "bufferView extensions are unsupported"):

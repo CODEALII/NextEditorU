@@ -391,7 +391,6 @@ def parse_glb(data):
     warnings = set()
     has_uvs = False
     has_normals = False
-    optional_attributes = None
     primitive_count = 0
     for mesh_index, node_transform in mesh_instances:
         mirrored = _linear_determinant(node_transform) < 0
@@ -420,11 +419,10 @@ def parse_glb(data):
             attributes = primitive.get("attributes")
             if not isinstance(attributes, dict) or "POSITION" not in attributes:
                 raise ValueError("GLB mesh primitive requires POSITION")
-            primitive_attributes = ("NORMAL" in attributes, "TEXCOORD_0" in attributes)
-            if optional_attributes is None:
-                optional_attributes = primitive_attributes
-            elif primitive_attributes != optional_attributes:
-                raise ValueError("All GLB primitives must consistently provide NORMAL and TEXCOORD_0")
+            if "NORMAL" not in attributes:
+                warnings.add("GLB primitives without NORMAL use generated smooth normals")
+            if "TEXCOORD_0" not in attributes:
+                warnings.add("GLB primitives without TEXCOORD_0 use planar terrain UV fallback")
             if "JOINTS_0" in attributes or "WEIGHTS_0" in attributes:
                 raise ValueError("Skinned GLB vertex attributes are unsupported; export a static mesh")
             ignored = set(attributes) - {"POSITION", "NORMAL", "TEXCOORD_0"}
