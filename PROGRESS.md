@@ -1,5 +1,25 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Make the graph editor accessible from every 3D world view
+
+- The actual desktop editor keeps the graph docked beside the WebGL world, and
+  the standalone preview now exposes the same dock instead of hiding it. Both
+  views start with the graph open and can hide or expand it.
+- In the embedded desktop view, dragging a node in the graph editor now moves
+  the matching world point in 3D and commits through the existing editor move
+  callback. Selection remains synchronized with the graph, world, and editor
+  list. External preview mode offers graph selection and camera focus; it cannot
+  persist edits without the desktop bridge.
+- Matched native road meshes now use `-4/-4` polygon offset consistently in the
+  render and picking passes. This is intended to reduce terrain depth flicker;
+  the known W1M0 path texture fragments remain a separate incomplete-shader
+  limitation until a fresh visual run confirms their behavior.
+- The focused preview/editor suites pass (**94 tests**), including graph
+  coordinate mapping and embedded/standalone graph availability. Generated
+  JavaScript passes `node --check`, and `git diff --check` is clean. The local
+  browser blocked opening the generated `file:` URL, so this turn did not
+  visually verify the new page or prove that every road artifact is resolved.
+
 ## 2026-10-22 — Dock the graph and verify a custom course start in Cemu
 
 - The integrated graph now uses a dedicated, full-height side dock within the

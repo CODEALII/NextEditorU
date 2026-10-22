@@ -25,7 +25,7 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("mesh.depthBias=metadata.depthBias===true", page)
         self.assertIn("clip.z-=uDepthBias*clip.w", page)
         self.assertIn("function applyRouteDepthOffset(enabled)", page)
-        self.assertIn("gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-1,-1)", page)
+        self.assertIn("gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-4,-4)", page)
         self.assertIn("applyRouteDepthOffset(m.depthBias&&!showWireframe)", page)
         self.assertIn("applyRouteDepthOffset(mesh.depthBias)", page)
         self.assertIn("gl.uniform1f(gl.getUniformLocation(meshProgram,'uDepthBias'),0)", page)
@@ -40,7 +40,36 @@ class PreviewSafetyTests(unittest.TestCase):
         page = build_document({"shapes": [], "nodes": [{"id": "W101", "x": 0, "y": 0, "z": 0}], "routes": []}, embedded=True)
         self.assertIn(".embedded .embedded-controls{display:inline-flex!important}", page)
         self.assertIn("graph.classList.add('open','expanded')", page)
+        self.assertIn("class=\"graph-toggle\"", page)
+        self.assertIn("graphDrag={editorId,pointerId:event.pointerId", page)
+        self.assertIn("window.tkwry?.invoke('move_item'", page)
+        self.assertIn("if(graph.classList.contains('open'))", page)
         self.assertIn('id="world-graph-svg"', page)
+
+    def test_standalone_preview_also_exposes_docked_world_graph(self):
+        page = build_document({"shapes": [], "nodes": [{"id": "W101", "x": 0, "y": 0, "z": 0}], "routes": []})
+        self.assertIn("class=\"graph-toggle\"", page)
+        self.assertIn("select nodes/routes to focus 3D", page)
+        self.assertIn("graph.classList.add('open','expanded')", page)
+
+    def test_graph_drag_maps_svg_coordinates_to_world_and_clamps_edges(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise graph point dragging")
+        page = build_document({"shapes": [], "nodes": [], "routes": []}, embedded=True)
+        start = page.index("function graphPointToWorld(")
+        end = page.index("\n", start)
+        helper = page[start:end]
+        probe = helper + r"""
+const domain={minX:-10,maxX:10,minZ:20,maxZ:60,height:175};
+console.log(JSON.stringify([
+  graphPointToWorld(18,15,domain),
+  graphPointToWorld(262,160,domain),
+  graphPointToWorld(-100,999,domain)
+]));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        self.assertEqual(json.loads(result.stdout), [[-10, 20], [10, 60], [-10, 60]])
 
     def test_preview_project_rejects_invalid_saved_terrain_transform(self):
         project = {"format": "worldstudio-preview-v1", "nodes": [], "routes": [],
@@ -108,7 +137,7 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("updateGraphInset()", embedded_page)
         self.assertIn('<body class="">', external_page)
         self.assertNotIn('id="controls-toggle"', external_page)
-        self.assertNotIn('id="graph-toggle"', external_page)
+        self.assertIn('id="graph-toggle"', external_page)
 
     def test_embedded_viewport_has_selection_and_incremental_overlay_api(self):
         page = build_document({"shapes": [], "nodes": [{"id": "W101", "editorId": "point:0",
