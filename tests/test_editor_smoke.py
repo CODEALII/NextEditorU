@@ -685,6 +685,17 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertEqual(self.app.graph_view_button.cget("text"), "Open 2D graph panel")
         self.assertFalse(EditorLayoutPreferences(self.app.layout_preferences.path).graph_visible())
 
+    def test_legacy_layout_preference_defaults_to_integrated_3d_graph(self):
+        preferences = self.app.layout_preferences
+        preferences.path.write_text(json.dumps({
+            "format": "nsmbu-world-studio-layout", "version": 2, "graph_visible": True
+        }), encoding="utf-8")
+
+        self.assertFalse(preferences.graph_visible(default=False))
+
+        preferences.set_graph_visible(True)
+        self.assertTrue(preferences.graph_visible(default=False))
+
     def test_webview_host_frame_keeps_viewport_pane_managed(self):
         class FakeWebView:
             def __init__(self, frame, **_kwargs):

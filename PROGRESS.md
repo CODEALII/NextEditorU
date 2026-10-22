@@ -1,5 +1,25 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Dock the graph into the 3D world and improve road depth precision
+
+- Enlarged the embedded graph to a full-height overlay that is open and expanded
+  by default. Its SVG layout adapts to the viewport, so point positions and labels
+  use the available height rather than remaining compressed in a small inset.
+  Point/route selection stays synchronized with the list and 3D world. A layout
+  preference version bump makes sessions saved with the old separate graph pane
+  start in the integrated 3D workflow; the optional side graph can still be
+  toggled and saved again.
+- Raised the minimum camera near plane from 0.1% to 0.5% of world radius. At a
+  close zoom in the camera-math regression, this lowers the far/near ratio from
+  1,250 to 250, improving depth-buffer resolution where roads and terrain sit
+  close together. The route-only clip-space bias remains in place.
+- Regression checks cover the updated depth range, expanded responsive graph,
+  and migration of old layout preferences. The focused preview/editor suite
+  passes **91 tests**, including generated JavaScript checks.
+  The computer-use runtime could not initialize (`Trusted RPC service is not
+  configured`), so this does not yet verify camera orbit appearance in the
+  native WebView or confirm every road artifact is gone.
+
 ## 2026-10-22 — Prevent projected terrain from flipping existing faces
 
 - The previous live terrain pack produced dark overlaps and holes. Inspection of
