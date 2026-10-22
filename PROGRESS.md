@@ -1,5 +1,19 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Suggest unique static route chains in the point editor
+
+- The native path-chain picker now searches resolved BFRES endpoint names for
+  a shortest ordered chain from one selected point to its single destination.
+  It offers the suggestion only when that shortest chain is unique; tied or
+  unreachable paths leave the field untouched. The user explicitly chooses
+  the suggestion and still applies it through the normal dialog. The status
+  continues to identify this as static name validation, not game behavior.
+- Added graph tests for direct, multi-hop, tied and unreachable chains, plus a
+  Tk smoke test proving the suggestion does not replace existing/unknown
+  values until explicitly selected. `python -m unittest
+  tests.test_graph_validation tests.test_editor_smoke` passes **64 tests**;
+  Python compilation and `git diff --check` pass.
+
 ## 2026-10-22 — Apply static GLB node transforms during terrain import
 
 - GLB terrain import now composes active-scene parent and child transforms,

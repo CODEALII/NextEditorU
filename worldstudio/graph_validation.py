@@ -6,6 +6,7 @@ identify the playable entry and required locations instead of treating every
 point as a level node.
 """
 import hashlib
+from collections import deque
 import json
 import re
 from pathlib import Path
@@ -277,6 +278,62 @@ def native_macro_path_chain_reaches(path_value, start, destinations, known_refer
     if any(not _ROUTE_ID.fullmatch(path) or path not in references for path in paths):
         return None
     return _macro_path_reaches(paths, start, targets[0])
+
+
+def suggest_native_macro_path_chain(path_ids, start, target):
+    """Return a unique shortest ordered BFRES path chain, or ``None``.
+
+    The suggestion uses only encoded route endpoints. If more than one
+    shortest chain exists, the caller must leave the field unchanged for the
+    user to choose; this does not infer which chain the game prefers.
+    """
+    if (not isinstance(start, str) or not _POINT_ID.fullmatch(start) or
+            not isinstance(target, str) or not _POINT_ID.fullmatch(target) or
+            start == target):
+        return None
+    outgoing = {}
+    try:
+        candidates = iter(path_ids or ())
+    except TypeError:
+        return None
+    seen = set()
+    for route_id in candidates:
+        if not isinstance(route_id, str) or not _ROUTE_ID.fullmatch(route_id):
+            continue
+        if route_id in seen:
+            continue
+        seen.add(route_id)
+        outgoing.setdefault(route_id[1:5], []).append((route_id[5:9], route_id))
+    for edges in outgoing.values():
+        edges.sort()
+
+    distance = {start: 0}
+    path_count = {start: 1}
+    previous = {}
+    queue = deque((start,))
+    while queue:
+        current = queue.popleft()
+        for next_node, route_id in outgoing.get(current, ()):
+            next_distance = distance[current] + 1
+            if next_node not in distance:
+                distance[next_node] = next_distance
+                path_count[next_node] = path_count[current]
+                previous[next_node] = (current, route_id)
+                queue.append(next_node)
+            elif distance[next_node] == next_distance:
+                path_count[next_node] = min(2, path_count[next_node] + path_count[current])
+    if target not in distance or path_count[target] != 1:
+        return None
+    result = []
+    current = target
+    while current != start:
+        predecessor = previous.get(current)
+        if predecessor is None:
+            return None
+        current, route_id = predecessor
+        result.append(route_id)
+    result.reverse()
+    return result
 
 
 def _known_local_inventory(point_rows, route_rows, known_references, world_prefix):

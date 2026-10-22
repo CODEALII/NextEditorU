@@ -424,6 +424,28 @@ class EditorSmokeTests(unittest.TestCase):
 
         self.assertEqual(dialog.result, original)
 
+    def test_path_chain_suggestion_replaces_values_only_after_explicit_use(self):
+        original = "RWbad,RW101W102"
+        suggestion = ["RW101K001", "RK001W103"]
+
+        def apply_suggestion():
+            dialog = next(child for child in self.root.winfo_children()
+                          if isinstance(child, PathChainDialog))
+            self.assertEqual(tuple(dialog.items.get(0, "end")), tuple(original.split(",")))
+            self.assertIsNotNone(dialog.suggest_button)
+            dialog.use_suggested_chain()
+            self.assertEqual(tuple(dialog.items.get(0, "end")), tuple(suggestion))
+            dialog.apply()
+
+        dialog = PathChainDialog(
+            self.root, original, suggestion, suggested_chain=suggestion,
+            chain_status=lambda _tokens: ("Static chain", "#8fd6a4"),
+            help_text="Explicitly use the static suggestion.")
+        self.root.after(0, apply_suggestion)
+        self.root.wait_window(dialog)
+
+        self.assertEqual(dialog.result, ",".join(suggestion))
+
     def test_path_chain_dialog_refreshes_static_route_status_when_order_changes(self):
         def status(tokens):
             reaches = tokens == ["RW101K001", "RK001W103"]

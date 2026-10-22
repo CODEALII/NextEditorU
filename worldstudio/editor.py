@@ -22,6 +22,7 @@ from .graph_validation import (
     build_native_route_row,
     native_macro_path_choices,
     native_macro_path_chain_reaches,
+    suggest_native_macro_path_chain,
     native_point_path_route_ids,
     native_road_type_choices,
     native_route_segment_choices,
@@ -2312,9 +2313,27 @@ class NativeStudio(WorldStudio):
             return ("Cannot confirm from names: destination is ambiguous or one or more IDs "
                     "are unresolved/branched.", "#ffd18a")
 
+        suggested_chain = None
+        if chain_context is not None:
+            start, destinations, _known_references = chain_context
+            targets = ([value.strip() for value in destinations.split(",") if value.strip()]
+                       if isinstance(destinations, str) else [])
+            if len(targets) == 1:
+                suggested_chain = suggest_native_macro_path_chain(
+                    route_ids, start, targets[0])
+        chain_help = (
+            "Existing values stay in place unless you explicitly choose a suggestion. "
+            "A unique shortest chain was found from BFRES endpoint names; taking it "
+            "replaces this list. This does not establish in-game route behavior."
+            if suggested_chain else
+            "Existing values remain in place, including unresolved IDs. Choosing a "
+            "BFRES ID does not confirm its game behavior.")
+
         dialog = PathChainDialog(
             self.winfo_toplevel(), variable.get(), route_ids,
-            chain_status=chain_status if chain_context is not None else None)
+            chain_status=chain_status if chain_context is not None else None,
+            suggested_chain=suggested_chain,
+            help_text=chain_help)
         self.wait_window(dialog)
         if dialog.result is not None:
             variable.set(dialog.result)
@@ -2908,6 +2927,7 @@ class PathChainDialog(tk.Toplevel):
     """Edit ordered IDs in a native point destination or path-chain field."""
 
     def __init__(self, parent, current_value, route_ids, chain_status=None, *,
+                 suggested_chain=None,
                  dialog_title="Edit point path order",
                  heading="Ordered BFRES path IDs", item_label="BFRES ID",
                  help_text=("Existing values remain in place, including unresolved IDs. "
@@ -2920,6 +2940,7 @@ class PathChainDialog(tk.Toplevel):
         self.changed = False
         self.result = None
         self.chain_status = chain_status
+        self.suggested_chain = tuple(suggested_chain or ())
         self.title(dialog_title)
         self.resizable(False, False)
         self.transient(parent.winfo_toplevel())
@@ -2982,6 +3003,11 @@ class PathChainDialog(tk.Toplevel):
         actions.pack(fill="x")
         self.remove_button = ttk.Button(actions, text="Remove", command=self.remove_selected)
         self.remove_button.pack(side="left")
+        self.suggest_button = None
+        if self.suggested_chain:
+            self.suggest_button = ttk.Button(
+                actions, text="Use suggested chain", command=self.use_suggested_chain)
+            self.suggest_button.pack(side="left", padx=(8, 0))
         self.up_button = ttk.Button(actions, text="Move up", command=lambda: self.move_selected(-1))
         self.up_button.pack(side="left", padx=(8, 0))
         self.down_button = ttk.Button(actions, text="Move down", command=lambda: self.move_selected(1))
@@ -3028,6 +3054,18 @@ class PathChainDialog(tk.Toplevel):
         self.items.selection_clear(0, "end")
         self.items.selection_set(index)
         self.items.see(index)
+        self.changed = True
+        self.update_actions()
+
+    def use_suggested_chain(self):
+        if not self.suggested_chain:
+            return
+        self.items.delete(0, "end")
+        for token in self.suggested_chain:
+            self.items.insert("end", token)
+        if self.suggested_chain:
+            self.items.selection_set(0)
+            self.items.see(0)
         self.changed = True
         self.update_actions()
 

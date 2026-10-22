@@ -4,6 +4,7 @@ from worldstudio.graph_validation import (
     build_native_route_row,
     native_macro_path_choices,
     native_macro_path_chain_reaches,
+    suggest_native_macro_path_chain,
     native_point_path_route_ids,
     native_road_type_choices,
     native_route_segment_choices,
@@ -29,6 +30,22 @@ class NativeRouteDraftTests(unittest.TestCase):
             "RW101K001,RK001W103", "W101", "W103,W104", refs))
         self.assertIsNone(native_macro_path_chain_reaches(
             "RW101K001,RK001W103", "W101", "W103", {"RW101K001"}))
+
+    def test_suggests_unique_shortest_macro_chain(self):
+        self.assertEqual(suggest_native_macro_path_chain(
+            {"RW101K001", "RK001W103", "RW101W103"}, "W101", "W103"),
+            ["RW101W103"])
+        self.assertEqual(suggest_native_macro_path_chain(
+            {"RW101K001", "RK001W103"}, "W101", "W103"),
+            ["RW101K001", "RK001W103"])
+
+    def test_path_suggestion_stays_silent_for_ties_or_unreachable_targets(self):
+        branches = {"RW101K001", "RK001W103", "RW101K002", "RK002W103"}
+        self.assertIsNone(suggest_native_macro_path_chain(branches, "W101", "W103"))
+        self.assertIsNone(suggest_native_macro_path_chain(
+            {"RW101K001"}, "W101", "W103"))
+        self.assertIsNone(suggest_native_macro_path_chain(
+            {"RW101K001"}, "W101", "W101"))
 
 
 class NativeGraphValidationTests(unittest.TestCase):
