@@ -16,6 +16,12 @@
   The result JSONs and before/after BMPs are in the ignored
   `local/evidence/cemu-input-test/` directory. The runner recorded the Cemu log
   hashes and save hashes in each report.
+- Launched the native Tk/WebView2 desktop app on local W1 and checked the
+  embedded viewport: the graph remained over the 3D model during orbit; clicking
+  `W103` selected its editor row, and clicking the graph edge selected
+  `RW101W102`. Three camera angles rendered without a WebView/WebGL failure.
+  This is a visual smoke check, not proof that every path texture gap or extreme
+  low-angle distortion is fixed.
 
 ## 2026-10-22 — Connect the real W1 graph edges to editable route rows
 
