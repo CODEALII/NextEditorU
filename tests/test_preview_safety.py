@@ -620,9 +620,11 @@ console.log(JSON.stringify([point,edge,meshIndexFromPixel([0,0,0,255])]));
         helper = page[start:end]
         probe = helper + r"""
 const uv=new Float32Array([0.25,0.75,1,0]);
-const shifted=routeBaseTextureUvs(uv,{mode:0,scale:[1,1],rotation:0,translation:[0,-29]});
+const shifted=routeBaseTextureUvs(uv,{mode:0,scale:[1,1],rotation:0,translation:[0,-29]},{s:'repeat',t:'repeat'});
+const clamped=routeBaseTextureUvs(uv,{mode:0,scale:[1,1],rotation:0,translation:[0,-29]},{s:'repeat',t:'clamp'});
 const unsupported=routeBaseTextureUvs(uv,{mode:1,scale:[1,1],rotation:0,translation:[0,-29]});
-if(Array.from(shifted).join(',')!=='0.25,-28.25,1,-29')throw Error('route SRT not applied');
+if(Array.from(shifted).join(',')!=='0.25,0.75,1,0')throw Error('repeat-safe route offset not applied');
+if(Array.from(clamped).join(',')!=='0.25,-28.25,1,-29')throw Error('clamped route offset was incorrectly reduced');
 if(unsupported!==uv)throw Error('unsupported SRT mode changed UVs');
 console.log('ok');
 """

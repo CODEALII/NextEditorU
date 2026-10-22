@@ -1,5 +1,27 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Bound repeat-wrapped route UV offsets in the embedded viewport
+
+- Native W1 route albedo samplers use repeat addressing, while their stored
+  mode-0 `texmtx0` translations include values as large as -29. The viewport now
+  reduces only repeat-wrapped translation components modulo 1 before building
+  the route UV buffer. This is sampling-equivalent for those axes and keeps
+  interpolated UV magnitudes smaller on lower-precision WebGL implementations;
+  clamped axes and unsupported SRT modes keep the original values.
+- Verified a 42-shape/12-node/8-route W1 scene in headless Chrome/SwiftShader
+  through the same orbit/zoom sweep. The embedded graph remained docked and
+  selection stayed active; no page errors or WebGL error overlay appeared.
+  A same-angle before/after capture showed no obvious desktop-renderer change,
+  so this is a precision safeguard rather than a confirmed visual fix for the
+  reported camera-motion road artifacts. The local screenshots are saved under
+  `local/evidence/current-orbit-render/repeat-before-sweep.png` and
+  `repeat-after-sweep.png`.
+- Anisotropic filtering was tested in a paired orbit capture and discarded
+  because it produced no visible improvement on this WebGL renderer.
+- Verification: focused route UV test, full preview/editor checks, and a fresh
+  static browser capture; runtime behavior in the user's WebView and Cemu remain
+  unverified.
+
 ## 2026-10-22 — Recheck route preview evidence and refresh the Cemu test gate
 
 - Built the current W1 scene from the local archive and exercised it in

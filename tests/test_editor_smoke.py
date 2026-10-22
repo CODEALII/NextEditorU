@@ -915,6 +915,7 @@ class EditorSmokeTests(unittest.TestCase):
             notice = scene["textureNotice"]
             self.assertIn("native route meshes blend their albedo alpha", notice)
             self.assertIn("supported mode-0 route texmtx0 scale/translation is applied", notice)
+            self.assertIn("repeat-wrapped offsets reduced modulo 1", notice)
             self.assertIn("RouteW1_alb", scene["textures"])
         finally:
             top.destroy()

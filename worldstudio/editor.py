@@ -1416,8 +1416,9 @@ class WorldStudio(ttk.Frame):
                 if texture_srt_parameters:
                     texture_notice += (f" {texture_srt_parameters} stored texmtx SRT parameter(s) are shown "
                                        "read-only in the inspector; supported mode-0 route texmtx0 scale/translation "
-                                       "is applied to route texture sampling and picking. Other modes and rotations "
-                                       "remain unapplied.")
+                                       "is applied to route texture sampling and picking, with repeat-wrapped offsets "
+                                       "reduced modulo 1 to preserve equivalent sampling at smaller UV magnitudes. "
+                                       "Other modes and rotations remain unapplied.")
                 if texture_srt_failures:
                     texture_notice += f" {len(texture_srt_failures)} material(s) have unsupported texture SRT data."
                 shader_metadata_shapes = sum(bool(shape.get("shaderMetadata")) for shape in shapes)
