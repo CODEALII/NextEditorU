@@ -303,10 +303,10 @@ class LocalTextureReferenceTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         folder = root / 'NSMBU Modding Project/content/Common/course_select'
         expected = {
-            'W1': (42, 42, 20), 'W2a': (58, 58, 32), 'W3': (40, 39, 19),
-            'W4': (53, 53, 34), 'W5a': (76, 74, 28), 'W5b': (27, 27, 18),
-            'W6a': (61, 61, 21), 'W7': (34, 33, 19), 'W8a': (18, 17, 16),
-            'W8b': (42, 33, 22), 'W9a': (3, 3, 2), 'W9b': (20, 20, 5),
+            'W1': (42, 42, 20), 'W2a': (58, 58, 32), 'W3': (40, 40, 20),
+            'W4': (53, 53, 34), 'W5a': (76, 75, 28), 'W5b': (27, 27, 18),
+            'W6a': (61, 61, 21), 'W7': (34, 34, 20), 'W8a': (18, 18, 16),
+            'W8b': (42, 37, 22), 'W9a': (3, 3, 2), 'W9b': (20, 20, 5),
         }
         missing = [world for world in expected if not (folder / f'CS_{world}.szs').is_file()]
         if missing:
@@ -438,9 +438,9 @@ class LocalTextureReferenceTests(unittest.TestCase):
 
         root = Path(__file__).resolve().parents[1]
         expected = {
-            'W1': (42, 20), 'W2a': (58, 32), 'W3': (39, 19), 'W4': (53, 34),
-            'W5a': (74, 28), 'W5b': (27, 18), 'W6a': (61, 21), 'W7': (33, 19),
-            'W8a': (17, 16), 'W8b': (33, 22), 'W9a': (3, 2), 'W9b': (20, 5),
+            'W1': (42, 20), 'W2a': (58, 32), 'W3': (40, 20), 'W4': (53, 34),
+            'W5a': (75, 28), 'W5b': (27, 18), 'W6a': (61, 21), 'W7': (34, 20),
+            'W8a': (18, 16), 'W8b': (37, 22), 'W9a': (3, 2), 'W9b': (20, 5),
         }
         sources = [root / 'NSMBU Modding Project/content/Common/course_select' /
                    f'CS_{world}.szs' for world in expected]

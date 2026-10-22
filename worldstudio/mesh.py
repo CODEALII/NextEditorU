@@ -19,7 +19,7 @@ DEFAULT_SHAPE = 'polySurface1489__mtGrass'
 DEFAULT_LIGHTMAP_PROJECTION_WARNING_DISTANCE = 128.0
 DEFAULT_TERRAIN_EDGE_BLEND_DISTANCE = 128.0
 MAX_FACE_CORNERS = 1024
-_UV_ATTRIBUTE_BYTES = {0x80d: 8, 0x7: 4, 0x207: 4, 0x4: 2}
+_UV_ATTRIBUTE_BYTES = {0x80d: 8, 0x808: 4, 0x7: 4, 0x207: 4, 0x204: 2, 0x4: 2}
 _POSITION_ATTRIBUTE_BYTES = {0x811: 12, 0x80f: 8}
 _VERTEX_COLOR_ATTRIBUTE_BYTES = {0x0a: 4, 0x80f: 8}
 
@@ -56,6 +56,10 @@ def _transform_normal(matrix, normal):
 def _decode_uv_attribute(data, offset, fmt):
     if fmt == 0x80d:  # GX2 Format_32_32_Single
         return struct.unpack_from('>2f', data, offset)
+    if fmt == 0x808:  # GX2 Format_16_16_Single
+        return struct.unpack_from('>2e', data, offset)
+    if fmt == 0x204:  # GX2 Format_8_8_SNorm
+        return tuple(max(-1., value / 127.) for value in struct.unpack_from('>2b', data, offset))
     if fmt == 0x7:  # GX2 Format_16_16_UNorm
         return tuple(value / 65535. for value in struct.unpack_from('>2H', data, offset))
     if fmt == 0x207:  # GX2 Format_16_16_SNorm

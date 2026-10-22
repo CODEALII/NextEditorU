@@ -1,5 +1,18 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Decode two additional BFRES UV formats
+
+- Inventory of the 12 supplied World BFRES models found eight `_u0` buffers
+  using GX2 Float16x2 (`0x808`) or SNORM8x2 (`0x204`) across W3/W5a/W7/W8a/W8b.
+  The reader now decodes both formats, including finite checks in extraction;
+  eight actual shapes now retain complete UV arrays for preview texturing.
+- Synthetic decoder vectors cover half-float pairs, signed-byte normalization
+  including `-128`, and unsupported format rejection. Local asset regressions
+  confirm per-shape UV/position counts and finite values for all affected
+  instances. Focused `tests.test_mesh` passed **40 tests**, texture tests passed
+  **25 tests**, and the complete suite passed **390 tests**. Cemu material
+  rendering and shader transforms remain unverified.
+
 ## 2026-10-22 — Capture manual course-clear and save evidence
 
 - Added optional `--record-level-clear`, which requires `--enter-level`, waits

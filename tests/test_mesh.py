@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import worldstudio.mesh as mesh
-from worldstudio.mesh import (DEFAULT_SHAPE, _decode_vertex_color_attribute, _geometry,
+from worldstudio.mesh import (DEFAULT_SHAPE, _decode_uv_attribute,
+                              _decode_vertex_color_attribute, _geometry,
                               extract_rigid_model, replace_rigid_mesh,
                               rigid_shape_bindings)
 from worldstudio.archive import Archive
@@ -207,6 +208,13 @@ class MeshTests(unittest.TestCase):
             {'indexOffset': 3, 'indexCount': 3},
         ])
         self.assertEqual(shape['indices'], [0, 1, 2, 0, 0, 0])
+
+    def test_additional_bfres_uv_formats_decode_half_float_and_signed_normalized_pairs(self):
+        data = struct.pack('>2e2b', 0.5, -2.0, -128, 64)
+
+        self.assertEqual(_decode_uv_attribute(data, 0, 0x808), (0.5, -2.0))
+        self.assertEqual(_decode_uv_attribute(data, 4, 0x204), (-1.0, 64 / 127))
+        self.assertIsNone(_decode_uv_attribute(data, 0, 0x123))
 
     def test_supported_vertex_color_formats_decode_without_clamping_source_values(self):
         data = struct.pack('>4B4e', 0, 64, 128, 255, 0.25, 1.5, -0.5, 1.0)
@@ -600,6 +608,32 @@ class LocalDumpMeshTests(unittest.TestCase):
                 self.assertTrue(all(shape['positions'] and shape['indices'] for shape in shapes))
                 self.assertTrue(all(math.isfinite(value)
                                     for shape in shapes for point in shape['positions'] for value in point))
+
+    def test_additional_local_world_uv_formats_decode_into_the_3d_preview(self):
+        root = Path(__file__).resolve().parents[1]
+        expected_formats = {
+            'W3': {0x808: 1},
+            'W5a': {0x204: 1},
+            'W7': {0x808: 1},
+            'W8a': {0x808: 1},
+            'W8b': {0x808: 2, 0x204: 2},
+        }
+        for world, expected in expected_formats.items():
+            with self.subTest(world=world):
+                source = root / 'NSMBU Modding Project/content/Common/course_select' / f'CS_{world}.szs'
+                if not source.is_file():
+                    self.skipTest(f'User-provided local {world} dump unavailable')
+                model = Archive(source.read_bytes()).read(f'CS_{world}.bfres')
+                shapes = extract_rigid_model(model, f'CS_{world}_World')
+                actual = {}
+                for shape in shapes:
+                    fmt = shape['vertexAttributes'].get('_u0', {}).get('format')
+                    if fmt in (0x808, 0x204):
+                        actual[fmt] = actual.get(fmt, 0) + 1
+                        self.assertEqual(len(shape['uvs']), len(shape['positions']))
+                        self.assertTrue(all(math.isfinite(value)
+                                            for uv in shape['uvs'] for value in uv))
+                self.assertEqual(actual, expected)
 
     def test_local_w8b_nonroot_rigid_shape_uses_its_bone_transform(self):
         from worldstudio.mesh import extract_rigid_model
