@@ -14,10 +14,16 @@
   shows a visibly more continuous route near W102 than the raw-UV view. Small
   W1M0 fragments remain; this does not reproduce route-mask, lightmap, or other
   game shader operations, and does not establish Cemu behavior.
+- Relaunched the native editor in a fresh process with the updated renderer and
+  loaded the local W1 archive in Tk/WebView2. The live viewport reported 42
+  shapes and 106,736 triangles; orbiting the camera kept the embedded graph
+  visible and the main W1 roads visually stable, with small W1M0 fragments
+  still present. No Cemu behavior was tested in this check.
 - The selectable graph remains embedded in the persistent 3D viewport and
   synchronized with the editor list; the separate 2D graph is optional.
-- Verification: `python -m unittest tests.test_preview_safety -q` passes 42
-  tests, including supported/unsupported UV transforms and picking alignment.
+- Verification: `python -m unittest tests.test_preview_safety tests.test_editor_smoke -q`
+  passes 89 tests, including supported/unsupported UV transforms and picking
+  alignment.
 
 ## 2026-10-22 — Narrow the remaining W1 road-preview artifacts
 
