@@ -23,9 +23,16 @@ class PreviewSafetyTests(unittest.TestCase):
                                             "positions": [], "indices": []}],
                                "nodes": [], "routes": []})
         self.assertIn("mesh.depthBias=metadata.depthBias===true", page)
-        self.assertIn("gl.polygonOffset(-4,-4)", page)
-        self.assertEqual(page.count("gl.polygonOffset(-4,-4)"), 2)
-        self.assertIn("gl.disable(gl.POLYGON_OFFSET_FILL)", page)
+        self.assertIn("clip.z-=uDepthBias*clip.w", page)
+        self.assertIn("m.depthBias&&!showWireframe?0.00008:0", page)
+        self.assertIn("mesh.depthBias?0.00008:0", page)
+        self.assertNotIn("POLYGON_OFFSET_FILL", page)
+
+    def test_embedded_graph_toggle_remains_visible_over_the_world(self):
+        page = build_document({"shapes": [], "nodes": [{"id": "W101", "x": 0, "y": 0, "z": 0}], "routes": []}, embedded=True)
+        self.assertIn(".embedded .embedded-controls{display:inline-flex!important}", page)
+        self.assertIn("graph.classList.add('open')", page)
+        self.assertIn('id="world-graph-svg"', page)
 
     def test_preview_project_rejects_invalid_saved_terrain_transform(self):
         project = {"format": "worldstudio-preview-v1", "nodes": [], "routes": [],

@@ -1,5 +1,19 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Stabilize native road surfaces and expose the in-world graph control
+
+- Replaced the slope-dependent polygon offset on native route meshes with a small
+  constant clip-space depth bias in both rendering and shape picking. This is a
+  targeted response to camera-motion z-fighting between near-coplanar roads and
+  grass; it has automated renderer coverage but still needs a fresh visual orbit
+  check before calling the road artifacts fixed.
+- Corrected embedded toolbar CSS precedence so the graph show/hide control stays
+  visible. The graph inset opens over the 3D world and keeps point/route selection
+  linked to the scene and editor list; the separate 2D graph remains optional.
+- Verification: focused preview safety tests pass **43 tests**, including emitted
+  JavaScript parsing, route depth bias, graph visibility and selection hooks.
+  The full suite exceeded several minutes with no progress output and was cancelled; no in-game test was performed.
+
 ## 2026-10-22 — Apply verified route texture transforms in the 3D viewport
 
 - The route surfaces' BFRES materials bind base color to `_u0` / `texmtx0`.
