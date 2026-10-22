@@ -299,6 +299,15 @@ def normalize_obj_transform(settings):
     return normalized
 
 
+def preview_geometry_sha256(geometry):
+    """Fingerprint the imported positions/topology independently of asset paths."""
+    vertices, faces = geometry
+    payload = json.dumps({"format": "worldstudio-preview-geometry-v1",
+                          "vertices": vertices, "faces": faces},
+                         separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def obj_transform_summary(settings):
     identity = {"scale": (1., 1., 1.), "rotation_degrees": (0., 0., 0.),
                 "translation": (0., 0., 0.)}
@@ -330,10 +339,18 @@ def validate_preview(project):
         return ["Nodes and routes must be objects"]
     issues, ids = [], set()
     if "terrain_transform" in project:
+        if not project.get("terrain"):
+            issues.append("terrain_transform requires a terrain source")
         try:
             normalize_obj_transform(project["terrain_transform"])
         except (TypeError, ValueError, OverflowError) as error:
             issues.append(f"Invalid terrain transform: {error}")
+    if "terrain_geometry_sha256" in project:
+        if not project.get("terrain"):
+            issues.append("terrain_geometry_sha256 requires a terrain source")
+        if (not isinstance(project["terrain_geometry_sha256"], str) or
+                not re.fullmatch(r"[0-9a-f]{64}", project["terrain_geometry_sha256"])):
+            issues.append("Invalid terrain geometry fingerprint")
     for node in project.get("nodes", []):
         name = node.get("id", "")
         if not isinstance(name, str) or not name.strip():
@@ -1112,13 +1129,23 @@ class WorldStudio(ttk.Frame):
             try:
                 from .project import resolve_project_path
                 terrain = resolve_project_path(path, self.project_path) if self.project_path else path
-                self.mesh = read_import_mesh(terrain)
+                mesh = read_import_mesh(terrain)
+                expected_hash = self.project.get("terrain_geometry_sha256")
+                if expected_hash and preview_geometry_sha256(mesh) != expected_hash:
+                    raise ValueError("terrain geometry changed since import; re-import the asset to update it")
                 settings = self.project.get("terrain_transform")
                 if settings is not None:
-                    self.mesh = apply_obj_transform((*self.mesh, None, None),
-                                                    normalize_obj_transform(settings))[:2]
+                    mesh = apply_obj_transform((*mesh, None, None),
+                                               normalize_obj_transform(settings))[:2]
+                self.mesh = mesh
+                self.terrain_load_error = None
+                return True
             except (OSError, ValueError) as error:
+                self.terrain_load_error = str(error)
                 self.status.set(f"Terrain unavailable: {error}")
+                return False
+        self.terrain_load_error = None
+        return True
 
     def open_3d_preview(self):
         """Build/update the embedded world view without blocking Tk."""
@@ -1801,9 +1828,10 @@ class WorldStudio(ttk.Frame):
             project["terrain"] = resolve_project_path(project.get("terrain"), path)
             self.project, self.project_path = project, Path(path)
             self.selected, self.dirty = None, False
-            self._load_mesh()
+            terrain_loaded = self._load_mesh()
             self.refresh()
-            self.status.set(f"Opened {path}")
+            if terrain_loaded:
+                self.status.set(f"Opened {path}")
             self._reset_edit_history()
             self._record_recent_project(path)
             self._set_recovery_context(path, offer=True)
@@ -1817,6 +1845,9 @@ class WorldStudio(ttk.Frame):
         try:
             destination = Path(path)
             stored = copy.deepcopy(self.project)
+            issues = validate_preview(stored)
+            if issues:
+                raise ValueError("\n".join(issues))
             from .project import save_project_bytes, store_project_path
             stored["terrain"] = store_project_path(stored.get("terrain"), destination)
             content = (json.dumps(stored, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
@@ -1829,7 +1860,7 @@ class WorldStudio(ttk.Frame):
             self.status.set(f"Saved preview project: {destination}{suffix}")
             self._record_recent_project(destination)
             return True
-        except OSError as error:
+        except (OSError, ValueError) as error:
             messagebox.showerror("Cannot save project", str(error), parent=self)
             return False
 
@@ -1840,6 +1871,7 @@ class WorldStudio(ttk.Frame):
         if path:
             try:
                 mesh, compatibility_warnings = read_import_mesh(path, include_report=True)
+                geometry_sha256 = preview_geometry_sha256(mesh)
                 transform = ObjTransformDialog(self.winfo_toplevel())
                 if transform.result is None:
                     return
@@ -1847,6 +1879,7 @@ class WorldStudio(ttk.Frame):
                 mesh = apply_obj_transform((*mesh, None, None), transform_settings)[:2]
                 self.project["terrain"], self.mesh = str(Path(path).resolve()), mesh
                 self.project["terrain_transform"] = transform_settings
+                self.project["terrain_geometry_sha256"] = geometry_sha256
                 self.dirty = True
                 self._record_edit()
                 self.fit()

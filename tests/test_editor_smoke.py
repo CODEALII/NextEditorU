@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from worldstudio.editor import (CameraDataWindow, NativeStudio, ObjTransformDialog, PathChainDialog,
                                 WorldStudio, demo_project, fit_preview_scale,
-                                project_preview_point)
+                                preview_geometry_sha256, project_preview_point, read_import_mesh)
 from worldstudio.camera import OffsetTable
 from worldstudio.recent_projects import RecentProjects
 from worldstudio.graph_profile_preferences import GraphProfilePreferences
@@ -1075,6 +1075,8 @@ class PreviewProjectPathTests(unittest.TestCase):
                 "rotation_degrees": [-90, 0, 0],
                 "translation": [1, 2, 3],
             }
+            source_data["terrain_geometry_sha256"] = preview_geometry_sha256(
+                read_import_mesh(terrain_path))
             source_project.write_text(json.dumps(source_data), encoding="utf-8")
 
             editor = object.__new__(WorldStudio)
@@ -1082,7 +1084,8 @@ class PreviewProjectPathTests(unittest.TestCase):
             editor.project_path = None
             editor.selected = None
             editor.dirty = False
-            editor.status = SimpleNamespace(set=lambda value: None)
+            status = SimpleNamespace(value="", set=lambda value: setattr(status, "value", value))
+            editor.status = status
             editor.recent_projects = RecentProjects(root / "recent.json")
             editor.refresh = lambda: None
             editor._reset_edit_history = lambda: None
@@ -1098,6 +1101,8 @@ class PreviewProjectPathTests(unittest.TestCase):
             self.assertEqual(resolve_project_path(same_location["terrain"], source_project),
                              str(terrain_path.resolve()))
             self.assertEqual(same_location["terrain_transform"], source_data["terrain_transform"])
+            self.assertEqual(same_location["terrain_geometry_sha256"],
+                             source_data["terrain_geometry_sha256"])
 
             save_as_path = root / "relocated" / "preview-copy.json"
             editor.project_path = None
@@ -1108,8 +1113,16 @@ class PreviewProjectPathTests(unittest.TestCase):
             self.assertEqual(resolve_project_path(relocated["terrain"], save_as_path),
                              str(terrain_path.resolve()))
             self.assertEqual(relocated["terrain_transform"], source_data["terrain_transform"])
+            self.assertEqual(relocated["terrain_geometry_sha256"],
+                             source_data["terrain_geometry_sha256"])
             editor.open_project_path(save_as_path)
             self.assertEqual(editor.mesh[0], [(1., 2., 3.), (3., 2., 3.), (1., 3., 3.)])
+
+            terrain_path.write_text(
+                "v 0 0 0\nv 1 0 0\nv 0 0 2\nf 1 2 3\n", encoding="utf-8")
+            editor.open_project_path(save_as_path)
+            self.assertEqual(editor.mesh, ([], []))
+            self.assertIn("terrain geometry changed since import", status.value)
 
     def test_export_status_surfaces_baked_uv_projection_warning(self):
         editor = object.__new__(NativeStudio)

@@ -1,5 +1,18 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Detect changed preview terrain geometry
+
+- New OBJ/glTF preview imports store a SHA-256 fingerprint of the parsed vertex
+  positions and face topology. Reopening checks the fingerprint before applying
+  the saved transform; changed geometry is left unloaded with a visible
+  re-import message instead of silently changing the scene.
+- The fingerprint and transform survive Save As and relative-asset resolution.
+  Legacy projects without a fingerprint remain supported. This tracks parsed
+  geometry only, not material/UV-only edits to the source file.
+- Save/reopen, changed-source and malformed-fingerprint regressions pass within
+  the **82-test** editor/preview group; the complete suite passed **393 tests**.
+  Cemu appearance and collision remain unverified.
+
 ## 2026-10-22 — Preserve imported terrain transforms in preview projects
 
 - Fixed a save/reopen gap: OBJ and glTF preview projects now persist the chosen
