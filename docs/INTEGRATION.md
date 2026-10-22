@@ -1,5 +1,38 @@
 # Runtime evidence and test protocol
 
+## Matched Clean/Chain traversal reaches different courses — 2026-10-22
+
+- Repeated the same process-bound test from **Crushing-Cogs Tower** in isolated
+  Clean and Chain profiles, with one Cemu instance at a time, verified window
+  focus, a 2,000 ms hold for each direction, and the same `A → S → W` sequence.
+  Both runs used the identical Wii U GamePad controller file SHA-256
+  `7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b` and
+  byte-identical start/end saves: personal
+  `5de5ecae3f91c13841ac5a16f0511b7af765ff63628cb95ce65bde721689c9df`, common
+  `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`.
+- Clean moved A to the Acorn Plains mushroom node, S to the road junction, and
+  W to the course card **Acorn Plains-2 — Tilted Tunnel**. Chain moved A to the
+  same visible Acorn Plains node, S to the same junction, and W to **Blooper's
+  Secret Lair**. Thus the changed Chain profile alters the destination reached
+  under the matched movement sequence. The game UI does not expose internal
+  point IDs, so the exact W102/W103 endpoint identity remains inferred from the
+  archive rather than independently visible in-game.
+- The active Chain archive and installed copy both hash to
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`. The
+  saves remained unchanged after both runs. Clean and Chain game log SHA-256
+  values are `888090954fd47fff3039ce956be15752e6b4b1161fd747020deeb09eb9599acb`
+  and `4ff618727e22613a7922ea8a7b8181e3c56ec9c37396361a6da2138c7d3be6fd`.
+- Evidence in `local/evidence/cemu-input-test/`:
+  `clean-gamepad-matched-route-20261022-r2-result.json` and its `step-1-a`,
+  `step-2-s`, `step-3-w` before/after screenshots; and
+  `chain-gamepad-matched-route-20261022-result.json` with the same six step
+  screenshots. Operator-observed labels are recorded in each result.
+- This verifies the matched route destination change in Cemu. Course entry has
+  a separate successful Chain capture documented below; level completion,
+  progression/unlocks, post-clear save persistence, and terrain behavior still
+  require testing.
+
+
 ## Matched Clean/GamePad and Chain profiles preflight-ready — 2026-10-22
 
 - Read-only preflight passed for `build/cemu-clean-gamepad-input-v3-20261021`
@@ -17,11 +50,8 @@
   `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`.
 - The Chain profile's installed `CS_W1.szs` hashes to
   `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`.
-  The matched movement comparison has not been run: preflight reads profile
-  files and boot logs only and does not launch Cemu or send input. When resumed,
-  use `--compare-controller-to build/cemu-chain-gamepad-input-v3-20261021`
-  with the Clean run so the runner enforces the same controller bytes before
-  testing.
+  The preflight is file and boot-log evidence only; it does not itself test
+  movement. The matched result now appears in the section above.
 
 ## Clean Pro movement retry stopped at the first visual gate — 2026-10-22
 
@@ -40,8 +70,8 @@
   `7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b`. An
   offline byte comparison shows the key mappings are identical; the only
   controller-file difference is `emulate = Wii U GamePad` versus
-  `emulate = Wii U Pro Controller`. Repeat the Clean comparison with the same
-  GamePad profile used for the successful Chain traversal. The runner now
+  `emulate = Wii U Pro Controller`. This comparison gap was resolved by the
+  matched GamePad traversal documented at the top of this file. The runner now
   accepts `--compare-controller-to <reference-profile>`; it checks exact
   controller-file bytes, records both hashes, and refuses to start Cemu if the
   profiles differ. New run reports also hash the selected Cemu executable and

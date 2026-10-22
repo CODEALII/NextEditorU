@@ -2,32 +2,23 @@
 
 World Studio is an offline research prototype. Items below describe work still needed for a genuinely playable custom overworld; a passing parser or export test does not satisfy an in-game acceptance check.
 
-## Highest priority: get a route to launch its level
+## Highest priority: complete progression and persistence verification
 
-On 2026-10-22, process-bound Cemu tests using the Chain archive moved Mario from
-the visible Acorn Plains node to a road junction and then to the island course
-card **Blooper's Secret Lair**. Configured `Z` opened the course and a later
-capture shows live side-scrolling gameplay. The active `WorldStudioChain` SZS
-and its installed copy both had SHA-256
-`19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`; the game
-UI does not expose the selected island's internal point ID.
+On 2026-10-22, matched process-bound Cemu runs from **Crushing-Cogs Tower**
+used the same Wii U GamePad profile, unchanged identical saves, and identical
+2-second `A → S → W` holds. Clean reached **Acorn Plains-2 — Tilted Tunnel**;
+Chain reached **Blooper's Secret Lair**. The Chain archive and installed copy
+hash to `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`.
+This isolates a changed destination under matched play. Cemu does not display
+internal point IDs, so mapping that movement to exact W102/W103 IDs is still
+inferred from the archive data. A separate Chain run already opened Blooper's
+Secret Lair and showed side-scrolling gameplay.
 
-The direct Clean comparison from that same junction is still required to
-attribute the visible transition to the edited W102→W103 link. Existing paired
-Chain and Clean movement runs used controller-profile hash
-`7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b` (Wii U
-GamePad). A later Clean retry used hash
-`d4f9fcf8da2748ac094f479d53c96661fb60c559fc564e41805bfc4ecae3879c` (Wii U
-Pro Controller); it held A for two seconds but showed no node change and was
-aborted before further input. The key map is the same, but the emulated
-controller type differs, so that retry is not a matched route comparison.
-When Cemu testing resumes, repeat the Clean sequence from the known junction
-with the same GamePad profile, identical held `W`/`S` sequence and verified
-focus before each input; pass `--compare-controller-to` with the Chain profile
-to make the runner enforce that match before launch. Then verify a course
-clear, fresh-save progression, save/reload and camera transitions. Keep each
-result tied to the exact pack, input profile and save snapshot. See
-`docs/INTEGRATION.md` for process IDs, archive hashes, screenshots and the test
+Next verify a course clear, unlock/progression behavior, save/reload persistence,
+and camera transitions using a fresh isolated save snapshot. Keep every test
+bound to its exact pack, input profile, start save and game log. Terrain
+appearance and collision still need in-game verification. See
+`docs/INTEGRATION.md` for the matched result, exact hashes, screenshots and
 protocol.
 
 ## Rendering fidelity

@@ -2,7 +2,7 @@
 
 **A research and editing toolkit for New Super Mario Bros. U world maps.**
 
-World Studio reads and edits selected world-map resources, builds experimental topology and terrain patches, and provides an integrated desktop editor with a persistent 3D world viewport. It is an actively researched prototype: resource handling and offline export are tested, and a matched Cemu run confirms movement from the tower to the next visible course node in both stock and Chain profiles. The custom W102→W103 edge, level launch, progression, and a complete playable custom overworld are not yet verified.
+World Studio reads and edits selected world-map resources, builds experimental topology and terrain patches, and provides an integrated desktop editor with a persistent 3D world viewport. A matched Cemu test from the same tower and with identical held inputs reached Tilted Tunnel on Clean and Blooper’s Secret Lair on Chain, verifying a changed route destination; a separate Chain run entered Blooper’s Secret Lair. Exact in-game point IDs, level completion, progression, save persistence, terrain behavior, and a complete playable custom overworld are not yet verified.
 
 ![World Studio project progress dashboard](docs/progress.svg)
 

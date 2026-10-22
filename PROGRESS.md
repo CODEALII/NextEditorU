@@ -1,5 +1,24 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Matched Cemu run verifies the changed route destination
+
+- With one isolated Cemu instance at a time, started both Clean and Chain at
+  **Crushing-Cogs Tower**. The process-bound runner verified window focus and
+  held `A`, `S`, then `W` for 2,000 ms each, with a screenshot and visual gate
+  after every step. Controller profile hashes and starting save hashes matched.
+- Clean reached the visible **Acorn Plains-2 — Tilted Tunnel** course card;
+  Chain reached **Blooper's Secret Lair**. This matched outcome verifies that
+  the Chain patch changes the destination reached under that movement sequence.
+  Internal point IDs are absent from the game UI, so the W102/W103 mapping is
+  still an archive-based inference.
+- The Chain archive and installed copy hash to
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`. Personal
+  and common saves stayed unchanged in both profiles. Game-log hashes, labels,
+  screenshots and runner result files are recorded in `docs/INTEGRATION.md` and
+  `local/evidence/cemu-input-test/`.
+- A prior separate Chain run confirms level entry, but course completion,
+  progression/unlocks, post-clear persistence and terrain remain unverified.
+
 ## 2026-10-22 — Put the graph editor into the 3D viewport and reinforce route depth bias
 
 - Added a compact SVG graph inset directly over the embedded WebGL viewport. It
@@ -27,7 +46,8 @@
   roadmap. The exact profile paths, hashes and runner comparison flag are in
   `docs/INTEGRATION.md`.
 - Cemu was not launched and no movement was tested in this preflight. The
-  matched Clean/Chain route traversal remains the next gameplay verification.
+  matched traversal was subsequently completed and is recorded at the top of
+  this progress log.
 
 ## 2026-10-22 — Make the 3D world the primary graph editor and stabilize route surfaces
 
