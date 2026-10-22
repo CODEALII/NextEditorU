@@ -1927,3 +1927,35 @@ camera behavior and a fully playable custom world remain open.
   in-game movement behavior is claimed.
 - The user deferred the requested Cemu focus step (“Später”), so no new Cemu
   instance was launched. The modified Chain route remains unverified in-game.
+
+## 2026-10-22 — Chain reaches and launches Blooper's Secret Lair
+
+- Continued the already-running isolated Chain test (only Cemu PID 17980 was
+  active). The runner captured the exact process-bound game window and verified
+  foreground focus before input. Its preflight confirmed the Chain archive and
+  installed copy match SHA-256
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`, with
+  keyboard WASD and `Z` mapped to GamePad A.
+- From the visible Acorn Plains node, held `S` for two seconds to reach the lower
+  junction. From that reviewed junction, held `W` for two seconds; after Mario
+  settled on the island, the selected course card read **Blooper's Secret
+  Lair**. A separate `Z` hold (700 ms) opened that course, and a subsequent
+  screenshot shows actual side-scrolling gameplay with Mario, HUD and timer.
+- Evidence is saved in `local/evidence/cemu-input-test/`:
+  `chain-w102-s-20261022-result.json`,
+  `chain-w1t0-w-20261022-result.json`,
+  `chain-bloopers-node-z-20261022-result.json`, and
+  `chain-blooper-secret-lair-gameplay-20261022.bmp`. The runner recorded game
+  log SHA-256
+  `2c1cdbf40e56b1e00bf3dedadd26e9a6597e9976ddd2e6a2b6681609134e0c4b`.
+  Save hashes matched the Clean profile before and after entry; the course was
+  not completed.
+- This is verified Chain-profile movement to a named course and successful
+  level entry. The UI does not display the island's internal point ID, and a
+  same-start, same-input Clean comparison from the lower junction is still
+  required to attribute that transition to the edited W102→W103 route. Course
+  completion, progression/unlocks, post-clear persistence, and terrain remain
+  unverified. The Clean comparison is deferred until the user can activate the
+  isolated Cemu window; no input was sent after the user said “Später.”
+- Updated `README.md` and `docs/INTEGRATION.md` to distinguish the verified
+  gameplay from the remaining route-attribution and progression questions.

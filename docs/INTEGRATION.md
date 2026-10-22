@@ -1,5 +1,35 @@
 # Runtime evidence and test protocol
 
+## Chain movement reaches and enters Blooper's Secret Lair — 2026-10-22
+
+- In the single isolated Cemu process (PID 17980, HWND 576522674), the runner
+  verified foreground focus before each held-key sequence. The profile preflight
+  confirms `WorldStudioChain` active and the keyboard WASD plus `Z`→GamePad A
+  mappings configured.
+- From the visible Acorn Plains course node, a two-second `S` hold moved Mario
+  to the lower road junction. From that confirmed junction, a two-second `W`
+  hold visibly moved him across the map toward the island. After the movement
+  settled, Cemu showed the selected course card **Blooper's Secret Lair**.
+  Pressing `Z` for 700 ms opened that course; a later capture shows the loaded
+  side-scrolling level with Mario, HUD, and active timer.
+- The patched archive and its installed profile copy both hash to
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`.
+  The Chain route profile hash is
+  `08990ee33aed7627c479ebe79b18200a30a6ccb8e5aeef13839547f0ef55820b`.
+  The run's personal/common save hashes matched the Clean profile at startup
+  and after course entry; no course was completed.
+- Evidence: `local/evidence/cemu-input-test/chain-w102-s-20261022-result.json`,
+  `chain-w1t0-w-20261022-result.json`,
+  `chain-bloopers-node-z-20261022-result.json`, and
+  `chain-blooper-secret-lair-gameplay-20261022.bmp`. The runner stored the game
+  log hash `2c1cdbf40e56b1e00bf3dedadd26e9a6597e9976ddd2e6a2b6681609134e0c4b`.
+- This confirms movement to and launch from a named course node with Chain
+  active. The game UI does not reveal the node's internal ID, and the same
+  junction-to-island held-input sequence has not yet been repeated on Clean.
+  Therefore this does not yet isolate the changed W102→W103 edge as the cause.
+  Course completion, progression/unlocks, post-clear save persistence, and
+  terrain appearance remain unverified.
+
 ## Profile-gated project export — 2026-10-22
 
 - `python -m worldstudio export <project> --out <archive> --profile <json>`
