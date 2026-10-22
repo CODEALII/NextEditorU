@@ -13,10 +13,10 @@
   a local `W1` draft, while non-world helper bones remain supported.
 - The non-mutating draft builder has focused checks for direct/multi-hop
   chains, normal/secret columns, reusing existing route rows, unchanged source
-  tables before apply, and rejection of tied or cross-world paths. The editor
-  exposes the workflow on selected point properties. Focused validation/UI
-  checks passed **27 tests**; the full suite passed **375 tests** in 318.739
-  seconds. This uses static
+  tables before apply, rejection of tied or cross-world paths, and acceptance
+  by the same local graph gate used during export. The editor exposes the
+  workflow on selected point properties. Focused validation/UI checks passed
+  **28 tests**; the full suite passed **375 tests** in 318.739 seconds. This uses static
   names only and does not verify traversal, level launch, progression, or saves
   in Cemu.
 

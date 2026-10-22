@@ -67,6 +67,26 @@ class NativeRouteDraftTests(unittest.TestCase):
                 points, [], {"RW101W201", "RW201W103"},
                 {"W101", "W103"}, 0, "W103", "normal", "road", "W1")
 
+    def test_connection_draft_passes_the_same_local_export_graph_gate(self):
+        points = [point(0, "W101"), point(1, "W103")]
+        initial_points = [row[:] for row in points]
+        initial_routes = []
+        references = {"W101", "W103", "K001", "RW101K001", "RK001W103"}
+        draft = build_native_connection_draft(
+            points, [], references, {"W101", "K001", "W103"},
+            0, "W103", "normal", "road", "W1")
+
+        points[0][draft["destination_column"]] = draft["target"]
+        points[0][draft["path_column"]] = ",".join(draft["chain"])
+        routes = [row[:] for row in draft["route_rows"]]
+        issues = validate_native_world(
+            points, routes, known_references=references,
+            initial_points=initial_points, initial_routes=initial_routes,
+            world_prefix="W1", entry_points=("W101",),
+            required_locations=("W103",))
+
+        self.assertEqual(issues, [])
+
     def test_macro_chain_status_checks_direct_and_multihop_order(self):
         refs = {"RW101K001", "RK001W103"}
         self.assertTrue(native_macro_path_chain_reaches(
