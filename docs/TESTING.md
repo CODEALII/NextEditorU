@@ -108,3 +108,5 @@ The current `_a0` sampler build was rendered in headless Chrome/SwiftShader from
 The static BFRES UV regression includes synthetic Float16x2 (`0x808`) and SNORM8x2 (`0x204`) decoder cases plus local model checks for W3/W5a/W7/W8a/W8b. It confirms decoded UV counts match the shape positions; shader transforms and game rendering remain unverified.
 
 `tests.test_mesh.LocalDumpMeshTests.test_local_world_uv_inventory_is_fully_decoded_across_all_uv_sets` scans all twelve supplied world models and checks each observed `_u0`/`_u1`/`_u2` attribute has a finite decoded pair per vertex. The expected format inventory is recorded in `docs/RESEARCH.md`; the test skips when the complete local dump is unavailable.
+
+The preview-project save/reopen regression uses a relative OBJ asset, applies non-identity scale/rotation/translation, saves in place and with Save As to another folder, and confirms the same converted vertex coordinates after reopening. It also rejects zero-scale saved transforms. Projects created before `terrain_transform` existed still load in source coordinates; this verifies editor persistence, not Cemu terrain appearance or collision.

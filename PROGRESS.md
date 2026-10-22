@@ -1,5 +1,19 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Preserve imported terrain transforms in preview projects
+
+- Fixed a save/reopen gap: OBJ and glTF preview projects now persist the chosen
+  scale, X/Y/Z rotation and translation, then reapply that conversion when
+  loading the referenced source mesh. The settings also survive Save As when
+  the project path is stored relative to the new location.
+- Added bounded validation for saved conversion vectors and rejects zero scale
+  or malformed values before opening a project. Older preview projects without
+  `terrain_transform` continue to load in source coordinates.
+- Regression tests reopen the same fixture after normal Save and Save As and
+  verify exact transformed vertices; invalid saved settings are rejected.
+  Editor/preview tests passed **81 tests**, and the complete suite passed **392
+  tests**. Cemu terrain appearance and collision remain unverified.
+
 ## 2026-10-22 — Audit UV decoding across every local world model
 
 - Scanned all twelve supplied world BFRES models: the parser found 474 `_u0`,

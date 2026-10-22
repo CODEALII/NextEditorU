@@ -124,6 +124,7 @@ protocol.
 - Implemented: changed archive members have before/after hashes and sizes in the export manifest; overwriting a changed native or OBJ-preview project rotates two adjacent, openable previous-version backups.
 - Implemented: a Recent menu stores up to ten native and ten preview paths in user settings, filters by editor type, and uses the existing unsaved-change guard when reopening.
 - Implemented: preview projects resolve relative terrain references against the project file on open, preserving the same asset on save and Save As from a different directory.
+- Implemented: preview projects persist imported terrain scale, XYZ rotation and translation and reapply them when the referenced mesh is reopened or saved to a new project location. Older preview projects without a transform remain in source coordinates; in-game terrain appearance and collision remain unverified.
 - Implemented: native sessions opened from an SZS source or saved JSON, plus saved preview projects, receive a debounced, checksummed recovery snapshot with a 64 MiB limit; snapshots bind to the source-file path/hash, and reopening offers restore while save/discard clears recovery data.
 - Implemented: `verify-export` reimports a saved-project export, compares every archive member against a fresh export, validates the manifest and checks camera companion outputs; runtime behavior remains separate.
 - Implemented: archive, camera companion and manifest export writes roll back files created by the current export if a later output write fails.

@@ -1065,10 +1065,16 @@ class PreviewProjectPathTests(unittest.TestCase):
             source_dir = root / "source"
             terrain_path = source_dir / "assets" / "island.obj"
             terrain_path.parent.mkdir(parents=True)
-            terrain_path.write_text("v 0 0 0\n", encoding="utf-8")
+            terrain_path.write_text(
+                "v 0 0 0\nv 1 0 0\nv 0 0 1\nf 1 2 3\n", encoding="utf-8")
             source_project = source_dir / "preview.json"
             source_data = demo_project()
             source_data["terrain"] = "assets/island.obj"
+            source_data["terrain_transform"] = {
+                "scale": [2, 1, 1],
+                "rotation_degrees": [-90, 0, 0],
+                "translation": [1, 2, 3],
+            }
             source_project.write_text(json.dumps(source_data), encoding="utf-8")
 
             editor = object.__new__(WorldStudio)
@@ -1078,7 +1084,6 @@ class PreviewProjectPathTests(unittest.TestCase):
             editor.dirty = False
             editor.status = SimpleNamespace(set=lambda value: None)
             editor.recent_projects = RecentProjects(root / "recent.json")
-            editor._load_mesh = lambda: None
             editor.refresh = lambda: None
             editor._reset_edit_history = lambda: None
             editor._record_recent_project = lambda path: None
@@ -1087,10 +1092,12 @@ class PreviewProjectPathTests(unittest.TestCase):
 
             editor.open_project_path(source_project)
             self.assertEqual(Path(editor.project["terrain"]), terrain_path.resolve())
+            self.assertEqual(editor.mesh[0], [(1., 2., 3.), (3., 2., 3.), (1., 3., 3.)])
             self.assertTrue(editor.save())
             same_location = json.loads(source_project.read_text(encoding="utf-8"))
             self.assertEqual(resolve_project_path(same_location["terrain"], source_project),
                              str(terrain_path.resolve()))
+            self.assertEqual(same_location["terrain_transform"], source_data["terrain_transform"])
 
             save_as_path = root / "relocated" / "preview-copy.json"
             editor.project_path = None
@@ -1100,6 +1107,9 @@ class PreviewProjectPathTests(unittest.TestCase):
             relocated = json.loads(save_as_path.read_text(encoding="utf-8"))
             self.assertEqual(resolve_project_path(relocated["terrain"], save_as_path),
                              str(terrain_path.resolve()))
+            self.assertEqual(relocated["terrain_transform"], source_data["terrain_transform"])
+            editor.open_project_path(save_as_path)
+            self.assertEqual(editor.mesh[0], [(1., 2., 3.), (3., 2., 3.), (1., 3., 3.)])
 
     def test_export_status_surfaces_baked_uv_projection_warning(self):
         editor = object.__new__(NativeStudio)

@@ -279,6 +279,26 @@ def apply_obj_transform(geometry, settings):
     return transform_obj_geometry(vertices, faces, uvs, normals, **settings)
 
 
+def normalize_obj_transform(settings):
+    """Validate and normalize a saved preview project's mesh conversion."""
+    keys = ("scale", "rotation_degrees", "translation")
+    if not isinstance(settings, dict) or set(settings) != set(keys):
+        raise ValueError("terrain_transform must contain scale, rotation_degrees and translation")
+    limits = {"scale": 1e4, "rotation_degrees": 36000., "translation": 1e5}
+    normalized = {}
+    for key in keys:
+        values = settings[key]
+        if not isinstance(values, (list, tuple)) or len(values) != 3:
+            raise ValueError(f"terrain_transform {key} must contain three numbers")
+        if any(type(value) not in (int, float) or not math.isfinite(value) or
+               abs(value) > limits[key] for value in values):
+            raise ValueError(f"terrain_transform {key} must be finite and within ±{limits[key]:g}")
+        normalized[key] = tuple(float(value) for value in values)
+    if any(abs(value) < 1e-12 for value in normalized["scale"]):
+        raise ValueError("terrain_transform scale components must be nonzero")
+    return normalized
+
+
 def obj_transform_summary(settings):
     identity = {"scale": (1., 1., 1.), "rotation_degrees": (0., 0., 0.),
                 "translation": (0., 0., 0.)}
@@ -309,6 +329,11 @@ def validate_preview(project):
     if not all(isinstance(item, dict) for item in project["nodes"] + project["routes"]):
         return ["Nodes and routes must be objects"]
     issues, ids = [], set()
+    if "terrain_transform" in project:
+        try:
+            normalize_obj_transform(project["terrain_transform"])
+        except (TypeError, ValueError, OverflowError) as error:
+            issues.append(f"Invalid terrain transform: {error}")
     for node in project.get("nodes", []):
         name = node.get("id", "")
         if not isinstance(name, str) or not name.strip():
@@ -1088,6 +1113,10 @@ class WorldStudio(ttk.Frame):
                 from .project import resolve_project_path
                 terrain = resolve_project_path(path, self.project_path) if self.project_path else path
                 self.mesh = read_import_mesh(terrain)
+                settings = self.project.get("terrain_transform")
+                if settings is not None:
+                    self.mesh = apply_obj_transform((*self.mesh, None, None),
+                                                    normalize_obj_transform(settings))[:2]
             except (OSError, ValueError) as error:
                 self.status.set(f"Terrain unavailable: {error}")
 
@@ -1814,8 +1843,10 @@ class WorldStudio(ttk.Frame):
                 transform = ObjTransformDialog(self.winfo_toplevel())
                 if transform.result is None:
                     return
-                mesh = apply_obj_transform((*mesh, None, None), transform.result)[:2]
+                transform_settings = normalize_obj_transform(transform.result)
+                mesh = apply_obj_transform((*mesh, None, None), transform_settings)[:2]
                 self.project["terrain"], self.mesh = str(Path(path).resolve()), mesh
+                self.project["terrain_transform"] = transform_settings
                 self.dirty = True
                 self._record_edit()
                 self.fit()

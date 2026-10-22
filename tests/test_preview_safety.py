@@ -15,6 +15,17 @@ from worldstudio.project import resolve_project_path, store_project_path
 
 
 class PreviewSafetyTests(unittest.TestCase):
+    def test_preview_project_rejects_invalid_saved_terrain_transform(self):
+        project = {"format": "worldstudio-preview-v1", "nodes": [], "routes": [],
+                   "terrain_transform": {"scale": [1, 0, 1],
+                                         "rotation_degrees": [0, 0, 0],
+                                         "translation": [0, 0, 0]}}
+
+        issues = validate_preview(project)
+
+        self.assertTrue(any("terrain_transform scale components must be nonzero" in issue
+                            for issue in issues))
+
     def test_embedded_preview_hides_inspector_by_default_and_exposes_toggle(self):
         scene = {"shapes": [], "nodes": [], "routes": []}
         embedded_page = build_document(scene, embedded=True)
