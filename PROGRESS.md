@@ -1,5 +1,16 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Audit UV decoding across every local world model
+
+- Scanned all twelve supplied world BFRES models: the parser found 474 `_u0`,
+  474 `_u1` and 210 `_u2` shape attributes. Added a local-asset regression that
+  checks every observed UV attribute is decoded to one finite pair per vertex,
+  including formats outside the primary `_u0` set.
+- Updated the static-preview research record with the complete format inventory.
+  This confirms offline extraction coverage only; it does not validate UV
+  sampler selection, shader transforms, Cemu material rendering or gameplay.
+- `tests.test_mesh` passed **41 tests** and the complete suite passed **391 tests**.
+
 ## 2026-10-22 — Decode two additional BFRES UV formats
 
 - Inventory of the 12 supplied World BFRES models found eight `_u0` buffers

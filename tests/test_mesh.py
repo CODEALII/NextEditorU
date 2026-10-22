@@ -536,6 +536,41 @@ class MeshTests(unittest.TestCase):
 
 
 class LocalDumpMeshTests(unittest.TestCase):
+    def test_local_world_uv_inventory_is_fully_decoded_across_all_uv_sets(self):
+        from collections import Counter, defaultdict
+
+        root = Path(__file__).resolve().parents[1]
+        folder = root / 'NSMBU Modding Project/content/Common/course_select'
+        worlds = ('W1', 'W2a', 'W3', 'W4', 'W5a', 'W5b', 'W6a', 'W7',
+                  'W8a', 'W8b', 'W9a', 'W9b')
+        missing = [world for world in worlds if not (folder / f'CS_{world}.szs').is_file()]
+        if missing:
+            self.skipTest(f'Complete user-provided world dump unavailable: {", ".join(missing)}')
+
+        actual = defaultdict(Counter)
+        for world in worlds:
+            source = folder / f'CS_{world}.szs'
+            model = Archive(source.read_bytes()).read(f'CS_{world}.bfres')
+            shapes = extract_rigid_model(model, f'CS_{world}_World')
+            for shape in shapes:
+                for name, attribute in shape['vertexAttributes'].items():
+                    if not name.startswith('_u') or not name[2:].isdecimal():
+                        continue
+                    fmt = attribute['format']
+                    actual[name][fmt] += 1
+                    values = shape.get('uvAttributes', {}).get(name)
+                    self.assertIsNotNone(values, f'{world}/{shape["name"]} {name} 0x{fmt:X}')
+                    self.assertEqual(len(values), len(shape['positions']),
+                                     f'{world}/{shape["name"]} {name}')
+                    self.assertTrue(all(math.isfinite(value) for uv in values for value in uv),
+                                    f'{world}/{shape["name"]} {name}')
+
+        self.assertEqual(dict(actual), {
+            '_u0': Counter({0x80d: 395, 0x7: 33, 0x207: 14, 0x4: 24, 0x808: 5, 0x204: 3}),
+            '_u1': Counter({0x7: 457, 0x4: 12, 0x207: 3, 0x80d: 2}),
+            '_u2': Counter({0x80d: 209, 0x7: 1}),
+        })
+
     def test_local_dump_world_model_extracts_static_shapes(self):
         root=Path(__file__).resolve().parents[1]
         source=root/'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
