@@ -1,5 +1,13 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Full regression after GLB optional-attribute support
+
+- `python -m unittest discover -s tests` passed **370 tests** in 317.011
+  seconds on the current `4fa946f` source, covering GLB transforms and partial
+  UV/normal fallbacks together with the embedded editor, archive, BFRES, and
+  Cemu-runner checks. This is offline regression evidence; it does not verify
+  game traversal, course progression, save compatibility, or terrain appearance.
+
 ## 2026-10-22 — Accept GLB primitives with optional UV/normal gaps
 
 - GLB primitive collections may now mix presence of `NORMAL` and
