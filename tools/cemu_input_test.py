@@ -287,6 +287,17 @@ def click_window_center(window):
     send_inputs([down, up])
 
 
+def advance_title(window, *, click=False, hold_ms=500):
+    """Advance the game title using its observed mouse prompt or mapped A key."""
+    if click:
+        click_window_center(window)
+        return "mouse_click"
+    key_event('z', True)
+    time.sleep(hold_ms / 1000.)
+    key_event('z', False)
+    return "gamepad_a"
+
+
 def wait_for_confirmation(prompt, *, pid, process=None):
     """Return True on Enter, False on N/Esc, or fail if the tested Cemu exits."""
     if not sys.stdin.isatty():
@@ -543,29 +554,43 @@ def run(args):
             report['game_log'] = str((profile / 'log.txt').resolve())
             report['game_log_sha256'] = sha256(profile / 'log.txt') if (profile / 'log.txt').is_file() else None
             return
-        if args.press_title_a:
-            if args.auto_press_title_a:
+        if args.press_title_a or getattr(args, 'click_title', False):
+            click_title = getattr(args, 'click_title', False)
+            auto_title = (getattr(args, 'auto_click_title', False) if click_title
+                          else args.auto_press_title_a)
+            if auto_title:
                 time.sleep(args.title_a_delay_ms / 1000.)
-                report['events'].append({'time': timestamp(), 'action': 'title_a_ready_delay',
+                report['events'].append({'time': timestamp(),
+                                         'action': 'title_click_ready_delay' if click_title
+                                         else 'title_a_ready_delay',
                                          'delay_ms': args.title_a_delay_ms})
             else:
                 if not confirm_or_abort(
                         report,
-                        'Inspect the exact Cemu window. When "Press A!" is visible, press Enter here; N/Esc aborts: ',
+                        ('Inspect the exact Cemu window. When "Press 2!" is visible, press Enter here; N/Esc aborts: '
+                         if click_title else
+                         'Inspect the exact Cemu window. When "Press A!" is visible, press Enter here; N/Esc aborts: '),
                         'title_screen', pid=pid, process=process):
                     return
             foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
-            key_event('z', True)
-            time.sleep(args.title_key_hold_ms / 1000.)
-            key_event('z', False)
-            report['events'].append({'time': timestamp(), 'action': 'title_a_key',
-                                     'key': 'z', 'button': 'A',
-                                     'hold_ms': args.title_key_hold_ms,
-                                     'foreground_hwnd': foreground})
+            action = advance_title(window, click=click_title,
+                                   hold_ms=args.title_key_hold_ms)
+            if click_title:
+                report['events'].append({'time': timestamp(), 'action': 'title_mouse_click',
+                                         'button': 'left', 'target': 'window_center',
+                                         'foreground_hwnd': foreground})
+            else:
+                report['events'].append({'time': timestamp(), 'action': 'title_a_key',
+                                         'key': 'z', 'button': 'A',
+                                         'hold_ms': args.title_key_hold_ms,
+                                         'foreground_hwnd': foreground})
             time.sleep(args.transition_wait)
-            title_advance = args.screenshot_dir / f'{args.case}-after-title-a.bmp'
+            title_advance = args.screenshot_dir / (
+                f'{args.case}-after-title-click.bmp' if action == 'mouse_click'
+                else f'{args.case}-after-title-a.bmp')
             capture_window(window['hwnd'], title_advance)
-            report['screenshots']['after_title_a'] = str(title_advance.resolve())
+            report['screenshots']['after_title_click' if action == 'mouse_click'
+                                  else 'after_title_a'] = str(title_advance.resolve())
         if args.attach:
             if not confirm_or_abort(
                     report,
@@ -720,6 +745,10 @@ def main(argv=None):
                         help='Send the configured Z=A key once to the verified game window before the manual start flow')
     parser.add_argument('--auto-press-title-a', action='store_true',
                         help='Send Z=A after the title delay instead of waiting for a manual title-screen confirmation')
+    parser.add_argument('--click-title', action='store_true',
+                        help='After confirming the visible "Press 2!" prompt, left-click the exact Cemu game-window center')
+    parser.add_argument('--auto-click-title', action='store_true',
+                        help='Left-click the exact game-window center after the title delay instead of waiting for confirmation')
     parser.add_argument('--title-a-delay-ms', type=int, default=5500,
                         help='Wait after Cemu creates its window before auto title A (100-20000 ms; default 5500)')
     parser.add_argument('--title-key-hold-ms', type=int, default=500)
@@ -752,6 +781,10 @@ def main(argv=None):
         parser.error('--title-a-delay-ms must be between 100 and 20000')
     if args.auto_press_title_a and not args.press_title_a:
         parser.error('--auto-press-title-a requires --press-title-a')
+    if args.click_title and args.press_title_a:
+        parser.error('--click-title and --press-title-a are mutually exclusive')
+    if args.auto_click_title and not args.click_title:
+        parser.error('--auto-click-title requires --click-title')
     if args.navigation_only and (not args.attach or not args.navigation_key):
         parser.error('--navigation-only requires --attach and --navigation-key')
     if not 100 <= args.navigation_hold_ms <= 5000:

@@ -1,5 +1,35 @@
 # Runtime evidence and test protocol
 
+## Clean Pro movement retry stopped at the first visual gate — 2026-10-22
+
+- The isolated clean profile `build/cemu-clean-pro-fixed-input-20261021` ran
+  with Cemu PID 3020 / HWND 29885910. The runner verified that exact window was
+  foreground before title and movement input. The clean save hashes matched
+  their preflight baselines. No mod archive was installed (`pack_file:null`);
+  controller profile SHA-256 was
+  `d4f9fcf8da2748ac094f479d53c96661fb60c559fc564e41805bfc4ecae3879c`.
+- Mario was visibly at **Crushing-Cogs Tower**. The runner held A for 2,000 ms
+  and captured the before/after map. The after image still showed the tower, so
+  the run was aborted at the visual confirmation gate; no S/W inputs or level
+  entry were sent. This run does not verify movement or attribute a route-data
+  failure. It also differs from the earlier Clean movement evidence, which used
+  controller profile SHA-256
+  `7f27b62eb731fdd4c4eae10b2f8a77f19f0a233c0a469067db2034900f4d9b`; compare
+  those profile mappings before repeating.
+- Evidence is in `local/evidence/cemu-input-test/`:
+  `clean-pro-chain-route-compare-20261022-r1-result.json`,
+  `clean-pro-chain-route-compare-20261022-r1-step-1-a-before.bmp`, and
+  `clean-pro-chain-route-compare-20261022-r1-step-1-a-after.bmp`. The run
+  recorded game log SHA-256
+  `68e8c3d557f3a41545be54ef7c99ceb385ef0c718710349df8461cdfa5dee39a` and
+  unchanged personal/common save hashes. The run's result records no pack hash
+  because this is the unmodified Clean case.
+- The runner now supports `--click-title` to click the exact verified Cemu
+  window center when the game presents “Press 2!”. The default remains the
+  explicit visual gate; `--auto-click-title` is available only when the user
+  selects an automatic delay. This is test-workflow support and does not modify
+  gameplay or route data.
+
 ## Chain movement reaches and enters Blooper's Secret Lair — 2026-10-22
 
 - In the single isolated Cemu process (PID 17980, HWND 576522674), the runner

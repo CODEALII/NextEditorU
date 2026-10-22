@@ -30,6 +30,32 @@ class CemuWindowSelectionTests(unittest.TestCase):
             "Crushing-Cogs Tower"))
         self.assertIn("intended start node", self.cemu_input_test.map_confirmation_prompt())
 
+    def test_title_click_targets_exact_game_window_center_and_releases_mouse(self):
+        bounds = SimpleNamespace(left=100, top=50, right=900, bottom=650)
+        window = {"rect": bounds, "width": 800, "height": 600}
+        with patch.object(self.cemu_input_test.user32, "SetCursorPos", return_value=1) as move, \
+                patch.object(self.cemu_input_test, "send_inputs") as send:
+            self.cemu_input_test.click_window_center(window)
+
+        move.assert_called_once_with(500, 350)
+        inputs = send.call_args.args[0]
+        self.assertEqual([item.type for item in inputs], [self.cemu_input_test.INPUT_MOUSE] * 2)
+        self.assertEqual([item.mi.dwFlags for item in inputs], [
+            self.cemu_input_test.MOUSEEVENTF_LEFTDOWN,
+            self.cemu_input_test.MOUSEEVENTF_LEFTUP,
+        ])
+
+    def test_title_click_path_does_not_send_a_keyboard_key(self):
+        window = {"rect": SimpleNamespace(left=0, top=0, right=800, bottom=600),
+                  "width": 800, "height": 600}
+        with patch.object(self.cemu_input_test, "click_window_center") as click, \
+                patch.object(self.cemu_input_test, "key_event") as key:
+            action = self.cemu_input_test.advance_title(window, click=True)
+
+        self.assertEqual(action, "mouse_click")
+        click.assert_called_once_with(window)
+        key.assert_not_called()
+
     def test_step_review_prompt_names_screenshot_and_next_direction(self):
         prompt = self.cemu_input_test.step_review_prompt("chain-route", 2, "d", "a")
         self.assertIn("chain-route-step-2-d-after.bmp", prompt)
