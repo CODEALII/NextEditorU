@@ -6,10 +6,14 @@ or skinned node poses. Static node transforms are applied to imported geometry.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import math
 from pathlib import Path
+import re
 import struct
+from urllib.parse import unquote, urlsplit
 
 
 MAX_GLB_FILE_BYTES = 64 * 1024 * 1024
@@ -227,7 +231,7 @@ def _scene_mesh_instances(document, mesh_count):
     return referenced_meshes
 
 
-def _accessor_values(document, binary, accessor_index, *, expected_type,
+def _accessor_values(document, binaries, accessor_index, *, expected_type,
                      role, max_count=MAX_GLB_ELEMENTS):
     accessors = _list(document, "accessors")
     accessor = _item(accessors, accessor_index, "accessor")
@@ -260,8 +264,10 @@ def _accessor_values(document, binary, accessor_index, *, expected_type,
 
     count = _integer(accessor.get("count"), f"{role} count", minimum=1, maximum=max_count)
     view = _item(_list(document, "bufferViews"), accessor["bufferView"], "bufferView")
-    if "buffer" not in view or _integer(view["buffer"], "bufferView buffer index", maximum=0) != 0:
-        raise ValueError("Only the embedded GLB buffer is supported")
+    buffer_index = _integer(view.get("buffer"), "bufferView buffer index", maximum=max(0, len(binaries) - 1))
+    if buffer_index >= len(binaries):
+        raise ValueError("bufferView references a missing glTF buffer")
+    binary = binaries[buffer_index]
     view_offset = _integer(view.get("byteOffset", 0), "bufferView byteOffset")
     view_length = _integer(view.get("byteLength"), "bufferView byteLength", minimum=1)
     if view.get("extensions"):
@@ -311,6 +317,125 @@ def _accessor_values(document, binary, accessor_index, *, expected_type,
                 raise ValueError(f"GLB {role} contains a non-finite or out-of-range value")
             values.append(tuple(row))
     return values
+
+
+def _parse_static_document(document, binaries):
+    meshes = _list(document, "meshes")
+    if not meshes:
+        raise ValueError("GLB contains no meshes")
+    mesh_instances = _scene_mesh_instances(document, len(meshes))
+    if not mesh_instances:
+        raise ValueError("GLB active scene contains no mesh primitives")
+    if len(mesh_instances) > MAX_GLB_PRIMITIVES:
+        raise ValueError(f"GLB exceeds the {MAX_GLB_PRIMITIVES:,}-mesh limit")
+
+    positions, uvs, normals, faces = [], [], [], []
+    warnings = set()
+    has_uvs = False
+    has_normals = False
+    primitive_count = 0
+    for mesh_index, node_transform in mesh_instances:
+        mirrored = _linear_determinant(node_transform) < 0
+        normal_transform = _normal_matrix(node_transform)
+        mesh = _item(meshes, mesh_index, "mesh")
+        if mesh.get("extensions"):
+            raise ValueError("GLB mesh extensions are unsupported")
+        if mesh.get("weights"):
+            raise ValueError("GLB mesh morph weights are unsupported; apply morphs before import")
+        primitives = mesh.get("primitives")
+        if not isinstance(primitives, list) or not primitives:
+            raise ValueError("GLB mesh must contain primitives")
+        for primitive in primitives:
+            primitive_count += 1
+            if primitive_count > MAX_GLB_PRIMITIVES:
+                raise ValueError(f"GLB exceeds the {MAX_GLB_PRIMITIVES:,}-primitive limit")
+            if not isinstance(primitive, dict):
+                raise ValueError("GLB mesh primitive must be an object")
+            if primitive.get("extensions"):
+                raise ValueError("GLB primitive extensions are unsupported; export uncompressed geometry")
+            mode = primitive.get("mode", 4)
+            if type(mode) is not int or mode != 4:
+                raise ValueError("Only GLB TRIANGLES primitives are supported")
+            if primitive.get("targets"):
+                raise ValueError("GLB morph targets are unsupported; apply morphs before import")
+            attributes = primitive.get("attributes")
+            if not isinstance(attributes, dict) or "POSITION" not in attributes:
+                raise ValueError("GLB mesh primitive requires POSITION")
+            if "NORMAL" not in attributes:
+                warnings.add("GLB primitives without NORMAL use generated smooth normals")
+            if "TEXCOORD_0" not in attributes:
+                warnings.add("GLB primitives without TEXCOORD_0 use planar terrain UV fallback")
+            if "JOINTS_0" in attributes or "WEIGHTS_0" in attributes:
+                raise ValueError("Skinned GLB vertex attributes are unsupported; export a static mesh")
+            ignored = set(attributes) - {"POSITION", "NORMAL", "TEXCOORD_0"}
+            if ignored:
+                warnings.add("GLB vertex attributes ignored: " + ", ".join(sorted(ignored)))
+            if primitive.get("material") is not None:
+                warnings.add("GLB materials and textures are ignored; the editor preview remains untextured and native replacement keeps its existing game material")
+            base = len(positions)
+            part_positions = _accessor_values(
+                document, binaries, attributes["POSITION"], expected_type="VEC3", role="POSITION",
+                max_count=MAX_GLB_VERTICES - len(positions))
+            count = len(part_positions)
+            if "NORMAL" in attributes:
+                source_normals = _accessor_values(
+                    document, binaries, attributes["NORMAL"], expected_type="VEC3", role="NORMAL",
+                    max_count=count)
+                if len(source_normals) != count:
+                    raise ValueError("GLB NORMAL and POSITION accessor counts differ")
+                part_normals = [_transform_normal(normal_transform, normal)
+                                for normal in source_normals]
+                has_normals = True
+            else:
+                part_normals = [None] * count
+            if "TEXCOORD_0" in attributes:
+                part_uvs = _accessor_values(
+                    document, binaries, attributes["TEXCOORD_0"], expected_type="VEC2", role="TEXCOORD_0",
+                    max_count=count)
+                if len(part_uvs) != count:
+                    raise ValueError("GLB TEXCOORD_0 and POSITION accessor counts differ")
+                has_uvs = True
+            else:
+                part_uvs = [None] * count
+            if "indices" in primitive:
+                part_indices = _accessor_values(
+                    document, binaries, primitive["indices"], expected_type="SCALAR", role="indices",
+                    max_count=MAX_GLB_TRIANGLES * 3)
+            else:
+                part_indices = list(range(count))
+            if len(part_indices) % 3:
+                raise ValueError("GLB triangle index count must be divisible by three")
+            if len(faces) + len(part_indices) // 3 > MAX_GLB_TRIANGLES:
+                raise ValueError(f"GLB exceeds the {MAX_GLB_TRIANGLES:,}-triangle limit")
+            if any(index >= count for index in part_indices):
+                raise ValueError("GLB index references a missing vertex")
+            try:
+                positions.extend(_transform_position(node_transform, position)
+                                 for position in part_positions)
+            except ValueError as error:
+                raise ValueError(f"GLB mesh node {mesh_index}: {error}") from error
+            uvs.extend(part_uvs)
+            normals.extend(part_normals)
+            for offset in range(0, len(part_indices), 3):
+                triangle = part_indices[offset:offset + 3]
+                if mirrored:
+                    triangle = (triangle[0], triangle[2], triangle[1])
+                faces.append(tuple(base + index for index in triangle))
+
+    if document.get("animations"):
+        warnings.add("GLB animations are ignored; imported geometry uses its static source pose")
+    if document.get("extensionsUsed"):
+        used = _array(document["extensionsUsed"], "extensionsUsed")
+        if not all(isinstance(extension, str) for extension in used):
+            raise ValueError("GLB extensionsUsed entries must be strings")
+        warnings.add("GLB optional extensions are not evaluated: " + ", ".join(map(str, used)))
+    if not positions or not faces:
+        raise ValueError("GLB contains no indexed triangles")
+    if not has_uvs:
+        uvs = None
+    if not has_normals:
+        normals = None
+    return (positions, faces, uvs, normals), tuple(sorted(warnings))
 
 
 def parse_glb(data):
@@ -378,123 +503,7 @@ def parse_glb(data):
         raise ValueError("GLB BIN chunk does not match the declared buffer length")
     binary = memoryview(binary_chunk)[:binary_length]
 
-    meshes = _list(document, "meshes")
-    if not meshes:
-        raise ValueError("GLB contains no meshes")
-    mesh_instances = _scene_mesh_instances(document, len(meshes))
-    if not mesh_instances:
-        raise ValueError("GLB active scene contains no mesh primitives")
-    if len(mesh_instances) > MAX_GLB_PRIMITIVES:
-        raise ValueError(f"GLB exceeds the {MAX_GLB_PRIMITIVES:,}-mesh limit")
-
-    positions, uvs, normals, faces = [], [], [], []
-    warnings = set()
-    has_uvs = False
-    has_normals = False
-    primitive_count = 0
-    for mesh_index, node_transform in mesh_instances:
-        mirrored = _linear_determinant(node_transform) < 0
-        normal_transform = _normal_matrix(node_transform)
-        mesh = _item(meshes, mesh_index, "mesh")
-        if mesh.get("extensions"):
-            raise ValueError("GLB mesh extensions are unsupported")
-        if mesh.get("weights"):
-            raise ValueError("GLB mesh morph weights are unsupported; apply morphs before import")
-        primitives = mesh.get("primitives")
-        if not isinstance(primitives, list) or not primitives:
-            raise ValueError("GLB mesh must contain primitives")
-        for primitive in primitives:
-            primitive_count += 1
-            if primitive_count > MAX_GLB_PRIMITIVES:
-                raise ValueError(f"GLB exceeds the {MAX_GLB_PRIMITIVES:,}-primitive limit")
-            if not isinstance(primitive, dict):
-                raise ValueError("GLB mesh primitive must be an object")
-            if primitive.get("extensions"):
-                raise ValueError("GLB primitive extensions are unsupported; export uncompressed geometry")
-            mode = primitive.get("mode", 4)
-            if type(mode) is not int or mode != 4:
-                raise ValueError("Only GLB TRIANGLES primitives are supported")
-            if primitive.get("targets"):
-                raise ValueError("GLB morph targets are unsupported; apply morphs before import")
-            attributes = primitive.get("attributes")
-            if not isinstance(attributes, dict) or "POSITION" not in attributes:
-                raise ValueError("GLB mesh primitive requires POSITION")
-            if "NORMAL" not in attributes:
-                warnings.add("GLB primitives without NORMAL use generated smooth normals")
-            if "TEXCOORD_0" not in attributes:
-                warnings.add("GLB primitives without TEXCOORD_0 use planar terrain UV fallback")
-            if "JOINTS_0" in attributes or "WEIGHTS_0" in attributes:
-                raise ValueError("Skinned GLB vertex attributes are unsupported; export a static mesh")
-            ignored = set(attributes) - {"POSITION", "NORMAL", "TEXCOORD_0"}
-            if ignored:
-                warnings.add("GLB vertex attributes ignored: " + ", ".join(sorted(ignored)))
-            if primitive.get("material") is not None:
-                warnings.add("GLB materials and textures are ignored; the editor preview remains untextured and native replacement keeps its existing game material")
-            base = len(positions)
-            part_positions = _accessor_values(
-                document, binary, attributes["POSITION"], expected_type="VEC3", role="POSITION",
-                max_count=MAX_GLB_VERTICES - len(positions))
-            count = len(part_positions)
-            if "NORMAL" in attributes:
-                source_normals = _accessor_values(
-                    document, binary, attributes["NORMAL"], expected_type="VEC3", role="NORMAL",
-                    max_count=count)
-                if len(source_normals) != count:
-                    raise ValueError("GLB NORMAL and POSITION accessor counts differ")
-                part_normals = [_transform_normal(normal_transform, normal)
-                                for normal in source_normals]
-                has_normals = True
-            else:
-                part_normals = [None] * count
-            if "TEXCOORD_0" in attributes:
-                part_uvs = _accessor_values(
-                    document, binary, attributes["TEXCOORD_0"], expected_type="VEC2", role="TEXCOORD_0",
-                    max_count=count)
-                if len(part_uvs) != count:
-                    raise ValueError("GLB TEXCOORD_0 and POSITION accessor counts differ")
-                has_uvs = True
-            else:
-                part_uvs = [None] * count
-            if "indices" in primitive:
-                part_indices = _accessor_values(
-                    document, binary, primitive["indices"], expected_type="SCALAR", role="indices",
-                    max_count=MAX_GLB_TRIANGLES * 3)
-            else:
-                part_indices = list(range(count))
-            if len(part_indices) % 3:
-                raise ValueError("GLB triangle index count must be divisible by three")
-            if len(faces) + len(part_indices) // 3 > MAX_GLB_TRIANGLES:
-                raise ValueError(f"GLB exceeds the {MAX_GLB_TRIANGLES:,}-triangle limit")
-            if any(index >= count for index in part_indices):
-                raise ValueError("GLB index references a missing vertex")
-            try:
-                positions.extend(_transform_position(node_transform, position)
-                                 for position in part_positions)
-            except ValueError as error:
-                raise ValueError(f"GLB mesh node {mesh_index}: {error}") from error
-            uvs.extend(part_uvs)
-            normals.extend(part_normals)
-            for offset in range(0, len(part_indices), 3):
-                triangle = part_indices[offset:offset + 3]
-                if mirrored:
-                    triangle = (triangle[0], triangle[2], triangle[1])
-                faces.append(tuple(base + index for index in triangle))
-
-    if document.get("animations"):
-        warnings.add("GLB animations are ignored; imported geometry uses its static source pose")
-    if document.get("extensionsUsed"):
-        used = _array(document["extensionsUsed"], "extensionsUsed")
-        if not all(isinstance(extension, str) for extension in used):
-            raise ValueError("GLB extensionsUsed entries must be strings")
-        warnings.add("GLB optional extensions are not evaluated: " + ", ".join(map(str, used)))
-    if not positions or not faces:
-        raise ValueError("GLB contains no indexed triangles")
-    if not has_uvs:
-        uvs = None
-    if not has_normals:
-        normals = None
-    return (positions, faces, uvs, normals), tuple(sorted(warnings))
-
+    return _parse_static_document(document, [binary])
 
 def read_glb(path, *, include_report=False):
     """Read one local GLB file, enforcing the import size limit before parsing."""
@@ -507,4 +516,97 @@ def read_glb(path, *, include_report=False):
     if len(data) > MAX_GLB_FILE_BYTES:
         raise ValueError(f"GLB exceeds the {MAX_GLB_FILE_BYTES // (1024 * 1024)} MiB file-size limit")
     geometry, warnings = parse_glb(data)
+    return (geometry, warnings) if include_report else geometry
+
+
+MAX_GLTF_BUFFERS = 16
+
+
+def _read_local_buffer(uri, source_dir, declared_length):
+    if not isinstance(uri, str) or not uri or "\0" in uri or "\\" in uri:
+        raise ValueError("glTF buffer URI must be a non-empty local URI")
+    if uri.startswith("data:"):
+        header, separator, payload = uri.partition(",")
+        if not separator or not header.lower().endswith(";base64"):
+            raise ValueError("Only base64 data URIs are supported for glTF buffers")
+        encoded_bound = ((declared_length + 2) // 3) * 4
+        if len(payload) > encoded_bound + 4:
+            raise ValueError("glTF data URI exceeds its declared buffer length")
+        try:
+            data = base64.b64decode(payload, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ValueError("glTF buffer data URI contains invalid base64") from error
+    else:
+        parts = urlsplit(uri)
+        if parts.scheme or parts.netloc or parts.query or parts.fragment or uri.startswith("/"):
+            raise ValueError("External glTF buffers must use local relative paths")
+        decoded = unquote(parts.path)
+        relative = Path(decoded)
+        if (not decoded or "\\" in decoded or relative.is_absolute() or
+                re.match(r"^[A-Za-z]:", decoded) or ".." in relative.parts):
+            raise ValueError("External glTF buffer path must stay relative to the source file")
+        try:
+            base = source_dir.resolve(strict=True)
+            target = (base / decoded).resolve(strict=True)
+        except OSError as error:
+            raise ValueError("External glTF buffer file is missing or inaccessible") from error
+        try:
+            target.relative_to(base)
+        except ValueError as error:
+            raise ValueError("External glTF buffer path escapes the source directory") from error
+        if not target.is_file() or target.stat().st_size > MAX_GLB_FILE_BYTES:
+            raise ValueError("External glTF buffer is missing or exceeds the file-size limit")
+        with target.open("rb") as stream:
+            data = stream.read(declared_length + 1)
+    if len(data) != declared_length:
+        raise ValueError("glTF buffer length does not match its declared byteLength")
+    return memoryview(data)
+
+
+def parse_gltf(data, *, source_dir):
+    """Parse bounded glTF 2.0 JSON with local relative or base64 buffer URIs."""
+    if not isinstance(data, (bytes, bytearray, memoryview)):
+        raise ValueError("glTF input must be bytes")
+    if len(data) > MAX_GLB_FILE_BYTES:
+        raise ValueError("glTF JSON exceeds the 64 MiB file-size limit")
+    try:
+        document = json.loads(bytes(data).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
+        raise ValueError("glTF JSON is invalid") from error
+    if not isinstance(document, dict) or not isinstance(document.get("asset"), dict):
+        raise ValueError("glTF JSON must contain an asset object")
+    if document["asset"].get("version") != "2.0":
+        raise ValueError("Only glTF asset version 2.0 is supported")
+    required = _array(document.get("extensionsRequired", []), "extensionsRequired")
+    if not all(isinstance(item, str) for item in required):
+        raise ValueError("glTF extensionsRequired entries must be strings")
+    if required:
+        raise ValueError("Required glTF extensions are unsupported: " + ", ".join(required))
+    buffer_defs = _list(document, "buffers")
+    if not buffer_defs or len(buffer_defs) > MAX_GLTF_BUFFERS:
+        raise ValueError(f"glTF must contain 1 to {MAX_GLTF_BUFFERS} buffers")
+    binaries = []
+    aggregate = 0
+    for buffer in buffer_defs:
+        if not isinstance(buffer, dict) or "uri" not in buffer:
+            raise ValueError("JSON glTF buffers must define a local URI")
+        length = _integer(buffer.get("byteLength"), "buffer byteLength", minimum=1)
+        aggregate += length
+        if aggregate > MAX_GLB_FILE_BYTES:
+            raise ValueError("glTF buffers exceed the 64 MiB aggregate size limit")
+        binaries.append(_read_local_buffer(buffer["uri"], Path(source_dir), length))
+    return _parse_static_document(document, binaries)
+
+
+def read_gltf(path, *, include_report=False):
+    """Read a local .gltf file and its bounded local buffers without network access."""
+    path = Path(path)
+    size = path.stat().st_size
+    if size > MAX_GLB_FILE_BYTES:
+        raise ValueError("glTF JSON exceeds the 64 MiB file-size limit")
+    with path.open("rb") as stream:
+        data = stream.read(MAX_GLB_FILE_BYTES + 1)
+    if len(data) > MAX_GLB_FILE_BYTES:
+        raise ValueError("glTF JSON exceeds the 64 MiB file-size limit")
+    geometry, warnings = parse_gltf(data, source_dir=path.parent)
     return (geometry, warnings) if include_report else geometry

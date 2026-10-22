@@ -1,3 +1,4 @@
+import base64
 import json
 import struct
 import tempfile
@@ -7,7 +8,7 @@ from unittest.mock import patch
 
 from worldstudio.archive import Archive
 from worldstudio.editor import read_import_mesh, read_obj
-from worldstudio.gltf import parse_glb, read_glb
+from worldstudio.gltf import parse_glb, read_glb, read_gltf
 from worldstudio.mesh import (DEFAULT_SHAPE, _geometry, extract_rigid_model,
                               project_terrain_for_preview, replace_rigid_mesh)
 from worldstudio.project import WorldProject
@@ -179,6 +180,62 @@ class GlbReaderTests(unittest.TestCase):
         self.assertEqual(len(geometry[2]), 3)
         self.assertEqual(len(preview_geometry), 2)
         self.assertTrue(any("materials and textures are ignored" in warning for warning in warnings))
+
+    def test_editor_import_path_reads_local_external_gltf_buffer(self):
+        document, binary = _fixture(primitive={"material": 0})
+        document["buffers"][0]["uri"] = "terrain.bin"
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            (folder / "terrain.bin").write_bytes(binary)
+            path = folder / "terrain.gltf"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            geometry, warnings = read_import_mesh(path, include_attributes=True, include_report=True)
+            self.assertEqual(geometry[0], [(0., 0., 0.), (0., 0., 1.), (1., 0., 0.)])
+            self.assertEqual(geometry[1], [(0, 1, 2)])
+            self.assertTrue(any("materials and textures are ignored" in warning for warning in warnings))
+
+    def test_reads_base64_gltf_buffer_and_multiple_local_buffers(self):
+        document, binary = _fixture()
+        original, _ = parse_glb(_glb(document, binary))
+        # Keep the geometry bytes together, but address it through two buffer entries.
+        split = 60
+        first, second = binary[:split], binary[split:]
+        doc = json.loads(json.dumps(document))
+        doc["buffers"] = [{"byteLength": len(first), "uri": "data:application/octet-stream;base64," +
+                           base64.b64encode(first).decode("ascii")},
+                          {"byteLength": len(second), "uri": "part.bin"}]
+        for view in doc["bufferViews"]:
+            if view["byteOffset"] >= split:
+                view["buffer"] = 1
+                view["byteOffset"] -= split
+            elif view["byteOffset"] + view["byteLength"] > split:
+                self.fail("fixture split must not divide a bufferView")
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            (folder / "part.bin").write_bytes(second)
+            path = folder / "multi.gltf"
+            path.write_text(json.dumps(doc), encoding="utf-8")
+            geometry = read_gltf(path)
+        self.assertEqual(geometry, original)
+
+    def test_rejects_remote_and_escaping_gltf_buffer_uris(self):
+        document, binary = _fixture()
+        for uri in ("https://example.invalid/mesh.bin", "../mesh.bin", "%2e%2e/mesh.bin"):
+            with self.subTest(uri=uri), tempfile.TemporaryDirectory() as folder:
+                document["buffers"][0]["uri"] = uri
+                path = Path(folder) / "mesh.gltf"
+                path.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    read_gltf(path)
+
+    def test_rejects_invalid_base64_gltf_buffer(self):
+        document, _ = _fixture()
+        document["buffers"][0]["uri"] = "data:application/octet-stream;base64,!!!!"
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "bad.gltf"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "invalid base64"):
+                read_gltf(path)
 
     def test_merges_multiple_primitives_and_reports_ignored_materials(self):
         document, binary = _fixture(primitive={"material": 0})

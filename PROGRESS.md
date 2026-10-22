@@ -1,5 +1,18 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Import local-buffer glTF terrain files
+
+- Extended the existing static geometry parser to accept JSON `.gltf` alongside
+  embedded `.glb`, including bounded local relative sidecars, multiple buffers,
+  and base64 data URIs. Network URIs and paths that escape the source directory
+  are rejected; the declared lengths and aggregate 64 MiB payload bound are
+  checked before geometry parsing.
+- Updated terrain import dialogs and added fixtures for sidecars, multiple
+  buffers, base64 data, unsafe URIs and editor dispatch. `python -m unittest
+  tests.test_gltf` passed **23 tests**. This verifies offline geometry import;
+  terrain appearance, collision, and the importer UI in a live session remain
+  unverified in Cemu.
+
 ## 2026-10-22 — Keep route-connection UI in sync through undo and redo
 
 - After the route transaction commits, the selected point stays selected and

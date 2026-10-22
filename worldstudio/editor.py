@@ -17,7 +17,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from .bfres import Skeletons
-from .gltf import read_glb
+from .gltf import read_glb, read_gltf
 from .graph_validation import (
     apply_native_connection_draft,
     build_native_connection_draft,
@@ -254,17 +254,18 @@ def read_obj(path, include_attributes=False, include_report=False):
 
 
 def read_import_mesh(path, *, include_attributes=False, include_report=False):
-    """Read a bounded OBJ or embedded static GLB mesh through one editor path."""
+    """Read a bounded OBJ, GLB, or local-buffer glTF mesh through one editor path."""
     path = Path(path)
-    if path.suffix.lower() == ".glb":
-        geometry, warnings = read_glb(path, include_report=True)
+    if path.suffix.lower() in (".glb", ".gltf"):
+        reader = read_glb if path.suffix.lower() == ".glb" else read_gltf
+        geometry, warnings = reader(path, include_report=True)
         if not include_attributes:
             geometry = geometry[:2]
         return (geometry, warnings) if include_report else geometry
     if path.suffix.lower() == ".obj":
         return read_obj(path, include_attributes=include_attributes,
                         include_report=include_report)
-    raise ValueError("Only Wavefront OBJ and Binary glTF (.glb) meshes are supported")
+    raise ValueError("Only Wavefront OBJ, Binary glTF (.glb), and local-buffer glTF (.gltf) meshes are supported")
 
 
 def obj_geometry_summary(vertices, faces):
@@ -469,7 +470,7 @@ class WorldStudio(ttk.Frame):
         bar.pack(fill="x")
         for title, action in [("New preview", self.new), ("Open project", self.open),
                               ("Recent", self.show_recent_projects),
-                              ("Save project", self.save), ("Import OBJ/GLB", self.import_obj),
+                              ("Save project", self.save), ("Import OBJ/glTF", self.import_obj),
                               ("Add node", self.add_node), ("Add route", self.add_route),
                               ("Delete selected", self.delete), ("Validate", self.validate),
                               ("Refresh 3D", self.open_3d_preview), ("Fit view", self.fit)]:
@@ -1804,9 +1805,9 @@ class WorldStudio(ttk.Frame):
             return False
 
     def import_obj(self):
-        path = filedialog.askopenfilename(filetypes=[("OBJ and Binary glTF", "*.obj *.glb"),
+        path = filedialog.askopenfilename(filetypes=[("OBJ and glTF", "*.obj *.glb *.gltf"),
                                                      ("Wavefront OBJ", "*.obj"),
-                                                     ("Binary glTF", "*.glb")], parent=self)
+                                                     ("glTF models", "*.gltf *.glb")], parent=self)
         if path:
             try:
                 mesh, compatibility_warnings = read_import_mesh(path, include_report=True)
@@ -1946,7 +1947,7 @@ class NativeStudio(WorldStudio):
         self.viewport_hint.configure(text="3D World is the main view · drag a point to move it · drag empty space to orbit · right-drag to pan · wheel to zoom. Click points or routes to edit them.")
         self.description.configure(text="Native point/segment fields are saved to CSV and exported in the SZS archive. "
             "Known bone XYZ edits modify BFRES; model names and engine indices remain protected. "
-            "Camera controls affect this viewport only. OBJ/GLB terrain import projects the upper surface onto existing grass vertices, preserving source topology and UVs; collision and in-game appearance still need Cemu testing.")
+            "Camera controls affect this viewport only. OBJ/glTF terrain import projects the upper surface onto existing grass vertices, preserving source topology and UVs; collision and in-game appearance still need Cemu testing.")
         toolbar = self.winfo_children()[0]
         replacements = {"New preview": "Reload source", "Add node": "Add draft point", "Add route": "Add segment"}
         for child in toolbar.winfo_children():
@@ -1964,7 +1965,7 @@ class NativeStudio(WorldStudio):
                                     command=self.clear_graph_profile)
         profile_menu.configure(menu=profile_options)
         profile_menu.pack(side="left", padx=2)
-        ttk.Button(bar, text="Use OBJ/GLB mesh (experimental)", command=self.use_obj_mesh).pack(side="left", padx=2)
+        ttk.Button(bar, text="Use OBJ/glTF mesh (experimental)", command=self.use_obj_mesh).pack(side="left", padx=2)
         ttk.Button(bar, text="Open external preview", command=self.open_external_preview).pack(side="left", padx=2)
         ttk.Checkbutton(bar, text="Show path geometry / auxiliary points", variable=self.show_auxiliary,
                         command=self.toggle_auxiliary).pack(side="left", padx=10)
@@ -2865,9 +2866,9 @@ class NativeStudio(WorldStudio):
     def import_obj(self):
         if self.exporting:
             return
-        path = filedialog.askopenfilename(filetypes=[("OBJ and Binary glTF", "*.obj *.glb"),
+        path = filedialog.askopenfilename(filetypes=[("OBJ and glTF", "*.obj *.glb *.gltf"),
                                                      ("Wavefront OBJ", "*.obj"),
-                                                     ("Binary glTF", "*.glb")], parent=self)
+                                                     ("glTF models", "*.gltf *.glb")], parent=self)
         if path:
             try:
                 mesh, compatibility_warnings = read_import_mesh(path, include_report=True)
@@ -2929,9 +2930,9 @@ class NativeStudio(WorldStudio):
     def use_obj_mesh(self):
         if self.exporting:
             return
-        path = filedialog.askopenfilename(filetypes=[("Experimental OBJ/GLB grass mesh", "*.obj *.glb"),
+        path = filedialog.askopenfilename(filetypes=[("Experimental OBJ/glTF grass mesh", "*.obj *.glb *.gltf"),
                                                      ("Wavefront OBJ", "*.obj"),
-                                                     ("Binary glTF", "*.glb")], parent=self)
+                                                     ("glTF models", "*.gltf *.glb")], parent=self)
         if path:
             try:
                 (vertices, faces, uvs, normals), compatibility_warnings = read_import_mesh(
