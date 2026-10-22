@@ -13,6 +13,9 @@
   values until explicitly selected. `python -m unittest
   tests.test_graph_validation tests.test_editor_smoke` passes **64 tests**;
   Python compilation and `git diff --check` pass.
+- Full repository regression after the GLB-transform and route-suggestion
+  changes: **368 tests passed** (`python -m unittest discover -s tests`,
+  325.866 seconds).
 
 ## 2026-10-22 — Apply static GLB node transforms during terrain import
 
