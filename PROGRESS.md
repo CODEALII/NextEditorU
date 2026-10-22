@@ -1,5 +1,22 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Build a point route connection as one draft
+
+- Added a selected-point workflow that searches the resolved local BFRES
+  endpoint inventory for a unique shortest chain to another point in the same
+  world. It can target the normal or secret destination field, lists the route
+  chain before applying, adds missing route-table rows using a source road
+  type, and groups all edits into one Undo step. Replacing a populated field
+  pair requires explicit confirmation. Ambiguous, unreachable, or unresolvable
+  chains remain unavailable.
+- The non-mutating draft builder has focused checks for direct/multi-hop
+  chains, normal/secret columns, reusing existing route rows, unchanged source
+  tables before apply, and ambiguous paths. The editor exposes the workflow on
+  selected point properties. Focused validation/UI checks passed **26 tests**;
+  the full suite passed **374 tests** in 317.977 seconds. This uses static
+  names only and does not verify traversal, level launch, progression, or saves
+  in Cemu.
+
 ## 2026-10-22 — Full regression after GLB optional-attribute support
 
 - `python -m unittest discover -s tests` passed **370 tests** in 317.011

@@ -19,6 +19,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from .bfres import Skeletons
 from .gltf import read_glb
 from .graph_validation import (
+    build_native_connection_draft,
     build_native_route_row,
     native_macro_path_choices,
     native_macro_path_chain_reaches,
@@ -2267,6 +2268,11 @@ class NativeStudio(WorldStudio):
                 entry.configure(state="readonly")
         if kind == "point":
             self.show_native_position(row[1], len(row))
+            ttk.Button(
+                self.form, text="Build route connection…",
+                command=lambda point_index=int(index):
+                    self.build_point_connection(point_index),
+            ).grid(row=len(row) + 4, column=0, columnspan=2, sticky="w", pady=(8, 2))
         self.form.columnconfigure(1, weight=1)
         self.draw()
 
@@ -2453,6 +2459,166 @@ class NativeStudio(WorldStudio):
             self._record_edit()
             self.refresh()
             self.status.set("Draft point added. New engine indices require script remapping and cannot currently export.")
+
+    def build_point_connection(self, point_index):
+        """Create a reviewable route/point/path draft as one undoable edit."""
+        if self.exporting:
+            return
+        if not 0 <= point_index < len(self.native.points.rows):
+            return
+        source_row = self.native.points.rows[point_index]
+        if len(source_row) != 9:
+            messagebox.showerror("Cannot build route", "The selected point row is malformed.", parent=self)
+            return
+        source_name = source_row[1]
+        world_match = re.match(r"W[1-9]", source_name)
+        if not world_match:
+            messagebox.showerror(
+                "Cannot build route",
+                "Choose a W1–W9 point as the route start; other point roles are not inferred.",
+                parent=self,
+            )
+            return
+        world_prefix = world_match.group(0)
+        bones = {
+            bone.name
+            for model_bones in self.native.skeletons.models.values()
+            for bone in model_bones
+        }
+        references = set(self.native.references)
+        road_types = native_road_type_choices(self.native.routes.initial)
+        if not road_types:
+            messagebox.showerror(
+                "Cannot build route",
+                "The source route table has no road type to reuse.", parent=self)
+            return
+        targets = [row[1] for i, row in enumerate(self.native.points.rows)
+                   if i != point_index and len(row) == 9 and
+                   row[1].startswith(world_prefix)]
+        if not targets:
+            messagebox.showerror(
+                "Cannot build route",
+                f"No other {world_prefix} points are available as destinations.", parent=self)
+            return
+
+        window = tk.Toplevel(self)
+        window.title("Build route connection draft")
+        window.transient(self.winfo_toplevel())
+        window.resizable(False, False)
+        body = ttk.Frame(window, padding=14)
+        body.grid(sticky="nsew")
+        ttk.Label(
+            body, text=f"Connect {source_name} through existing BFRES paths",
+            font=("TkDefaultFont", 10, "bold"),
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
+
+        destination = tk.StringVar(value="")
+        destination_kind = tk.StringVar(value="normal")
+        road_type = tk.StringVar(value=road_types[0])
+        ttk.Label(body, text="Destination point").grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Combobox(body, textvariable=destination, values=targets,
+                     state="readonly", width=24).grid(row=1, column=1, sticky="ew", pady=4)
+        ttk.Label(body, text="Destination field").grid(row=2, column=0, sticky="w", pady=4)
+        slot = ttk.Frame(body)
+        slot.grid(row=2, column=1, sticky="w", pady=4)
+        ttk.Radiobutton(slot, text="Normal", variable=destination_kind,
+                        value="normal").pack(side="left")
+        ttk.Radiobutton(slot, text="Secret", variable=destination_kind,
+                        value="secret").pack(side="left", padx=(10, 0))
+        ttk.Label(body, text="Road type for new rows").grid(row=3, column=0, sticky="w", pady=4)
+        ttk.Combobox(body, textvariable=road_type, values=road_types,
+                     state="readonly", width=24).grid(row=3, column=1, sticky="ew", pady=4)
+        chain_preview = tk.StringVar(value="Choose a destination to inspect existing BFRES paths.")
+        ttk.Label(body, textvariable=chain_preview, wraplength=460,
+                  foreground="#a9c2d5").grid(
+                      row=4, column=0, columnspan=2, sticky="w", pady=(8, 4))
+        ttk.Label(
+            body,
+            text=("This drafts an ordered path from BFRES endpoint names, adds missing route-table rows, "
+                  "and replaces only the chosen normal/secret destination and path-chain pair. "
+                  "Review the result before export; game movement and unlock behavior are not inferred."),
+            wraplength=460,
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(4, 10))
+
+        buttons = ttk.Frame(body)
+        buttons.grid(row=6, column=0, columnspan=2, sticky="e")
+        create = ttk.Button(buttons, text="Build connection", state="disabled")
+        create.pack(side="right", padx=(8, 0))
+        ttk.Button(buttons, text="Cancel", command=window.destroy).pack(side="right")
+        state = {"draft": None}
+
+        def update_preview(*_):
+            target = destination.get()
+            try:
+                draft = build_native_connection_draft(
+                    self.native.points.rows, self.native.routes.rows, references,
+                    bones, point_index, target, destination_kind.get(),
+                    road_type.get(), world_prefix) if target else None
+            except ValueError as error:
+                draft = None
+                chain_preview.set(str(error) if target else
+                                  "Choose a destination to inspect existing BFRES paths.")
+            state["draft"] = draft
+            if not draft:
+                create.state(["disabled"])
+                return
+            chain = draft["chain"]
+            if not chain:
+                chain_preview.set(
+                    "No unique shortest BFRES path chain was found. Existing data is unchanged.")
+                create.state(["disabled"])
+                return
+            chain_preview.set(
+                f"Static path: {source_name} → " + " → ".join(
+                    [route_id[1:5] for route_id in chain] + [target]) +
+                f". {len(draft['route_rows'])} route-table row(s) will be added.")
+            create.state(["!disabled"] if road_type.get() in road_types else ["disabled"])
+
+        def submit():
+            draft = state.get("draft")
+            target = destination.get()
+            if not draft or target not in targets or road_type.get() not in road_types:
+                return
+            if point_index >= len(self.native.points.rows) or self.native.points.rows[point_index][1] != source_name:
+                messagebox.showerror("Cannot build route", "The selected source point changed; reopen the dialog.", parent=window)
+                return
+            point = self.native.points.rows[point_index]
+            destination_column = draft["destination_column"]
+            path_column = draft["path_column"]
+            if point[destination_column] or point[path_column]:
+                if not messagebox.askyesno(
+                        "Replace route fields?",
+                        f"Replace {source_name}'s selected destination and path-chain fields?\n\n"
+                        f"Destination: {point[destination_column] or '(empty)'}\n"
+                        f"Path chain: {point[path_column] or '(empty)'}\n\n"
+                        "The change will be one Undo step.", parent=window):
+                    return
+            try:
+                draft = build_native_connection_draft(
+                    self.native.points.rows, self.native.routes.rows, references,
+                    bones, point_index, target, destination_kind.get(),
+                    road_type.get(), world_prefix)
+            except ValueError as error:
+                messagebox.showerror("Cannot build route", str(error), parent=window)
+                update_preview()
+                return
+            point[draft["destination_column"]] = target
+            point[draft["path_column"]] = ",".join(draft["chain"])
+            self.native.routes.rows.extend(draft["route_rows"])
+            self.dirty = True
+            self._record_edit()
+            self.refresh()
+            self.status.set(
+                f"Drafted {source_name} → {target} with {len(draft['chain'])} existing BFRES path segment(s); "
+                f"added {len(draft['route_rows'])} route row(s). Static names only; verify traversal in Cemu.")
+            window.destroy()
+
+        for variable in (destination, destination_kind, road_type):
+            variable.trace_add("write", update_preview)
+        window.bind("<Return>", lambda _event: submit() if create.instate(("!disabled",)) else None)
+        window.bind("<Escape>", lambda _event: window.destroy())
+        window.grab_set()
+        window.wait_window()
 
     def add_route(self):
         if self.exporting:

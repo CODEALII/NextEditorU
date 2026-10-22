@@ -159,6 +159,64 @@ def build_native_route_row(route_id, road_type, available_route_ids,
     return [route_id, road_type.strip(), ""]
 
 
+def build_native_connection_draft(point_rows, route_rows, known_references,
+                                  known_bones, source_index, target,
+                                  destination_kind, road_type, world_prefix):
+    """Prepare a non-mutating point/path/route draft from existing BFRES IDs.
+
+    The draft is offered only when endpoint names describe one unique shortest
+    path and every missing route-table row can be built from an existing BFRES
+    segment. It does not infer game movement or unlock semantics.
+    """
+    if (type(source_index) is not int or not 0 <= source_index < len(point_rows) or
+            not isinstance(world_prefix, str) or not re.fullmatch(r"W[1-9]", world_prefix)):
+        raise ValueError("Choose a valid source point and world prefix")
+    source = point_rows[source_index]
+    if (not isinstance(source, (list, tuple)) or len(source) != 9 or
+            not isinstance(source[1], str) or not source[1].startswith(world_prefix)):
+        raise ValueError("The source must be a supported point in the selected world")
+    source_name = source[1]
+    if destination_kind not in ("normal", "secret"):
+        raise ValueError("Destination field must be normal or secret")
+    target_rows = [row for row in point_rows
+                   if isinstance(row, (list, tuple)) and len(row) == 9 and
+                   row[1] == target and row[1] != source_name and
+                   row[1].startswith(world_prefix)]
+    if len(target_rows) != 1:
+        raise ValueError("Choose one other point in the same world")
+
+    path_ids = native_macro_path_choices(known_references, known_bones, world_prefix)
+    chain = suggest_native_macro_path_chain(path_ids, source_name, target)
+    if not chain:
+        raise ValueError("No unique shortest BFRES path chain reaches this destination")
+
+    available = set(native_route_segment_choices(
+        route_rows, known_references, known_bones, world_prefix,
+        point_rows=point_rows))
+    existing = {
+        row[0] for row in route_rows
+        if isinstance(row, (list, tuple)) and len(row) == 3 and
+        isinstance(row[0], str) and _ROUTE_ID.fullmatch(row[0])
+    }
+    missing = [route_id for route_id in chain if route_id not in existing]
+    unavailable = [route_id for route_id in missing if route_id not in available]
+    if unavailable:
+        raise ValueError("BFRES path rows cannot be safely added: " + ", ".join(unavailable))
+    route_drafts = [build_native_route_row(route_id, road_type, available, route_rows)
+                    for route_id in missing]
+    destination_column = 3 if destination_kind == "normal" else 6
+    return {
+        "source_index": source_index,
+        "source": source_name,
+        "target": target,
+        "destination_kind": destination_kind,
+        "destination_column": destination_column,
+        "path_column": destination_column + 1,
+        "chain": tuple(chain),
+        "route_rows": route_drafts,
+    }
+
+
 def _tokens(value):
     return [token.strip() for token in value.split(",") if token.strip()]
 

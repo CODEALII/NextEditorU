@@ -410,6 +410,16 @@ class EditorSmokeTests(unittest.TestCase):
 
         self.assertEqual(dialog.result, "RWbad,RW102F001,RW101W102")
 
+    def test_selected_point_exposes_existing_path_connection_workflow(self):
+        self.app.tree.selection_set("point:0")
+        self.app.select_tree()
+        self.root.update()
+
+        buttons = [widget for widget in self.app.form.winfo_children()
+                   if isinstance(widget, ttk.Button)]
+        self.assertTrue(any(widget.cget("text") == "Build route connection…"
+                            for widget in buttons))
+
     def test_path_chain_dialog_returns_exact_original_when_untouched(self):
         original = " RWbad , RW101W102 , "
 

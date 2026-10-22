@@ -1,6 +1,7 @@
 import unittest
 
 from worldstudio.graph_validation import (
+    build_native_connection_draft,
     build_native_route_row,
     native_macro_path_choices,
     native_macro_path_chain_reaches,
@@ -17,6 +18,48 @@ def point(index, name, normal="", paths="", secret="", secret_paths=""):
 
 
 class NativeRouteDraftTests(unittest.TestCase):
+    def test_builds_nonmutating_connection_draft_from_unique_existing_path(self):
+        points = [point(0, "W101", "", "", "", ""),
+                  point(1, "W103")]
+        routes = [["RF001K001", "road", ""]]
+        references = {"RW101K001", "RK001W103", "RF001K001"}
+        bones = {"W101", "K001", "W103", "F001"}
+
+        draft = build_native_connection_draft(
+            points, routes, references, bones, 0, "W103", "normal", "road", "W1")
+
+        self.assertEqual(draft["chain"], ("RW101K001", "RK001W103"))
+        self.assertEqual(draft["destination_column"], 3)
+        self.assertEqual(draft["path_column"], 4)
+        self.assertEqual(draft["route_rows"], [
+            ["RW101K001", "road", ""], ["RK001W103", "road", ""]])
+        self.assertEqual(points[0][3:5], ["", ""])
+        self.assertEqual(routes, [["RF001K001", "road", ""]])
+
+    def test_connection_draft_only_adds_missing_route_rows_and_supports_secret_slot(self):
+        points = [point(0, "W101", secret="", secret_paths=""),
+                  point(1, "W103")]
+        routes = [["RW101K001", "road", ""]]
+        draft = build_native_connection_draft(
+            points, routes, {"RW101K001", "RK001W103"},
+            {"W101", "K001", "W103"}, 0, "W103", "secret", "road", "W1")
+
+        self.assertEqual(draft["destination_column"], 6)
+        self.assertEqual(draft["path_column"], 7)
+        self.assertEqual(draft["route_rows"], [["RK001W103", "road", ""]])
+
+    def test_connection_draft_rejects_tied_or_unavailable_paths(self):
+        points = [point(0, "W101"), point(1, "W103")]
+        tied = {"RW101K001", "RK001W103", "RW101K002", "RK002W103"}
+        bones = {"W101", "K001", "K002", "W103"}
+        with self.assertRaisesRegex(ValueError, "unique shortest"):
+            build_native_connection_draft(
+                points, [], tied, bones, 0, "W103", "normal", "road", "W1")
+        with self.assertRaisesRegex(ValueError, "road type"):
+            build_native_connection_draft(
+                points, [], {"RW101W103"}, {"W101", "W103"},
+                0, "W103", "normal", "", "W1")
+
     def test_macro_chain_status_checks_direct_and_multihop_order(self):
         refs = {"RW101K001", "RK001W103"}
         self.assertTrue(native_macro_path_chain_reaches(

@@ -11,7 +11,7 @@ Progress details and dated findings: [PROGRESS.md](PROGRESS.md) · [Runtime test
 ## What works today
 
 - Read Yaz0/SARC archives and export patched archives while preserving untouched members. Export manifests list every changed member with before/after SHA-256 hashes and byte sizes, alongside archive-level hashes.
-- Read and edit World 1 point and route tables; validate references before export. For one local destination, the path-chain editor can offer a user-confirmed unique shortest BFRES endpoint chain; ambiguous paths are left for manual editing, and these names do not establish in-game route behavior.
+- Read and edit World 1 point and route tables; validate references before export. The point editor can draft a normal or secret connection using a unique shortest existing BFRES endpoint chain, add its missing route-table rows, and apply the destination/path pair as one undoable edit. Ambiguous paths remain blocked; static names do not establish in-game route behavior.
 - Choose route movement types from the source archive's existing type values. Changed/new route rows with empty or unknown types are blocked from export; unchanged source values remain preserved.
 - Inspect supported BFRES skeletons and apply bounded bone-transform changes.
 - Export an experimental three-node progression patch using existing route data.
