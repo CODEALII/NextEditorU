@@ -1,5 +1,20 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Compare matched Cemu route runs from their evidence files
+
+- Added `tools/compare_cemu_runs.py` to require matching base RPX, Cemu binary,
+  controller, held-key sequence, timing, start label and baseline saves; verify
+  the modified pack against its installed copy and graph-profile preflight; and
+  compare operator-entered per-step labels and screenshot hashes. It also
+  reports save changes, while always leaving `gameplay_verified:false`.
+- Applying it to the older Clean/Chain movement reports correctly rejects them:
+  those reports predate executable/RPX hashes and per-step labels, and they did
+  not review the final direction. This establishes that the old records cannot
+  serve as the strict controlled comparison now required; it does not infer
+  failure of the route.
+- Synthetic comparator tests pass (**2 tests**); the full repository suite passes
+  **386 tests in 319.147 seconds**. No Cemu process was launched.
+
 ## 2026-10-22 — Record visible nodes during Cemu movement tests
 
 - Process-bound sequence runs now pause after every direction, including the

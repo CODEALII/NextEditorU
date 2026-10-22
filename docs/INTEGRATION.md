@@ -616,8 +616,8 @@ the user, so no new emulator instance was started for this change.
   ```
 
   Each run refuses another active Cemu process, waits for the exact game window
-  to be foreground before every input, and pauses after the first direction so
-  the operator can confirm the visible node. If `A` does not reach the same
+  to be foreground before every input, and records a visible location label at
+  every held step. If `A` does not reach the same
   expected W102 node in both runs, stop and record that difference instead of
   interpreting the following `D` result as a W102-to-W103 traversal. The
   runner independently enforces the profile/manifest/archive/save preflight
@@ -626,8 +626,19 @@ the user, so no new emulator instance was started for this change.
   (`N` also works when stdin is not an interactive terminal). The result JSON
   records the aborted gate, screenshots, saves and log hashes; an isolated Cemu
   started by the runner is closed normally, while an attached instance is left
-  running.
-  The command sequence is a ready protocol, not a new gameplay result.
+  running. Compare both result files afterward:
+
+  ```powershell
+  python tools/compare_cemu_runs.py local/evidence/cemu-input-test/clean-w102-link-result.json local/evidence/cemu-input-test/chain-w102-link-result.json --expected-pack-sha256 19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e --output local/evidence/cemu-input-test/w102-link-comparison.json
+  ```
+
+  The comparator checks matched game/emulator/controller/input/save hashes,
+  the modified installed archive and graph-profile gate, step labels and
+  screenshot hashes, and reports save changes. It always leaves
+  `gameplay_verified:false`: a human still reviews the images and route causality.
+  Historical reports without executable/RPX hashes or step labels are marked
+  non-comparable. The command sequence remains a ready protocol, not gameplay
+  evidence until the new runs are completed.
 
 ## Profile-provenance Cemu package — 2026-10-22
 

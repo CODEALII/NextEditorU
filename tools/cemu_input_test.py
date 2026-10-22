@@ -492,6 +492,7 @@ def run(args):
         'start_label': args.start_label,
         'pause_after_each_step': args.pause_after_each_step,
         'hold_ms': args.hold_ms,
+        'settle_wait_ms': round(getattr(args, 'settle_wait', 2.) * 1000),
         'navigation_key': args.navigation_key,
         'navigation_hold_ms': args.navigation_hold_ms,
         'baseline_save_hashes': save_hashes(profile),
@@ -687,6 +688,7 @@ def run(args):
                 report['events'].append({'time': timestamp(), 'action': 'sequence_key_down',
                                          'step': index, 'key': key,
                                          'hold_ms': args.hold_ms,
+        'settle_wait_ms': round(getattr(args, 'settle_wait', 2.) * 1000),
                                          'foreground_hwnd': foreground})
                 time.sleep(args.hold_ms / 1000.)
                 key_event(key, False)
