@@ -21,7 +21,9 @@
   GamePad profile used for the successful Chain traversal. The runner now
   accepts `--compare-controller-to <reference-profile>`; it checks exact
   controller-file bytes, records both hashes, and refuses to start Cemu if the
-  profiles differ.
+  profiles differ. New run reports also hash the selected Cemu executable and
+  RPX so results bind to exact base-game/emulator files as well as the pack,
+  controller profile, save data and game log.
 - Evidence is in `local/evidence/cemu-input-test/`:
   `clean-pro-chain-route-compare-20261022-r1-result.json`,
   `clean-pro-chain-route-compare-20261022-r1-step-1-a-before.bmp`, and

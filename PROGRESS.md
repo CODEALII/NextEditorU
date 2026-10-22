@@ -22,8 +22,12 @@
   reference profile's exact controller file. A mismatch is recorded and blocks
   Cemu launch. Tests cover equal profiles, emulated-device mismatch and
   prelaunch failure evidence.
-- Full repository regression after this runner change: **363 tests passed**
-  (`python -m unittest discover -s tests`, 317.356 seconds).
+- Runtime reports now also include SHA-256 hashes for the selected Cemu
+  executable and RPX, binding future observations to exact game/emulator files.
+- Full repository regression after the controller-comparison guard: **363
+  tests passed** (`python -m unittest discover -s tests`, 317.356 seconds).
+- After adding Cemu/RPX hash fields, the focused runner tests passed **19/19**
+  and Python compilation plus `git diff --check` passed.
 
 ## 2026-10-22 — Verify the embedded viewport and matched Cemu movement
 

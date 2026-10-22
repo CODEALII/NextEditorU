@@ -113,6 +113,9 @@ class CemuWindowSelectionTests(unittest.TestCase):
             launch.assert_not_called()
             result = json.loads((screenshot_dir / "controller-mismatch-result.json").read_text(
                 encoding="utf-8"))
+            self.assertEqual(result["rpx_sha256"], hashlib.sha256(b"test-rpx").hexdigest())
+            self.assertEqual(result["cemu_executable_sha256"],
+                             hashlib.sha256(b"test-executable").hexdigest())
             self.assertFalse(result["controller_comparison"]["matches"])
             self.assertEqual(result["controller_comparison"]["reference_controller_sha256"],
                              hashlib.sha256(reference_controller.read_bytes()).hexdigest())
