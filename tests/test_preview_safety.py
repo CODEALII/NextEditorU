@@ -174,7 +174,7 @@ console.log(JSON.stringify([
         self.assertIn("Could not initialize the WebGL renderer", page)
         self.assertIn("approximate material colors", page)
         self.assertIn("aUv", page)
-        self.assertIn("texture2D(uTexture,vUv)", page)
+        self.assertIn("texture2D(uTexture,vBaseUv)", page)
         self.assertIn("texel.a<0.5)discard", page)
         self.assertNotIn("https://", page)
         self.assertNotIn("</script><script>alert(1)", page)
@@ -580,12 +580,34 @@ console.log(JSON.stringify([point,edge,meshIndexFromPixel([0,0,0,255])]));
         page = build_document({"shapes": [], "nodes": [], "routes": []})
         self.assertIn("pickProgram=program(", page)
         self.assertIn("gl.readPixels(point[0],point[1],1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel)", page)
-        self.assertIn("texture2D(uTexture,vUv).a<0.5", page)
+        self.assertIn("texture2D(uTexture,vBaseUv).a<0.5", page)
+        self.assertIn("aBaseUv", page)
         self.assertIn("gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0)", page)
         self.assertIn("selectMesh(meshes[index])", page)
         self.assertIn("previous.button===0&&Math.hypot(e.clientX-previous.startX,e.clientY-previous.startY)<4", page)
         self.assertIn("Drag a native world point to move", page)
         self.assertIn("pickMeshAt", page)
+
+    def test_route_base_texture_uvs_apply_supported_srt_and_reject_unsupported_modes(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise route texture transforms")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        start = page.index("function routeBaseTextureUvs(")
+        end = page.index("\nfunction vertexColorMetrics(", start)
+        helper = page[start:end]
+        probe = helper + r"""
+const uv=new Float32Array([0.25,0.75,1,0]);
+const shifted=routeBaseTextureUvs(uv,{mode:0,scale:[1,1],rotation:0,translation:[0,-29]});
+const unsupported=routeBaseTextureUvs(uv,{mode:1,scale:[1,1],rotation:0,translation:[0,-29]});
+if(Array.from(shifted).join(',')!=='0.25,-28.25,1,-29')throw Error('route SRT not applied');
+if(unsupported!==uv)throw Error('unsupported SRT mode changed UVs');
+console.log('ok');
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True, text=True)
+        self.assertEqual(result.stdout.strip(), "ok")
+        self.assertIn("shape.depthBias===true?shape.textureSrt?.texmtx0:null", page)
+        self.assertIn("texture2D(uTexture,vBaseUv)", page)
 
     def test_focus_mesh_centers_the_camera_and_uses_mesh_radius(self):
         node = shutil.which("node")

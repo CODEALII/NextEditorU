@@ -1,5 +1,24 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Apply verified route texture transforms in the 3D viewport
+
+- The route surfaces' BFRES materials bind base color to `_u0` / `texmtx0`.
+  Their local SRT records use mode 0, unit scale, zero rotation, and per-route
+  V translations. The viewer had displayed these values as metadata but sampled
+  the albedo with raw UVs, which left visible cutout gaps along several roads.
+- Added a separate base-map UV stream for named route surfaces. It applies the
+  supported mode-0 scale and translation during rendering and uses the same
+  coordinates during texture-aware picking. Normal/mask diagnostics continue
+  to use raw UVs; unsupported SRT modes and rotations safely keep raw UVs.
+- A saved same-angle WebGL comparison in `local/evidence/route-orbit-sweep-srt`
+  shows a visibly more continuous route near W102 than the raw-UV view. Small
+  W1M0 fragments remain; this does not reproduce route-mask, lightmap, or other
+  game shader operations, and does not establish Cemu behavior.
+- The selectable graph remains embedded in the persistent 3D viewport and
+  synchronized with the editor list; the separate 2D graph is optional.
+- Verification: `python -m unittest tests.test_preview_safety -q` passes 42
+  tests, including supported/unsupported UV transforms and picking alignment.
+
 ## 2026-10-22 — Narrow the remaining W1 road-preview artifacts
 
 - A controlled WebGL comparison confirms the route polygon offset fixes some
