@@ -1,5 +1,21 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Reinforce road depth while editing in the 3D viewport
+
+- Native road surfaces now combine the existing route-only polygon offset with
+  a small clip-space depth bias in both rendering and picking. This targets
+  camera-motion flicker where the road and grass surfaces nearly overlap; a
+  fresh live-app orbit check is still needed before calling the visual issue
+  resolved.
+- The Graph Editor remains inside the persistent WebGL viewport, with matching
+  selection and point dragging in the graph, 3D world, and editor list. The
+  separate graph canvas is no longer part of the primary native editor layout.
+- Verification: the focused preview and embedded-editor suites pass **95**
+  tests, including checks that the route bias is restricted to native road
+  surfaces and matches the picking pass. A fresh live WebView orbit could not
+  be captured because the browser policy blocks local-file navigation; Cemu
+  gameplay was not retested here.
+
 ## 2026-10-22 — Overlay the graph in the 3D viewport and stabilize road depth
 
 - The graph no longer occupies a separate Tk canvas beside the world. It now
