@@ -4,6 +4,8 @@ from worldstudio.graph_validation import (
     apply_native_connection_draft,
     build_native_connection_draft,
     build_native_route_row,
+    native_graph_route_editor_id,
+    native_graph_route_editor_ids,
     native_macro_path_choices,
     native_macro_path_chain_reaches,
     suggest_native_macro_path_chain,
@@ -19,6 +21,43 @@ def point(index, name, normal="", paths="", secret="", secret_paths=""):
 
 
 class NativeRouteDraftTests(unittest.TestCase):
+    def test_graph_edge_maps_to_first_segment_in_unique_bfres_chain(self):
+        route = {"id": "W101:normal:W102", "start": "W101", "end": "W102"}
+        rows = [["RW101K001", "normal", ""], ["RK001W102", "normal", ""]]
+
+        self.assertEqual(native_graph_route_editor_id(
+            route, rows, ["RW101K001", "RK001W102"]), "segment:0")
+
+    def test_graph_edge_maps_exact_route_id_before_chain_inference(self):
+        route = {"id": "RW101W102", "start": "W101", "end": "W102"}
+        rows = [["RW101W102", "normal", ""]]
+
+        self.assertEqual(native_graph_route_editor_id(route, rows, []), "segment:0")
+
+    def test_graph_edge_with_ambiguous_bfres_chains_stays_unselected(self):
+        route = {"id": "W101:normal:W102", "start": "W101", "end": "W102"}
+        rows = [["RW101K001", "normal", ""], ["RK001W102", "normal", ""],
+                ["RW101K002", "normal", ""], ["RK002W102", "normal", ""]]
+
+        self.assertEqual(native_graph_route_editor_id(
+            route, rows, [row[0] for row in rows]), "")
+
+    def test_shared_route_prefix_maps_each_graph_edge_to_its_unique_segment(self):
+        routes = [{"id": "W102:normal:W1T0", "start": "W102", "end": "W1T0"},
+                  {"id": "W102:normal:W1K1", "start": "W102", "end": "W1K1"}]
+        rows = [["RW102K201", "normal", ""], ["RK201W1T0", "normal", ""],
+                ["RK201W1K1", "normal", ""]]
+
+        self.assertEqual(native_graph_route_editor_ids(routes, rows),
+                         ["segment:1", "segment:2"])
+
+    def test_duplicate_graph_edges_do_not_share_a_false_selection(self):
+        routes = [{"id": "W101:normal:W102", "start": "W101", "end": "W102"},
+                  {"id": "W101:secret:W102", "start": "W101", "end": "W102"}]
+        rows = [["RW101W102", "normal", ""]]
+
+        self.assertEqual(native_graph_route_editor_ids(routes, rows), ["", ""])
+
     def test_builds_nonmutating_connection_draft_from_unique_existing_path(self):
         points = [point(0, "W101", "", "", "", ""),
                   point(1, "W103")]

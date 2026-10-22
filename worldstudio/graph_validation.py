@@ -6,7 +6,7 @@ identify the playable entry and required locations instead of treating every
 point as a level node.
 """
 import hashlib
-from collections import deque
+from collections import Counter, deque
 import json
 import re
 from pathlib import Path
@@ -469,6 +469,58 @@ def suggest_native_macro_path_chain(path_ids, start, target):
         result.append(route_id)
     result.reverse()
     return result
+
+
+def native_graph_route_editor_id(route, route_rows, path_ids):
+    """Map a displayed point-to-point edge to its first editable route row.
+
+    Graph edges are derived from point CSV destinations, while the route table
+    stores BFRES segment IDs. Resolve a unique shortest segment chain and use
+    its first segment as the row selection; ambiguous or incomplete chains stay
+    unselectable rather than highlighting an unrelated segment.
+    """
+    if not isinstance(route, dict):
+        return ""
+    route_index = {
+        row[0]: index for index, row in enumerate(route_rows)
+        if (isinstance(row, (list, tuple)) and row and
+            isinstance(row[0], str) and _ROUTE_ID.fullmatch(row[0]))
+    }
+    route_id = route.get("id")
+    if route_id in route_index:
+        return f"segment:{route_index[route_id]}"
+    chain = suggest_native_macro_path_chain(
+        path_ids, route.get("start"), route.get("end"))
+    if not chain:
+        return ""
+    matched = next((segment for segment in chain if segment in route_index), None)
+    return f"segment:{route_index[matched]}" if matched else ""
+
+
+def native_graph_route_editor_ids(routes, route_rows):
+    """Map graph edges to distinct route rows where their chains allow it."""
+    route_index = {
+        row[0]: index for index, row in enumerate(route_rows)
+        if (isinstance(row, (list, tuple)) and row and
+            isinstance(row[0], str) and _ROUTE_ID.fullmatch(row[0]))
+    }
+    segment_ids = list(route_index)
+    chains = []
+    for route in routes:
+        if not isinstance(route, dict):
+            chains.append([])
+            continue
+        direct = route.get("id")
+        chain = ([direct] if direct in route_index else
+                 suggest_native_macro_path_chain(
+                     segment_ids, route.get("start"), route.get("end")) or [])
+        chains.append(chain)
+    counts = Counter(segment for chain in chains for segment in set(chain))
+    editor_ids = []
+    for chain in chains:
+        matched = next((segment for segment in chain if counts[segment] == 1), None)
+        editor_ids.append(f"segment:{route_index[matched]}" if matched else "")
+    return editor_ids
 
 
 def _known_local_inventory(point_rows, route_rows, known_references, world_prefix):

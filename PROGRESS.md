@@ -1,5 +1,27 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Connect the real W1 graph edges to editable route rows
+
+- The embedded graph previously drew the real W1 point-to-point routes but
+  left their editor IDs empty: CSV graph IDs such as `W101:normal:W102` did not
+  match BFRES segment rows such as `RW101W102`. Graph routes now resolve through
+  a unique shortest chain from the actual route table. Each edge selects a
+  route row that is unique among the visible graph edges; ambiguous duplicates
+  stay unbound rather than highlighting a different edge.
+- Built the real local W1 scene and loaded it in headless Chrome/SwiftShader:
+  42 shapes, 12 graph points, and all 8 displayed routes mapped to distinct
+  editor rows. Clicking a graph point selected `point:0`; clicking a graph
+  edge selected `segment:119`. Eight orbit steps completed with no JavaScript
+  errors, WebGL error overlay, or GL error. Ignored captures are in
+  `local/evidence/route-depth-bias-4/`.
+- The native Tk/WebView2 host and Cemu have not been visually rechecked. The
+  camera-angle screenshots still show source-level texture/geometry artifacts
+  near W1M0, so this resolves graph selection mapping but does not establish
+  that the road shimmer is fully fixed.
+- Verification: graph-validation, preview, and editor-smoke suites pass **121
+  tests**. The captured local W1 page also confirms all eight visible routes
+  have distinct editor-row IDs.
+
 ## 2026-10-22 — Make the in-world graph editor easier to use and reduce route z-fighting
 
 - The graph remains an always-visible editor overlay inside the embedded 3D

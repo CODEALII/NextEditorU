@@ -24,6 +24,7 @@ from .graph_validation import (
     build_native_route_row,
     native_macro_path_choices,
     native_macro_path_chain_reaches,
+    native_graph_route_editor_ids,
     suggest_native_macro_path_chain,
     native_point_path_route_ids,
     native_road_type_choices,
@@ -1470,13 +1471,18 @@ class WorldStudio(ttk.Frame):
                 nodes = [{"id": n["id"], "editorId": (f"point:{point_index[n['id']]}" if n["id"] in point_index else f"bone:{n['id']}"),
                           "x": float(n["x"]), "y": float(n["y"]), "z": float(n["z"])}
                          for n in visible_nodes.values()]
-                route_index = {row[0]: index for index, row in enumerate(self.native.routes.rows) if row}
-                for route in graph["routes"]:
-                    if route.get("start") in visible_nodes and route.get("end") in visible_nodes:
-                        routes.append({"id": route.get("id", ""),
-                                       "editorId": f"segment:{route_index[route['id']]}" if route.get("id") in route_index else "",
-                                       "start": route["start"], "end": route["end"],
-                                       "kind": "secret" if route.get("unlock") == "secret" else "normal"})
+                graph_routes = [
+                    route for route in graph["routes"]
+                    if route.get("start") in visible_nodes and
+                    route.get("end") in visible_nodes
+                ]
+                graph_route_editor_ids = native_graph_route_editor_ids(
+                    graph_routes, self.native.routes.rows)
+                for route, editor_id in zip(graph_routes, graph_route_editor_ids):
+                    routes.append({"id": route.get("id", ""),
+                                   "editorId": editor_id,
+                                   "start": route["start"], "end": route["end"],
+                                   "kind": "secret" if route.get("unlock") == "secret" else "normal"})
                 world_label = preview_model_name.removesuffix("_World")
                 title = f"{self.native.source.name} · {world_label} world"
                 model_name = f"{preview_model_name} • native BFRES static geometry"
