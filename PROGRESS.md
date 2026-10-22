@@ -29,6 +29,13 @@
   during some orbit angles. The route shader's mask/material behavior remains
   unresolved, so road rendering is not claimed fully fixed. Course clearing,
   unlock progression, and save/reload behavior remain untested.
+- Rejected two same-angle route experiments: writing alpha-blended roads into
+  the depth buffer made no visible improvement, and multiplying their albedo
+  alpha by the stored `_o1` edge-mask channel made road strips thinner and more
+  discontinuous. The mask stays diagnostic until its shader role and UV
+  association are established. The ignored comparisons are under
+  `local/evidence/route-depth-write-candidate-20261022/` and
+  `local/evidence/route-mask-candidate-20261022/`.
 
 ## 2026-10-22 — Bound repeat-wrapped route UV offsets in the embedded viewport
 
