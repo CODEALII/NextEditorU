@@ -1,5 +1,19 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Preserve Cemu gate screenshots and record a startup stop
+
+- Rechecked the live isolated Chain run. It stopped at the overworld gate on
+  **Begin Story Mode?** before any route or course inputs. The Chain pack and
+  controller still matched their exact reference hashes, both save hashes
+  stayed unchanged, and the result correctly records gameplay as unverified.
+- The Cemu runner now saves the exact game window after each focus, title, map,
+  or course-entry gate is answered, whether the operator continues or aborts,
+  and adds that image to the report. This closes the evidence gap exposed by
+  this startup stop.
+- Verification: all **28** Cemu window/runner tests pass, including an abort
+  gate screenshot/report regression. The current Cemu run was stopped safely;
+  route traversal still needs a fresh start that reaches the world map.
+
 ## 2026-10-22 — Reinforce road depth while editing in the 3D viewport
 
 - Native road surfaces now combine the existing route-only polygon offset with

@@ -1,5 +1,30 @@
 # Runtime evidence and test protocol
 
+## Chain startup stopped before reaching the world map — 2026-10-22
+
+- The isolated `build/cemu-course-controls-test-20261022` run launched one Cemu
+  process (PID 24704) with the `WorldStudioChain` archive. The installed pack
+  hash matched the requested build:
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`. Its
+  GamePad controller hash matched the Clean reference:
+  `7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b`.
+- After the title transition and save/controller menus, Computer Use observed
+  the **Begin Story Mode?** screen. Short Z, Return, and 3 taps did not reach
+  the world map. The runner was stopped at its `overworld_visible` gate; it sent
+  no WASD movement or course actions, and recorded `gameplay_verified:false`.
+  The report is
+  `local/evidence/cemu-input-test/chain-course-controls-20261022-result.json`.
+- Personal and common save hashes matched their baselines exactly:
+  `5de5ecae3f91c13841ac5a16f0511b7af765ff63628cb95ce65bde721689c9df` and
+  `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`.
+  The runner captured the launch/title screens but did not save the later
+  controller screen, so that screen is documented from the live observation
+  and has no durable image in this run.
+- The runner now saves a screenshot immediately after each focus, title, map,
+  or course-entry confirmation gate is answered, including an abort, and
+  records its path in the JSON report. The next startup attempt will preserve
+  the exact screen that prevented the map test from starting.
+
 ## Screenshot-reviewed input inside a course — 2026-10-22
 
 `tools/cemu_input_test.py` accepts repeatable `--level-action KEY[+KEY]:MS`

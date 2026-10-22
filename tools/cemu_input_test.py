@@ -329,12 +329,27 @@ def wait_for_confirmation(prompt, *, pid, process=None):
         time.sleep(0.05)
 
 
-def confirm_or_abort(report, prompt, gate, *, pid, process=None):
-    """Record a manual gate and let the operator stop without sending more input."""
+def confirm_or_abort(report, prompt, gate, *, pid, process=None, window=None,
+                     screenshot_path=None):
+    """Record a manual gate and preserve the exact screen before continuing or aborting."""
     confirmed = wait_for_confirmation(prompt, pid=pid, process=process)
-    report['events'].append({'time': timestamp(),
-                             'action': 'manual_gate_confirmed' if confirmed else 'manual_gate_aborted',
-                             'gate': gate})
+    screenshot = None
+    if window is not None and screenshot_path is not None:
+        screenshot_path = Path(screenshot_path)
+        screenshot_path.parent.mkdir(parents=True, exist_ok=True)
+        capture_window(window['hwnd'], screenshot_path)
+        screenshot = str(screenshot_path.resolve())
+        report.setdefault('screenshots', {})[f'gate_{gate}'] = screenshot
+        report.setdefault('events', []).append({
+            'time': timestamp(), 'action': 'manual_gate_screenshot',
+            'gate': gate, 'hwnd': int(window['hwnd']), 'screenshot': screenshot,
+        })
+    gate_event = {'time': timestamp(),
+                  'action': 'manual_gate_confirmed' if confirmed else 'manual_gate_aborted',
+                  'gate': gate}
+    if screenshot:
+        gate_event['screenshot'] = screenshot
+    report.setdefault('events', []).append(gate_event)
     if not confirmed:
         report['status'] = 'aborted'
         report['abort_gate'] = gate
@@ -615,14 +630,18 @@ def run(args):
                                  window['rect'].right, window['rect'].bottom]
         report['screenshots'] = {}
 
+        def confirm_gate(prompt, gate):
+            screenshot = args.screenshot_dir / f'{args.case}-gate-{gate}.bmp'
+            return confirm_or_abort(report, prompt, gate, pid=pid, process=process,
+                                    window=window, screenshot_path=screenshot)
+
         title_capture = args.screenshot_dir / f'{args.case}-launch.bmp'
         capture_window(window['hwnd'], title_capture)
         report['screenshots']['launch'] = str(title_capture.resolve())
         report['events'].append({'time': timestamp(), 'action': 'window_capture_before_focus',
                                  'hwnd': int(window['hwnd']), 'pid': pid})
         if getattr(args, 'pause_for_focus', False):
-            if not confirm_or_abort(report, focus_confirmation_prompt(),
-                                    'focus_activation', pid=pid, process=process):
+            if not confirm_gate(focus_confirmation_prompt(), 'focus_activation'):
                 return
         foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
         report['events'].append({'time': timestamp(), 'action': 'focus_verified',
@@ -663,12 +682,11 @@ def run(args):
                                          else 'title_a_ready_delay',
                                          'delay_ms': args.title_a_delay_ms})
             else:
-                if not confirm_or_abort(
-                        report,
+                if not confirm_gate(
                         ('Inspect the exact Cemu window. When "Press 2!" is visible, press Enter here; N/Esc aborts: '
                          if click_title else
                          'Inspect the exact Cemu window. When "Press A!" is visible, press Enter here; N/Esc aborts: '),
-                        'title_screen', pid=pid, process=process):
+                        'title_screen'):
                     return
             foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
             action = advance_title(window, click=click_title,
@@ -690,16 +708,14 @@ def run(args):
             report['screenshots']['after_title_click' if action == 'mouse_click'
                                   else 'after_title_a'] = str(title_advance.resolve())
         if args.attach:
-            if not confirm_or_abort(
-                    report,
+            if not confirm_gate(
                     'Verify the attached Cemu window shows the intended overworld; Enter continues, N/Esc aborts: ',
-                    'overworld_visible', pid=pid, process=process):
+                    'overworld_visible'):
                 return
         else:
-            if not confirm_or_abort(
-                    report,
+            if not confirm_gate(
                     'Pass the title/start screens. When the intended overworld is visible, press Enter; N/Esc aborts: ',
-                    'overworld_visible', pid=pid, process=process):
+                    'overworld_visible'):
                 return
         foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
         report['events'].append({'time': timestamp(), 'action': 'overworld_focus_verified',
@@ -707,8 +723,7 @@ def run(args):
         map_capture = args.screenshot_dir / f'{args.case}-map-check.bmp'
         capture_window(window['hwnd'], map_capture)
         report['screenshots']['map_check'] = str(map_capture.resolve())
-        if not confirm_or_abort(report, map_confirmation_prompt(args.start_label),
-                                'starting_node', pid=pid, process=process):
+        if not confirm_gate(map_confirmation_prompt(args.start_label), 'starting_node'):
             return
 
         before = args.screenshot_dir / f'{args.case}-before-{"".join(args.keys or args.key)}.bmp'
@@ -777,10 +792,9 @@ def run(args):
             capture_window(window['hwnd'], after)
             report['screenshots']['after'] = str(after.resolve())
         if args.enter_level:
-            if not confirm_or_abort(
-                    report,
+            if not confirm_gate(
                     'Verify Mario is on the intended course node. Enter sends Z/A once; N/Esc aborts: ',
-                    'level_entry', pid=pid, process=process):
+                    'level_entry'):
                 return
             foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
             key_event('z', True)
@@ -794,10 +808,9 @@ def run(args):
             capture_window(window['hwnd'], level_capture)
             report['screenshots']['level_result'] = str(level_capture.resolve())
             if report['course_actions']:
-                if not confirm_or_abort(
-                        report,
+                if not confirm_gate(
                         'Review the saved course-start screenshot. Press Enter only when Mario is at the expected start; N/Esc aborts: ',
-                        'course_start', pid=pid, process=process):
+                        'course_start'):
                     return
                 for index, action in enumerate(report['course_actions'], 1):
                     keys = action['keys']

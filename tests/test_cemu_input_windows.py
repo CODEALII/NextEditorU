@@ -35,6 +35,26 @@ class CemuWindowSelectionTests(unittest.TestCase):
         self.assertIn("Activate the exact Cemu window through Computer Use", prompt)
         self.assertIn("before any game input", prompt)
 
+    def test_aborted_manual_gate_saves_the_observed_cemu_window(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report = {"screenshots": {}, "events": []}
+            screenshot = Path(temporary) / "case-gate-overworld_visible.bmp"
+            window = {"hwnd": 4242}
+            with patch.object(self.cemu_input_test, "wait_for_confirmation", return_value=False), \
+                    patch.object(self.cemu_input_test, "capture_window") as capture:
+                confirmed = self.cemu_input_test.confirm_or_abort(
+                    report, "continue? ", "overworld_visible", pid=99,
+                    process=None, window=window, screenshot_path=screenshot)
+
+        self.assertFalse(confirmed)
+        capture.assert_called_once_with(4242, screenshot)
+        self.assertEqual(report["abort_gate"], "overworld_visible")
+        self.assertEqual(report["screenshots"]["gate_overworld_visible"],
+                         str(screenshot.resolve()))
+        self.assertEqual([event["action"] for event in report["events"]], [
+            "manual_gate_screenshot", "manual_gate_aborted",
+        ])
+
     def test_course_action_parses_a_bounded_single_key(self):
         self.assertEqual(self.cemu_input_test.parse_course_action("d:1200"), {
             "keys": ["d"], "hold_ms": 1200,
