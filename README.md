@@ -2,7 +2,7 @@
 
 **A research and editing toolkit for New Super Mario Bros. U world maps.**
 
-World Studio reads and edits selected world-map resources, builds experimental topology and terrain patches, and provides an integrated desktop editor with a persistent 3D world viewport. A matched Cemu test from the same tower and with identical held inputs reached Tilted Tunnel on Clean and Blooper’s Secret Lair on Chain, verifying a changed route destination; a separate Chain run entered Blooper’s Secret Lair. Exact in-game point IDs, level completion, progression, save persistence, terrain behavior, and a complete playable custom overworld are not yet verified.
+World Studio reads and edits selected world-map resources, builds experimental topology and terrain patches, and provides an integrated desktop editor with a persistent 3D world viewport. A matched Cemu test from the same tower and with identical held inputs reached Tilted Tunnel on Clean and Blooper’s Secret Lair on Chain, verifying a changed route destination; a separate Chain run entered Blooper’s Secret Lair. The experimental terrain projector now dampens height edits that would invert existing W1 grass faces in the offline mesh check. Its updated appearance and collision have not yet been confirmed in Cemu. Exact in-game point IDs, level completion, progression, save persistence, and a complete playable custom overworld are not yet verified.
 
 ![World Studio project progress dashboard](docs/progress.svg)
 
@@ -35,7 +35,7 @@ For the integrated viewport, the embedded graph inset, editor list, optional 2D 
 
 ## Current runtime status
 
-Matched process-bound Cemu tests started Clean and Chain at Crushing-Cogs Tower, with identical GamePad mappings, unchanged identical saves, and the same held `A → S → W` sequence (2,000 ms per direction). Clean reached **Acorn Plains-2 — Tilted Tunnel**; Chain reached **Blooper’s Secret Lair**. A separate Chain run entered Blooper’s Secret Lair and showed side-scrolling gameplay. Cemu does not show internal point IDs, so the W102/W103 archive mapping is still inferred. Course completion, unlock progression, post-clear save persistence, and patched terrain appearance remain unverified. The earlier Mainlight terrain build showed dark-green overlaps; the current exporter preserves source topology and UVs, but terrain rendering and collision still need a Cemu check. See [the integration log](docs/INTEGRATION.md).
+Matched process-bound Cemu tests started Clean and Chain at Crushing-Cogs Tower, with identical GamePad mappings, unchanged identical saves, and the same held `A → S → W` sequence (2,000 ms per direction). Clean reached **Acorn Plains-2 — Tilted Tunnel**; Chain reached **Blooper’s Secret Lair**. A separate Chain run entered Blooper’s Secret Lair and showed side-scrolling gameplay. Cemu does not show internal point IDs, so the W102/W103 archive mapping is still inferred. Course completion, unlock progression, post-clear save persistence, and patched terrain appearance remain unverified. The prior Mainlight terrain build had 905 faces inverted by height projection; the current offline exporter limits those height changes while preserving the source topology and UVs. The resulting terrain appearance and collision still need a Cemu check. See [the integration log](docs/INTEGRATION.md) and [the dated progress log](PROGRESS.md).
 
 ## Get started
 

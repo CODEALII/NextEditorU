@@ -581,12 +581,57 @@ def _recompute_vertex_normals(vertices, indices, fallback_normals):
     return result
 
 
+def _limit_height_displacements(vertices, indices, height_displacements, *, max_iterations=32):
+    """Dampen local height edits that would flip or collapse existing faces."""
+    factors = [1.] * len(vertices)
+    triangles = [tuple(indices[offset:offset + 3])
+                 for offset in range(0, len(indices), 3)]
+    source_normals = []
+    for a, b, c in triangles:
+        pa, pb, pc = vertices[a], vertices[b], vertices[c]
+        ab = [pb[axis] - pa[axis] for axis in range(3)]
+        ac = [pc[axis] - pa[axis] for axis in range(3)]
+        normal = (ab[1] * ac[2] - ab[2] * ac[1],
+                  ab[2] * ac[0] - ab[0] * ac[2],
+                  ab[0] * ac[1] - ab[1] * ac[0])
+        source_normals.append(normal)
+
+    for _ in range(max_iterations):
+        invalid = 0
+        for (a, b, c), source_normal in zip(triangles, source_normals):
+            source_area_squared = sum(value * value for value in source_normal)
+            if source_area_squared <= 1e-10:
+                continue
+            pa, pb, pc = (vertices[index] for index in (a, b, c))
+            ya = pa[1] + height_displacements[a] * factors[a]
+            yb = pb[1] + height_displacements[b] * factors[b]
+            yc = pc[1] + height_displacements[c] * factors[c]
+            abx, aby, abz = pb[0] - pa[0], yb - ya, pb[2] - pa[2]
+            acx, acy, acz = pc[0] - pa[0], yc - ya, pc[2] - pa[2]
+            normal = (aby * acz - abz * acy,
+                      abz * acx - abx * acz,
+                      abx * acy - aby * acx)
+            dot = sum(normal[axis] * source_normal[axis] for axis in range(3))
+            area_squared = sum(value * value for value in normal)
+            if dot > 0. and area_squared >= source_area_squared * 1e-8:
+                continue
+            invalid += 1
+            for index in (a, b, c):
+                if height_displacements[index] != 0.:
+                    factors[index] *= .5
+        if invalid == 0:
+            return factors
+    raise ValueError('Terrain projection would invert or collapse existing triangles')
+
+
 def _apply_topology_preserving_patch(data, *, start, stride, capacity, position_offset,
                                      normal_offset, indices, patch_triangles, source_points,
                                      fallback_normals, shape_offset,
                                      bounds_start, bounds_count, edge_blend_distance, report):
     """Displace only existing upward-facing terrain vertices under the OBJ surface."""
     normals = [tuple(normal) for normal in fallback_normals]
+    original_points = list(source_points)
+    height_displacements = [0.] * len(source_points)
     changed = 0
     blended = 0
     for index, point in enumerate(source_points):
@@ -605,10 +650,23 @@ def _apply_topology_preserving_patch(data, *, start, stride, capacity, position_
         if factor < 0.999:
             blended += 1
         if abs(point[1] - height) > 1e-5:
-            source_points[index] = (point[0], height, point[2])
+            height_displacements[index] = height - point[1]
             changed += 1
     if changed == 0:
         raise ValueError('Terrain patch does not overlap upward-facing vertices in the target shape')
+
+    displacement_factors = _limit_height_displacements(
+        original_points, indices, height_displacements)
+    topology_limited = 0
+    changed = 0
+    for index, (point, displacement, factor) in enumerate(zip(
+            original_points, height_displacements, displacement_factors)):
+        if factor < 0.999:
+            topology_limited += 1
+        height = point[1] + displacement * factor
+        if abs(point[1] - height) > 1e-5:
+            source_points[index] = (point[0], height, point[2])
+            changed += 1
 
     normals = _recompute_vertex_normals(source_points, indices, fallback_normals)
     lo = [min(point[axis] for point in source_points) for axis in range(3)]
@@ -631,6 +689,8 @@ def _apply_topology_preserving_patch(data, *, start, stride, capacity, position_
         'vertices': capacity,
         'vertices_displaced': changed,
         'vertices_edge_blended': blended,
+        'vertices_topology_limited': topology_limited,
+        'minimum_displacement_scale': min(displacement_factors, default=1.),
         'edge_blend_distance': edge_blend_distance,
         'triangles': len(indices) // 3,
         'vertex_capacity': capacity,

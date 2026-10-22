@@ -1,5 +1,28 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Prevent projected terrain from flipping existing faces
+
+- The previous live terrain pack produced dark overlaps and holes. Inspection of
+  the local W1 grass mesh found **905 inverted triangles** after the experimental
+  height projection. The cause was large local height changes folding the
+  preserved triangle topology.
+- Added a topology guard that progressively dampens only height displacements
+  contributing to flipped or collapsed faces. It keeps the source index buffer,
+  UVs and vertex layout intact, then regenerates normals and bounds. The local W1
+  projection now reports zero flipped source faces; four already-degenerate
+  source faces remain unchanged.
+- Added a synthetic regression for displacement damping and a local-dump test for
+  W1 face orientation. Both pass. This is an offline mesh result, not proof that
+  the patch looks correct or collides correctly in game.
+- Cemu retest is pending. The modified archive SHA-256 is
+  `5af4ad56ec51285fa642672782b770d487b524ac68c0710215f7addce00dc567`.
+  The isolated clean/modified save copies match (`personal`:
+  `5de5ecae3f91c13841ac5a16f0511b7af765ff63628cb95ce65bde721689c9df`,
+  `common`: `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`).
+  An initial automated run failed its exact-window focus check before capturing
+  the map; a follow-up launch reached the title/cutscene but did not complete the
+  runner's manual map-confirmation gate. No visual terrain comparison is claimed.
+
 ## 2026-10-22 — Stabilize native road surfaces and expose the in-world graph control
 
 - Replaced the slope-dependent polygon offset on native route meshes with a small

@@ -167,6 +167,20 @@ class MeshTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'does not overlap'):
             replace_rigid_mesh(fixture(), far_patch, self.faces, preserve_topology=True)
 
+    def test_height_displacements_are_dampened_before_they_flip_a_source_face(self):
+        source = [(0., 0., 0.), (1., 1., 0.), (2., 0., 0.)]
+        factors = mesh._limit_height_displacements(
+            source, [0, 1, 2], [0., -5., 0.])
+
+        adjusted = [(point[0], point[1] + displacement * factor, point[2])
+                    for point, displacement, factor in zip(
+                        source, [0., -5., 0.], factors)]
+        before = mesh._recompute_vertex_normals(source, [0, 1, 2], [(0., 0., 1.)] * 3)[0]
+        after = mesh._recompute_vertex_normals(adjusted, [0, 1, 2], [(0., 0., 1.)] * 3)[0]
+
+        self.assertLess(factors[1], 1.)
+        self.assertGreater(sum(a * b for a, b in zip(before, after)), 0.)
+
     def test_topology_preserving_patch_blends_to_source_terrain_at_boundary(self):
         patch_vertices = [(-2., 10., -2.), (-2., 10., 10.), (10., 10., -2.)]
 
@@ -536,6 +550,40 @@ class MeshTests(unittest.TestCase):
 
 
 class LocalDumpMeshTests(unittest.TestCase):
+    def test_local_w1_terrain_projection_preserves_face_orientation(self):
+        from worldstudio.editor import read_obj
+
+        root = Path(__file__).resolve().parents[1]
+        source = root / 'NSMBU Modding Project/content/Common/course_select/CS_W1.szs'
+        if not source.is_file():
+            self.skipTest('User-provided local W1 dump unavailable')
+        archive = Archive(source.read_bytes())
+        model = archive.read('CS_W1.bfres')
+        grass = next(shape for shape in extract_rigid_model(model, 'CS_W1_World')
+                     if shape['name'] == 'polySurface1489__mtGrass')
+        vertices, faces, uvs, normals = read_obj(
+            root / 'examples/island-game.obj', include_attributes=True)
+        projected, report = replace_rigid_mesh(
+            model, vertices, faces, 'CS_W1_World', grass['name'],
+            uvs=uvs, imported_normals=normals, preserve_topology=True)
+        result = next(shape for shape in extract_rigid_model(projected, 'CS_W1_World')
+                      if shape['name'] == grass['name'])
+
+        inverted = 0
+        for offset in range(0, len(grass['indices']), 3):
+            ids = grass['indices'][offset:offset + 3]
+            before = mesh._recompute_vertex_normals(
+                [grass['positions'][index] for index in ids], [0, 1, 2],
+                [(0., 1., 0.)] * 3)[0]
+            after = mesh._recompute_vertex_normals(
+                [result['positions'][index] for index in ids], [0, 1, 2],
+                [(0., 1., 0.)] * 3)[0]
+            inverted += sum(a * b for a, b in zip(before, after)) < 0.
+
+        self.assertGreater(report['vertices_topology_limited'], 0)
+        self.assertEqual(report['indices_preserved'], True)
+        self.assertEqual(inverted, 0)
+
     def test_local_world_uv_inventory_is_fully_decoded_across_all_uv_sets(self):
         from collections import Counter, defaultdict
 
