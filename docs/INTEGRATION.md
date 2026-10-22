@@ -771,3 +771,34 @@ save/reload behavior establish the game rule.
   `step-1-a-after`, `step-2-d-before`, and `step-2-d-after`. The Chain Cemu
   instance was left open after the attached test; a separate runner that had
   no interactive stdin was stopped without terminating the game.
+
+## Clean baseline and Chain secret-course entry — 2026-10-22
+
+- The same game RPX, controller mapping and equal saves were tested in isolated
+  Clean and Chain profiles. The runner identified one Cemu process, paused for
+  window activation, rechecked the exact foreground HWND before every input,
+  held each direction for 2,000 ms, and captured a screenshot after each step.
+- Clean: from the displayed Crushing-Cogs Tower start, `A → S → W` produced the
+  visible Acorn Plains mushroom node, the junction by the pipes, then the
+  **Tilted Tunnel** course card. Chain: `A → S → W → W` produced the same first
+  two visible checkpoints; the first W reached the eastern island, and the
+  second W showed **Blooper's Secret Lair**. Z/A on that displayed course node
+  loaded its side-scrolling level. This confirms the observed Chain route and
+  course start with this save/profile; the internal node ID and route causality
+  have not been independently identified.
+- Chain report: `chain-secret-route-entry-20261022-r1-result.json`; course
+  screenshot: `chain-secret-route-entry-20261022-r1-level-result.bmp`. Clean
+  report: `clean-road-offset-baseline-20261022-r1-result.json`. Evidence is under
+  ignored `local/evidence/cemu-input-test/`. Chain pack SHA-256 is
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`;
+  controller SHA-256 is
+  `7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b`.
+  The personal save hash remained
+  `5de5ecae3f91c13841ac5a16f0511b7af765ff63628cb95ce65bde721689c9df`, and
+  common save hash remained
+  `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`.
+- The runner's report intentionally keeps `gameplay_verified:false`; it records
+  operator labels and screenshots rather than inferring verification from input
+  completion. The captured course screen and in-level screenshot were visually
+  reviewed. Clearing the level, unlock conditions, and a post-clear save/reload
+  comparison remain future tests.

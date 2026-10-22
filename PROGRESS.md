@@ -1,21 +1,34 @@
 # NSMBU World Studio progress
 
-## 2026-10-22 — Stabilize native roads during viewport movement
+## 2026-10-22 — Dock the graph and verify a custom course start in Cemu
 
-- The existing fixed clip-space bias was replaced for route surfaces by WebGL
-  polygon offset (`factor=-1`, `units=-1`), which accounts for polygon slope as
-  well as depth-buffer precision. The offset is enabled only for the native
-  route overlay pass, reset before the path and node overlays, and also used by
-  mesh picking so the visible road and selectable road agree. Terrain geometry
-  is not offset. The 3D viewport already starts with its editable graph docked
-  beside the world; the separate graph pane remains an optional view.
-- `python -m unittest tests.test_preview_safety -v` passes **43 tests**,
-  including generated JavaScript parsing and route-vs-terrain render-state
-  checks. This is a renderer-level fix; the Cemu comparison could not run in
-  this turn because the isolated launch displayed Cemu's “Unknown file type”
-  dialog for the configured RPX before any input was sent. No game or save
-  changes were made. Visual confirmation in the user's embedded WebView remains
-  outstanding.
+- The integrated graph now uses a dedicated, full-height side dock within the
+  embedded viewport. Its width is shared with the WebGL canvas sizing, so the
+  graph no longer floats over or hides the rendered world. A 1280×800
+  Chrome/SwiftShader run measured a 756×800 world canvas beside a 500×638 graph;
+  12 nodes rendered, WebGL stayed active through four orbit gestures, and there
+  were no browser errors. Screenshot evidence is in ignored
+  `local/evidence/world-dock-orbit-20261022/`.
+- In the matched Clean profile, held `A → S → W` from Crushing-Cogs Tower
+  reached the visible Tilted Tunnel course. In the Chain profile, the same
+  start and held `A → S → W → W` reached the visible **Blooper's Secret Lair**
+  node; one Z/A action loaded the side-scrolling level. Reports and screenshots
+  are in ignored `local/evidence/cemu-input-test/` under
+  `clean-road-offset-baseline-20261022-r1` and
+  `chain-secret-route-entry-20261022-r1`. Both runs used controller SHA-256
+  `7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b`;
+  Chain's installed archive SHA-256 is
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`. The
+  personal/common save hashes matched before and after the course start.
+- Added an optional runner focus gate so the exact Cemu window can be activated
+  through Computer Use before the runner verifies its HWND and sends input.
+  `python -m unittest tests.test_preview_safety tests.test_editor_smoke
+  tests.test_cemu_input_windows -q` passes **119 tests**.
+- Route polygon offset and repeat-wrapped UV reduction reduce depth and
+  interpolation artifacts, but the preview still shows small W1M0 fragments
+  during some orbit angles. The route shader's mask/material behavior remains
+  unresolved, so road rendering is not claimed fully fixed. Course clearing,
+  unlock progression, and save/reload behavior remain untested.
 
 ## 2026-10-22 — Bound repeat-wrapped route UV offsets in the embedded viewport
 

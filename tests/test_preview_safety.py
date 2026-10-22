@@ -85,6 +85,8 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("graph.classList.add('open','expanded')", embedded_page)
         self.assertIn("#stage.graph-docked #view{right:auto;width:calc(100% - var(--world-graph-dock-width))}", embedded_page)
         self.assertIn("#stage.graph-docked .labels{right:var(--world-graph-dock-width)!important}", embedded_page)
+        self.assertIn("#stage.graph-docked .world-graph{top:104px;bottom:58px;height:auto;width:var(--world-graph-panel-width,380px)", embedded_page)
+        self.assertIn("stage.style.setProperty('--world-graph-panel-width'", embedded_page)
         self.assertIn("stage.style.setProperty('--world-graph-dock-width'", embedded_page)
         self.assertIn("function syncGraphDock()", embedded_page)
         self.assertIn("graphToggle.addEventListener('click'", embedded_page)

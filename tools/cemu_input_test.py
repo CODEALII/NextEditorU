@@ -349,6 +349,11 @@ def map_confirmation_prompt(start_label=None):
             'press N or Esc to abort: ')
 
 
+def focus_confirmation_prompt():
+    return ('Activate the exact Cemu window through Computer Use, then press Enter; '
+            'N or Esc aborts before any game input: ')
+
+
 def step_review_prompt(case, index, key, next_key=None, *, require_label=False):
     next_step = f' Next direction is {next_key.upper()}.' if next_key else ' This was the final direction.'
     requirement = ' A visible course/node label is required.' if require_label else ' Leave blank if no label is visible.'
@@ -615,6 +620,10 @@ def run(args):
         report['screenshots']['launch'] = str(title_capture.resolve())
         report['events'].append({'time': timestamp(), 'action': 'window_capture_before_focus',
                                  'hwnd': int(window['hwnd']), 'pid': pid})
+        if getattr(args, 'pause_for_focus', False):
+            if not confirm_or_abort(report, focus_confirmation_prompt(),
+                                    'focus_activation', pid=pid, process=process):
+                return
         foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
         report['events'].append({'time': timestamp(), 'action': 'focus_verified',
                                  'foreground_hwnd': foreground, 'pid': pid})
@@ -922,6 +931,8 @@ def main(argv=None):
     parser.add_argument('--title-key-hold-ms', type=int, default=500)
     parser.add_argument('--hold-ms', type=int, default=1500)
     parser.add_argument('--focus-timeout', type=float, default=30.)
+    parser.add_argument('--pause-for-focus', action='store_true',
+                        help='Pause after the exact Cemu window is identified so it can be activated through Computer Use; focus is still verified before input')
     parser.add_argument('--pack-file', type=Path,
                         help='Exact W1 archive to hash and compare to this profile copy')
     parser.add_argument('--graph-profile', type=Path,

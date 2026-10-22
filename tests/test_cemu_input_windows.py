@@ -30,6 +30,11 @@ class CemuWindowSelectionTests(unittest.TestCase):
             "Crushing-Cogs Tower"))
         self.assertIn("intended start node", self.cemu_input_test.map_confirmation_prompt())
 
+    def test_focus_gate_requires_computer_use_activation_before_input(self):
+        prompt = self.cemu_input_test.focus_confirmation_prompt()
+        self.assertIn("Activate the exact Cemu window through Computer Use", prompt)
+        self.assertIn("before any game input", prompt)
+
     def test_course_action_parses_a_bounded_single_key(self):
         self.assertEqual(self.cemu_input_test.parse_course_action("d:1200"), {
             "keys": ["d"], "hold_ms": 1200,
