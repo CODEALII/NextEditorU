@@ -1,5 +1,20 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Smooth native route texture edges in the embedded viewport
+
+- The route albedo contains partially transparent edge pixels and is mipmapped.
+  The viewer previously turned that coverage into a hard alpha cutoff, which
+  could make road edges pop as the camera changed scale. Native route meshes now
+  draw after the opaque world and blend their texture alpha without writing
+  depth; wireframe and channel-diagnostic modes keep their opaque diagnostic
+  behavior. The route mesh order is prepared once when the scene loads.
+- Regression coverage checks route-only blending, depth-mask restoration,
+  shader output and draw ordering. `python -m unittest tests.test_preview_safety
+  -q` passes **43 tests**. The static Chrome comparison showed no major change to
+  the shape of the W1 paths, so remaining road fragments may come from the
+  source BFRES geometry or its material setup. A sustained native WebView camera
+  test is still required before calling the movement artifact resolved.
+
 ## 2026-10-22 — Dock the graph into the 3D world and improve road depth precision
 
 - Reworked the embedded graph from a covering overlay into a full-height docked

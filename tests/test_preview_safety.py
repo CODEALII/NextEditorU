@@ -26,6 +26,11 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("clip.z-=uDepthBias*clip.w", page)
         self.assertIn("m.depthBias&&!showWireframe?0.00008:0", page)
         self.assertIn("mesh.depthBias?0.00008:0", page)
+        self.assertIn("const renderMeshes=[...meshes.filter(m=>!m.depthBias),...meshes.filter(m=>m.depthBias)]", page)
+        self.assertIn("uRouteBlend>0.5&&texel.a<=0.001", page)
+        self.assertIn("gl_FragColor=vec4(c,uRouteBlend>0.5?texel.a:1.0)", page)
+        self.assertIn("gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false)", page)
+        self.assertIn("if(routeBlend){gl.depthMask(true);gl.disable(gl.BLEND)}", page)
         self.assertNotIn("POLYGON_OFFSET_FILL", page)
 
     def test_embedded_graph_toggle_remains_visible_over_the_world(self):
@@ -191,7 +196,7 @@ console.log(JSON.stringify([
         self.assertIn("approximate material colors", page)
         self.assertIn("aUv", page)
         self.assertIn("texture2D(uTexture,vBaseUv)", page)
-        self.assertIn("texel.a<0.5)discard", page)
+        self.assertIn("uRouteBlend<0.5&&texel.a<0.5", page)
         self.assertNotIn("https://", page)
         self.assertNotIn("</script><script>alert(1)", page)
         self.assertIn("<\\/script>", page)
