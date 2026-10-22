@@ -349,10 +349,29 @@ def map_confirmation_prompt(start_label=None):
             'press N or Esc to abort: ')
 
 
-def step_review_prompt(case, index, key, next_key=None):
+def step_review_prompt(case, index, key, next_key=None, *, require_label=False):
     next_step = f' Next direction is {next_key.upper()}.' if next_key else ' This was the final direction.'
-    return (f'Inspect {case}-step-{index}-{key}-after.bmp. Confirm Mario reached the expected '
-            f'next node before continuing.{next_step} Press Enter to continue or N/Esc to stop: ')
+    requirement = ' A visible course/node label is required.' if require_label else ' Leave blank if no label is visible.'
+    return (f'Inspect {case}-step-{index}-{key}-after.bmp. Record the visible course/node label '
+            f'(operator observation only).{requirement}{next_step} '
+            'Type N to abort, or press Enter to submit the observation: ')
+
+
+def wait_for_step_observation(prompt, *, pid, process=None, require_label=False):
+    """Return (confirmed, visible_label); labels are operator reports, not machine OCR."""
+    while True:
+        if process is not None and process.poll() is not None:
+            raise RuntimeError(f'Cemu PID {pid} exited while waiting for a step observation.')
+        if process is None and pid not in active_cemu_pids():
+            raise RuntimeError(f'Attached Cemu PID {pid} exited while waiting for a step observation.')
+        answer = input(prompt).strip()
+        if answer.casefold() in {'n', 'no', 'q', 'quit'}:
+            return False, None
+        if answer:
+            return True, answer[:200]
+        if not require_label:
+            return True, None
+        prompt = 'A label is required for this comparison. Type the visible course/node label, or N to abort: '
 
 
 def capture_window(hwnd, path: Path):
@@ -678,17 +697,25 @@ def run(args):
                 step_after = args.screenshot_dir / f'{args.case}-step-{index}-{key}-after.bmp'
                 capture_window(window['hwnd'], step_after)
                 report['screenshots'][f'step_{index}_after'] = str(step_after.resolve())
-                if args.pause_after_each_step and index < len(keys):
+                if args.pause_after_each_step:
                     next_key = keys[index] if index < len(keys) else None
-                    if not confirm_or_abort(
-                            report, step_review_prompt(args.case, index, key, next_key),
-                            f'step_{index}_{key}', pid=pid, process=process):
-                        return
+                    confirmed, observation = wait_for_step_observation(
+                        step_review_prompt(args.case, index, key, next_key,
+                                           require_label=getattr(args, 'require_step_labels', False)),
+                        pid=pid, process=process,
+                        require_label=getattr(args, 'require_step_labels', False))
                     report['events'].append({'time': timestamp(),
-                                             'action': 'step_review_confirmed',
+                                             'action': 'step_review_confirmed' if confirmed
+                                             else 'step_review_aborted',
                                              'step': index, 'key': key,
                                              'next_key': next_key,
+                                             'observed_location': observation,
+                                             'observation_source': 'operator',
                                              'screenshot': str(step_after.resolve())})
+                    if not confirmed:
+                        report['status'] = 'aborted'
+                        report['abort_gate'] = f'step_{index}_{key}'
+                        return
         else:
             for key in keys:
                 key_event(key, True)
@@ -768,6 +795,8 @@ def main(argv=None):
                         help='Expected visible starting node name; included in the explicit map confirmation prompt and result')
     parser.add_argument('--pause-after-each-step', action='store_true',
                         help='With --sequence, pause after each screenshot for node-by-node visual confirmation before the next direction')
+    parser.add_argument('--require-step-labels', action='store_true',
+                        help='With --pause-after-each-step, require a visible course/node label to be typed for every step')
     parser.add_argument('--attach', action='store_true',
                         help='Attach to the one active Cemu whose executable is in --profile; do not close it')
     parser.add_argument('--navigation-only', action='store_true',
@@ -832,6 +861,8 @@ def main(argv=None):
         parser.error('--sequence and --keys are mutually exclusive')
     if args.pause_after_each_step and not args.sequence:
         parser.error('--pause-after-each-step requires --sequence')
+    if args.require_step_labels and not args.pause_after_each_step:
+        parser.error('--require-step-labels requires --pause-after-each-step')
     if args.start_label is not None and not args.start_label.strip():
         parser.error('--start-label cannot be empty')
     if not args.pack_name or any(character not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_' for character in args.pack_name):

@@ -1,5 +1,19 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Record visible nodes during Cemu movement tests
+
+- Process-bound sequence runs now pause after every direction, including the
+  final one, and allow the operator to enter the visible course/node label.
+  The result records it explicitly as an operator observation next to the exact
+  screenshot. `--require-step-labels` prevents a matched route comparison from
+  continuing until every step has a label; this remains manual evidence rather
+  than OCR or an engine point-ID claim.
+- Rechecked Clean and Chain preflight without launching Cemu: both remain ready,
+  use the same Wii U GamePad controller map and have byte-identical saves. The
+  matched in-game comparison still needs an active test-window focus.
+- The Windows runner suite passed **21 tests** and the full repository suite
+  passed **384 tests in 316.630 seconds**. No Cemu keys were sent.
+
 ## 2026-10-22 — Import local-buffer glTF terrain files
 
 - Extended the existing static geometry parser to accept JSON `.gltf` alongside

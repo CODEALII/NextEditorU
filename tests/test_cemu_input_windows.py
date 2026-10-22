@@ -124,6 +124,30 @@ class CemuWindowSelectionTests(unittest.TestCase):
         prompt = self.cemu_input_test.step_review_prompt("chain-route", 2, "d", "a")
         self.assertIn("chain-route-step-2-d-after.bmp", prompt)
         self.assertIn("Next direction is A", prompt)
+        self.assertIn("operator observation only", prompt)
+        self.assertIn("visible course/node label is required", self.cemu_input_test.step_review_prompt(
+            "chain-route", 1, "a", "d", require_label=True))
+
+    def test_step_observation_records_label_or_unknown_and_can_require_label(self):
+        with patch.object(self.cemu_input_test, "input", side_effect=["", "Blooper's Secret Lair"]):
+            confirmed, label = self.cemu_input_test.wait_for_step_observation(
+                "label: ", pid=42, process=Mock(poll=Mock(return_value=None)),
+                require_label=True)
+        self.assertTrue(confirmed)
+        self.assertEqual(label, "Blooper's Secret Lair")
+
+        with patch.object(self.cemu_input_test, "input", return_value=""):
+            confirmed, label = self.cemu_input_test.wait_for_step_observation(
+                "label: ", pid=42, process=Mock(poll=Mock(return_value=None)))
+        self.assertTrue(confirmed)
+        self.assertIsNone(label)
+
+    def test_step_observation_can_abort_without_label(self):
+        with patch.object(self.cemu_input_test, "input", return_value="n"):
+            confirmed, label = self.cemu_input_test.wait_for_step_observation(
+                "label: ", pid=42, process=Mock(poll=Mock(return_value=None)))
+        self.assertFalse(confirmed)
+        self.assertIsNone(label)
 
     def test_ignores_titled_auxiliary_gamepad_view_when_main_title_is_present(self):
         game = {"title": "Cemu 1.26.2f [TitleId: 00050000-10101d00] New SUPER MARIO BROS. U"}

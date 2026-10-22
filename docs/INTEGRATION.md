@@ -585,9 +585,13 @@ belong in this document and PROGRESS.md with their exact scope.
 The process-bound runner supports `--start-label "Crushing-Cogs Tower"` to
 show the expected map starting point in its explicit screenshot confirmation.
 For ordered movement tests, `--sequence w a s d --pause-after-each-step` captures
-before/after images around each held direction and pauses between steps for an
-operator to confirm the visible next node before continuing. The runner records
-each confirmation and re-verifies the exact Cemu window focus before the next key.
+before/after images around each held direction and pauses after every step,
+including the final one. The operator can type the visible course/node label;
+that value is stored as `observed_location` with `observation_source: operator`,
+not presented as OCR or an engine point ID. Use `--require-step-labels` for a
+comparison that must record a non-empty visible label at every step. The runner
+records the gate, screenshot and observation, and re-verifies exact Cemu window
+focus before it sends the next key.
 This makes the test result easier to reproduce and interpret; it does not add
 new in-game movement evidence by itself. The next Cemu retest was deferred by
 the user, so no new emulator instance was started for this change.
@@ -607,8 +611,8 @@ the user, so no new emulator instance was started for this change.
 
   ```powershell
   $rpx = '.\NSMBU Modding Project\code\red-pro2.rpx'
-  python tools/cemu_input_test.py --profile build/cemu-clean-gamepad-input-v3-20261021 --rpx $rpx --case clean-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --pack-name WorldStudioChain
-  python tools/cemu_input_test.py --profile build/cemu-chain-profile-gated-20261022 --rpx $rpx --case chain-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --pack-name WorldStudioChain --pack-file build/profile-gated-chain-patch/content/Common/course_select/CS_W1.szs --graph-profile profiles/w1-core-progression.json --compare-save-to build/cemu-clean-gamepad-input-v3-20261021
+  python tools/cemu_input_test.py --profile build/cemu-clean-gamepad-input-v3-20261021 --rpx $rpx --case clean-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --require-step-labels --pack-name WorldStudioChain
+  python tools/cemu_input_test.py --profile build/cemu-chain-profile-gated-20261022 --rpx $rpx --case chain-w102-link --start-label 'Crushing-Cogs Tower' --sequence a d --hold-ms 2000 --pause-after-each-step --require-step-labels --pack-name WorldStudioChain --pack-file build/profile-gated-chain-patch/content/Common/course_select/CS_W1.szs --graph-profile profiles/w1-core-progression.json --compare-save-to build/cemu-clean-gamepad-input-v3-20261021
   ```
 
   Each run refuses another active Cemu process, waits for the exact game window
