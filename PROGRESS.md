@@ -1,5 +1,28 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Narrow the remaining W1 road-preview artifacts
+
+- A controlled WebGL comparison confirms the route polygon offset fixes some
+  orbit-dependent gaps compared with no offset. Increasing the existing
+  `-4/-4` offset to `-8/-8` or `-16/-16` did not visibly change the remaining
+  W1M0 fragments at the inspected angle, so those fragments are not established
+  as simple depth-buffer flicker.
+- The local `RouteW1_alb` is a 128×256 BC3 cutout texture. Its decoded alpha
+  has 6,629 fully transparent pixels out of 32,768, plus graded edge values.
+  The current WebGL preview discards texels below alpha 0.5 and does not apply
+  stored `texmtx` transforms or the route shader's additional `_o0` route-mask
+  sampler. The local route shader interface declares these resources, but its
+  operations and material-to-UV transforms remain unresolved; this is a
+  plausible preview cause, not a confirmed root cause.
+- The saved Chain Cemu map capture shows the road around Crushing-Cogs Tower
+  continuous in game, while static preview sweeps retain local fragments. This
+  points toward preview geometry/material presentation in that area; it does
+  not verify every route or eliminate BFRES geometry as a cause.
+- Next diagnostic step: bind the route material's verified texture and UV
+  inputs, then compare the same orbit sweep in the native embedded viewport.
+  Keep the existing route bias as a partial mitigation; road rendering is not
+  fully fixed.
+
 ## 2026-10-22 — Add reproducible course-input checkpoints; course motion remains blocked
 
 - The Cemu runner now accepts bounded `--level-action KEY[+KEY]:MS` inputs
