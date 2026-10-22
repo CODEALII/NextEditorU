@@ -1,5 +1,23 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Reduce route-texture minification shimmer
+
+- Power-of-two `_a0` base-color textures now generate mipmaps and use trilinear
+  minification in the WebGL preview. Non-power-of-two textures, diagnostic maps,
+  and WebGL contexts without mipmap support keep the previous linear path.
+- Loaded the local W1 BFRES in headless Chrome/SwiftShader with 42 shapes, 20
+  albedo maps, 12 visible nodes and 8 routes; eight orbit increments rendered
+  without WebGL or console errors. Same-angle captures with and without mipmaps
+  are in ignored `local/evidence/route-orbit-sweep/` and
+  `local/evidence/route-orbit-sweep-no-mips/`.
+- Fragmented road patches near W1M0 remain visible in both views. The likely
+  alpha/shader or source-geometry cause is still unresolved; mipmaps address
+  texture minification only and do not prove the reported desktop issue fully
+  fixed.
+- Verification: all **399 tests pass**, including NPOT/diagnostic fallback and
+  mipmap selection coverage. The embedded WebView2 and Cemu renderer have not
+  been visually verified in this run.
+
 ## 2026-10-22 — Matched Cemu run verifies the changed route destination
 
 - With one isolated Cemu instance at a time, started both Clean and Chain at

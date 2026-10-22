@@ -264,6 +264,36 @@ mirrorWraps:parameters.slice(2,4),repeatWraps:parameters.slice(6,8)}));
             "repeatWraps": [[5, 101], [6, 101]],
         })
 
+    def test_power_of_two_base_color_textures_use_mipmaps_only_for_base_maps(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js is required to exercise WebGL texture filtering")
+        page = build_document({"shapes": [], "nodes": [], "routes": []})
+        helper_start = page.index("function gx2WrapToWebGL(gl,mode){")
+        helper_end = page.index("\nfunction wireEdges", helper_start)
+        helper = page[helper_start:helper_end]
+        probe = helper + r"""
+globalThis.atob=value=>Buffer.from(value,'base64').toString('binary');
+const filters=[],mipmaps=[];let nextId=0;
+const gl={REPEAT:101,MIRRORED_REPEAT:102,CLAMP_TO_EDGE:103,TEXTURE_2D:1,
+TEXTURE_MIN_FILTER:2,LINEAR:3,LINEAR_MIPMAP_LINEAR:10,TEXTURE_MAG_FILTER:4,
+TEXTURE_WRAP_S:5,TEXTURE_WRAP_T:6,RGBA:7,UNSIGNED_BYTE:8,UNPACK_ALIGNMENT:9,
+createTexture(){return{id:++nextId}},bindTexture(){},pixelStorei(){},texImage2D(){},
+generateMipmap(){mipmaps.push('generated')},
+texParameteri(target,name,value){if(name===2)filters.push(value)}};
+const data=(name,width,height)=>({name,width,height,rgbaBase64:Buffer.alloc(width*height*4).toString('base64')});
+createTexture(data('pot',4,8),'base');
+createTexture(data('npot',3,8),'base');
+createTexture(data('diagnostic',4,8),'bc4');
+console.log(JSON.stringify({mipmaps:mipmaps.length,filters}));
+"""
+        result = subprocess.run([node, "-e", probe], check=True, capture_output=True,
+                                text=True, encoding="utf-8")
+        self.assertEqual(json.loads(result.stdout), {
+            "mipmaps": 1,
+            "filters": [10, 3, 3],
+        })
+
     def test_webgl_startup_failures_show_an_obvious_viewer_fallback(self):
         page = build_document({"shapes": [], "nodes": [], "routes": []})
         script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
