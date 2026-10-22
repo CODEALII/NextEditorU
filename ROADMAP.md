@@ -4,31 +4,31 @@ World Studio is an offline research prototype. Items below describe work still n
 
 ## Highest priority: get a route to launch its level
 
-A controlled Cemu retest on 2026-10-21 reached the World 1 map in both the
-CrashFix-only Clean profile and the World Studio Chain profile. Holding `D` for
-about two seconds moved Mario to a visible neighboring node in both Clean and
-Chain. A later Chain screenshot showed **Acorn Plains-2 — Tilted Tunnel**, but
-Computer Use detected external user input at that time, so the movement cannot
-be attributed to a particular test key or profile action. Pressing `Z` there
-left the map open after a 2.5-second wait; level launch remains unverified.
-In a later Direct-profile run, the same expected archive and active pack loaded
-the World 1 map at the Crushing-Cogs Tower. A single `D` tap, configured
-GamePad-A (`Z`) tap and click on the entrance left Mario on the map. This
-verifies boot-to-map only; the Computer Use key API cannot hold a direction, so
-it does not test sustained movement or route traversal. After both later game
-processes were closed, Chain and Direct save files still match Clean byte for
-byte. This only verifies that the recorded map observations did not change the
-saves; a course clear, unlock, and save/reload progression test is still
-required. These results supersede the historical no-input observations below.
+On 2026-10-22, process-bound Cemu tests using the Chain archive moved Mario from
+the visible Acorn Plains node to a road junction and then to the island course
+card **Blooper's Secret Lair**. Configured `Z` opened the course and a later
+capture shows live side-scrolling gameplay. The active `WorldStudioChain` SZS
+and its installed copy both had SHA-256
+`19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`; the game
+UI does not expose the selected island's internal point ID.
 
-Archive inspection shows the patched chain changes `pointW1.csv`; the stock
-archive already connects W101 to W102. The controlled first-node movement
-therefore does not validate the modified W102-to-W103 path (`RW102W1T0` then
-`RW1T0W103`). Next test that link from a known W102 state, then verify level
-launch, fresh-save progression, save/reload, and camera transitions. Keep each
+The direct Clean comparison from that same junction is still required to
+attribute the visible transition to the edited W102→W103 link. Existing paired
+Chain and Clean movement runs used controller-profile hash
+`7f27b62eb731fdd4c4eae10b2f8a77f19a0f233c0a469067db2034900f4d9b` (Wii U
+GamePad). A later Clean retry used hash
+`d4f9fcf8da2748ac094f479d53c96661fb60c559fc564e41805bfc4ecae3879c` (Wii U
+Pro Controller); it held A for two seconds but showed no node change and was
+aborted before further input. The key map is the same, but the emulated
+controller type differs, so that retry is not a matched route comparison.
+When Cemu testing resumes, repeat the Clean sequence from the known junction
+with the same GamePad profile, identical held `W`/`S` sequence and verified
+focus before each input; pass `--compare-controller-to` with the Chain profile
+to make the runner enforce that match before launch. Then verify a course
+clear, fresh-save progression, save/reload and camera transitions. Keep each
 result tied to the exact pack, input profile and save snapshot. See
-`docs/INTEGRATION.md` for process IDs, archive hashes, screenshot evidence and
-the remaining controlled-test steps.
+`docs/INTEGRATION.md` for process IDs, archive hashes, screenshots and the test
+protocol.
 
 ## Rendering fidelity
 

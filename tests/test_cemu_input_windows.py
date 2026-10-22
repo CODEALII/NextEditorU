@@ -56,6 +56,67 @@ class CemuWindowSelectionTests(unittest.TestCase):
         click.assert_called_once_with(window)
         key.assert_not_called()
 
+    def test_controller_profile_comparison_checks_exact_file_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            current = root / "current/controllerProfiles/controller0.txt"
+            reference = root / "reference/controllerProfiles/controller0.txt"
+            current.parent.mkdir(parents=True)
+            reference.parent.mkdir(parents=True)
+            current.write_text("emulate = Wii U Pro Controller\nWASD = left stick\n",
+                               encoding="utf-8")
+            reference.write_text("emulate = Wii U GamePad\nWASD = left stick\n",
+                                 encoding="utf-8")
+
+            comparison = self.cemu_input_test.compare_controller_profiles(
+                current, reference.parent.parent)
+
+            self.assertFalse(comparison["matches"])
+            self.assertNotEqual(comparison["controller_sha256"],
+                                comparison["reference_controller_sha256"])
+
+            reference.write_bytes(current.read_bytes())
+            comparison = self.cemu_input_test.compare_controller_profiles(
+                current, reference.parent.parent)
+            self.assertTrue(comparison["matches"])
+
+    def test_controller_mismatch_blocks_cemu_before_launch_and_records_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = root / "profile"
+            reference = root / "reference"
+            controller = profile / "controllerProfiles/controller0.txt"
+            reference_controller = reference / "controllerProfiles/controller0.txt"
+            controller.parent.mkdir(parents=True)
+            reference_controller.parent.mkdir(parents=True)
+            (profile / "Cemu.exe").write_bytes(b"test-executable")
+            controller.write_text("emulate = Wii U Pro Controller\n", encoding="utf-8")
+            reference_controller.write_text("emulate = Wii U GamePad\n", encoding="utf-8")
+            rpx = root / "red-pro2.rpx"
+            rpx.write_bytes(b"test-rpx")
+            screenshot_dir = root / "evidence"
+            args = SimpleNamespace(
+                profile=profile, rpx=rpx, key="d", keys=None,
+                screenshot_dir=screenshot_dir, pack_file=None,
+                pack_name="WorldStudioChain", compare_controller_to=reference,
+                compare_save_to=None, graph_profile=None, enter_level=False,
+                attach=False, case="controller-mismatch", sequence=["d"],
+                start_label="Tower", pause_after_each_step=False, hold_ms=2000,
+                navigation_key=None, navigation_hold_ms=700,
+            )
+
+            with patch.object(self.cemu_input_test, "active_cemu_pids", return_value=[]), \
+                    patch.object(self.cemu_input_test.subprocess, "Popen") as launch:
+                with self.assertRaisesRegex(ValueError, "does not byte-match"):
+                    self.cemu_input_test.run(args)
+
+            launch.assert_not_called()
+            result = json.loads((screenshot_dir / "controller-mismatch-result.json").read_text(
+                encoding="utf-8"))
+            self.assertFalse(result["controller_comparison"]["matches"])
+            self.assertEqual(result["controller_comparison"]["reference_controller_sha256"],
+                             hashlib.sha256(reference_controller.read_bytes()).hexdigest())
+
     def test_step_review_prompt_names_screenshot_and_next_direction(self):
         prompt = self.cemu_input_test.step_review_prompt("chain-route", 2, "d", "a")
         self.assertIn("chain-route-step-2-d-after.bmp", prompt)
@@ -131,7 +192,8 @@ class CemuWindowSelectionTests(unittest.TestCase):
                 profile=profile, rpx=rpx, key="d", keys=None,
                 screenshot_dir=screenshot_dir, pack_file=pack,
                 pack_name="WorldStudioChain", graph_profile=graph_profile,
-                compare_save_to=None, enter_level=False, attach=False,
+                compare_save_to=None, compare_controller_to=None,
+                enter_level=False, attach=False,
                 case="blocked-profile", sequence=["d"], start_label="Tower",
                 pause_after_each_step=False, hold_ms=2000,
                 navigation_key=None, navigation_hold_ms=700,

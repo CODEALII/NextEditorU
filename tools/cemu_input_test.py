@@ -416,6 +416,27 @@ def record_prelaunch_failure(report, args, profile, message):
     print(f'Result: {result_path.resolve()}')
 
 
+def compare_controller_profiles(controller_path, reference_profile):
+    """Require byte-identical controller mappings for a matched Cemu run."""
+    reference_profile = Path(reference_profile).resolve(strict=True)
+    if not reference_profile.is_dir():
+        raise ValueError('Controller comparison reference must be a Cemu profile directory')
+    reference_controller = reference_profile / 'controllerProfiles/controller0.txt'
+    if not reference_controller.is_file():
+        reference_controller = reference_profile / 'controllerProfiles/controller0.xml'
+    current_hash = sha256(controller_path) if Path(controller_path).is_file() else None
+    reference_hash = (sha256(reference_controller)
+                      if reference_controller.is_file() else None)
+    return {
+        'reference_profile': str(reference_profile),
+        'controller_profile': str(controller_path),
+        'controller_sha256': current_hash,
+        'reference_controller_profile': str(reference_controller),
+        'reference_controller_sha256': reference_hash,
+        'matches': bool(current_hash and reference_hash and current_hash == reference_hash),
+    }
+
+
 def run(args):
     profile = args.profile.resolve(strict=True)
     rpx = args.rpx.resolve(strict=True)
@@ -455,6 +476,18 @@ def run(args):
         'baseline_save_hashes': save_hashes(profile),
         'events': [],
     }
+    if args.compare_controller_to is not None:
+        try:
+            report['controller_comparison'] = compare_controller_profiles(
+                controller, args.compare_controller_to)
+        except (OSError, ValueError) as error:
+            record_prelaunch_failure(report, args, profile, str(error))
+            raise ValueError(f'Controller-profile comparison failed: {error}') from error
+        if not report['controller_comparison']['matches']:
+            message = ('Controller profile does not byte-match reference profile: '
+                       f"{report['controller_comparison']['reference_profile']}")
+            record_prelaunch_failure(report, args, profile, message)
+            raise ValueError(message)
     if args.pack_file:
         report['pack_matches_profile_copy'] = (
             sha256(pack) == sha256(profile_pack) if profile_pack.is_file() else None)
@@ -760,6 +793,8 @@ def main(argv=None):
                         help='Require this passing static graph profile in the packed export manifest before launching')
     parser.add_argument('--compare-save-to', type=Path, metavar='PROFILE',
                         help='Require identical NSMBU saves before launch')
+    parser.add_argument('--compare-controller-to', type=Path, metavar='PROFILE',
+                        help='Require a byte-identical controller profile to another Cemu profile')
     parser.add_argument('--pack-name', default='WorldStudioChain',
                         help='Graphic-pack folder name inside the isolated profile')
     parser.add_argument('--enter-level', action='store_true',

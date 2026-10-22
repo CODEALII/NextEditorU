@@ -5,17 +5,23 @@
 - Added a runner path that left-clicks the center of the exact PID-bound Cemu
   window for the observed “Press 2!” title prompt. Added focused tests that
   verify the click target and mouse-button release. `python -m unittest
-  tests.test_cemu_input_windows` passes (17 tests); Python compilation and
+  tests.test_cemu_input_windows` passes (19 tests); Python compilation and
   `git diff --check` also pass.
 - A fresh unmodified Clean-Pro run verified process-specific window focus and
   started at Crushing-Cogs Tower, but held A for two seconds without a visible
   node change. The run was aborted at that screenshot gate, before any further
-  direction or level-entry input. Its controller mapping hash differs from the
-  earlier successful Clean movement run, so this is an input-profile mismatch
-  to resolve, not evidence of a route-data defect. Exact hashes and screenshots
-  are recorded in `docs/INTEGRATION.md`.
+  direction or level-entry input. An offline byte comparison found its key map
+  matches the earlier successful Clean/Chain profile; only the emulated device
+  type differs (Wii U Pro Controller versus GamePad). Repeat the Clean route
+  comparison with the matched GamePad profile. This is not evidence of a route
+  data defect. Exact hashes and screenshots are recorded in
+  `docs/INTEGRATION.md`.
 - User deferred the next Cemu focus action. Do not restart input testing until
   the user resumes it; the runner and evidence are ready for that continuation.
+- Added `--compare-controller-to` to bind a Clean/Chain runtime run to the
+  reference profile's exact controller file. A mismatch is recorded and blocks
+  Cemu launch. Tests cover equal profiles, emulated-device mismatch and
+  prelaunch failure evidence.
 
 ## 2026-10-22 — Verify the embedded viewport and matched Cemu movement
 

@@ -14,8 +14,14 @@
   entry were sent. This run does not verify movement or attribute a route-data
   failure. It also differs from the earlier Clean movement evidence, which used
   controller profile SHA-256
-  `7f27b62eb731fdd4c4eae10b2f8a77f19f0a233c0a469067db2034900f4d9b`; compare
-  those profile mappings before repeating.
+  `7f27b62eb731fdd4c4eae10b2f8a77f19f0a233c0a469067db2034900f4d9b`. An
+  offline byte comparison shows the key mappings are identical; the only
+  controller-file difference is `emulate = Wii U GamePad` versus
+  `emulate = Wii U Pro Controller`. Repeat the Clean comparison with the same
+  GamePad profile used for the successful Chain traversal. The runner now
+  accepts `--compare-controller-to <reference-profile>`; it checks exact
+  controller-file bytes, records both hashes, and refuses to start Cemu if the
+  profiles differ.
 - Evidence is in `local/evidence/cemu-input-test/`:
   `clean-pro-chain-route-compare-20261022-r1-result.json`,
   `clean-pro-chain-route-compare-20261022-r1-step-1-a-before.bmp`, and
