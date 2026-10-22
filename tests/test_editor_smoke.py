@@ -18,6 +18,7 @@ from worldstudio.recent_projects import RecentProjects
 from worldstudio.graph_profile_preferences import GraphProfilePreferences
 from worldstudio.project import WorldProject, resolve_project_path
 from worldstudio.session_recovery import SessionRecovery
+from worldstudio.graph_validation import build_native_connection_draft
 
 
 class NativeFixture:
@@ -419,6 +420,37 @@ class EditorSmokeTests(unittest.TestCase):
                    if isinstance(widget, ttk.Button)]
         self.assertTrue(any(widget.cget("text") == "Build route connection…"
                             for widget in buttons))
+
+    def test_applying_connection_refreshes_properties_overlay_and_undo_redo_together(self):
+        self.native.references.add("RW101W102")
+        self.app.tree.selection_set("point:0")
+        self.app.select_tree()
+        self.root.update()
+        before_points = [row[:] for row in self.native.points.rows]
+        before_routes = [row[:] for row in self.native.routes.rows]
+        bones = {bone.name for rows in self.native.skeletons.models.values() for bone in rows}
+        draft = build_native_connection_draft(
+            self.native.points.rows, self.native.routes.rows,
+            self.native.references, bones, 0, "W102", "secret", "road", "W1")
+
+        with patch.object(self.app, "_schedule_viewport_overlay_update") as overlay_update:
+            self.app._apply_point_connection_draft(draft)
+
+        self.assertEqual(self.native.points.rows[0][6:8], ["W102", "RW101W102"])
+        self.assertEqual(self.native.routes.rows,
+                         before_routes + [["RW101W102", "road", ""]])
+        self.assertEqual(self.app.properties[6].get(), "W102")
+        self.assertEqual(self.app.properties[7].get(), "RW101W102")
+        self.assertEqual(self.app.native_selection, ("point", 0))
+        overlay_update.assert_called_once()
+
+        self.app.undo()
+        self.assertEqual(self.native.points.rows, before_points)
+        self.assertEqual(self.native.routes.rows, before_routes)
+        self.app.redo()
+        self.assertEqual(self.native.points.rows[0][6:8], ["W102", "RW101W102"])
+        self.assertEqual(self.native.routes.rows,
+                         before_routes + [["RW101W102", "road", ""]])
 
     def test_path_chain_dialog_returns_exact_original_when_untouched(self):
         original = " RWbad , RW101W102 , "

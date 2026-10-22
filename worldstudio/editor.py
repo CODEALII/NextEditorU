@@ -2604,20 +2604,11 @@ class NativeStudio(WorldStudio):
                 update_preview()
                 return
             try:
-                point_rows, route_rows = apply_native_connection_draft(
-                    self.native.points.rows, self.native.routes.rows, draft)
+                self._apply_point_connection_draft(draft)
             except ValueError as error:
                 messagebox.showerror("Cannot build route", str(error), parent=window)
                 update_preview()
                 return
-            self.native.points.rows = point_rows
-            self.native.routes.rows = route_rows
-            self.dirty = True
-            self._record_edit()
-            self.refresh()
-            self.status.set(
-                f"Drafted {source_name} → {target} with {len(draft['chain'])} existing BFRES path segment(s); "
-                f"added {len(draft['route_rows'])} route row(s). Static names only; verify traversal in Cemu.")
             window.destroy()
 
         for variable in (destination, destination_kind, road_type):
@@ -2626,6 +2617,26 @@ class NativeStudio(WorldStudio):
         window.bind("<Escape>", lambda _event: window.destroy())
         window.grab_set()
         window.wait_window()
+
+    def _apply_point_connection_draft(self, draft):
+        """Commit both route tables and refresh the selected point properties."""
+        point_rows, route_rows = apply_native_connection_draft(
+            self.native.points.rows, self.native.routes.rows, draft)
+        self.native.points.rows = point_rows
+        self.native.routes.rows = route_rows
+        self.dirty = True
+        self._record_edit()
+        self.refresh()
+        point_index = draft["source_index"]
+        iid = f"point:{point_index}"
+        if self.tree.exists(iid):
+            self.tree.selection_set(iid)
+            self.tree.see(iid)
+            self.select_tree()
+        self.status.set(
+            f"Drafted {draft['source']} → {draft['target']} with {len(draft['chain'])} "
+            f"existing BFRES path segment(s); added {len(draft['route_rows'])} route row(s). "
+            "Static names only; verify traversal in Cemu.")
 
     def add_route(self):
         if self.exporting:

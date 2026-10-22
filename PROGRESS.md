@@ -1,5 +1,17 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Keep route-connection UI in sync through undo and redo
+
+- After the route transaction commits, the selected point stays selected and
+  its destination/path properties are rebuilt from the new native rows. The
+  route/node overlay refresh is scheduled; undo and redo restore both tables
+  through the existing project history path.
+- A Tk smoke test checks property-panel values and the overlay-refresh request,
+  then verifies Undo and Redo restore the point fields and added route row
+  together. The focused editor/graph tests passed **30 tests** and the full
+  suite passed **378 tests** in 318.568 seconds. The viewport render is still
+  an editor preview and does not verify game traversal.
+
 ## 2026-10-22 — Apply route connection drafts atomically
 
 - Route connection submission now revalidates the same-world point pair, the
