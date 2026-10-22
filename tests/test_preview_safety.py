@@ -18,6 +18,8 @@ class PreviewSafetyTests(unittest.TestCase):
     def test_native_route_surfaces_get_polygon_offset_without_affecting_terrain(self):
         self.assertTrue(route_surface_needs_depth_bias("beltmodel27__mtRW102W1S0a", "RW102W1S0a"))
         self.assertTrue(route_surface_needs_depth_bias("routeOpague1", "mtRouteOpague"))
+        self.assertTrue(route_surface_needs_depth_bias("polySurface1390__mtRFd01W1M0a", "mtRFd01W1M0a"))
+        self.assertTrue(route_surface_needs_depth_bias("f008W1C0__mtRF008W1C0a", "mtRF008W1C0a"))
         self.assertFalse(route_surface_needs_depth_bias("polySurface1489__mtGrass", "mtGrass"))
         page = build_document({"shapes": [{"name": "road", "depthBias": True,
                                             "positions": [], "indices": []}],
@@ -29,6 +31,10 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("applyRouteDepthOffset(m.depthBias&&!showWireframe)", page)
         self.assertIn("applyRouteDepthOffset(mesh.depthBias)", page)
         self.assertIn("const ROUTE_CLIP_DEPTH_BIAS=0.00002", page)
+        self.assertIn("let fragmentFloatPrecision='mediump'", page)
+        self.assertIn("getShaderPrecisionFormat(gl.FRAGMENT_SHADER,gl.HIGH_FLOAT)", page)
+        self.assertIn("precision ${fragmentFloatPrecision} float;uniform vec3 uColor", page)
+        self.assertIn("precision ${fragmentFloatPrecision} float;uniform vec4 uPickColor", page)
         self.assertIn("gl.uniform1f(gl.getUniformLocation(meshProgram,'uDepthBias'),m.depthBias&&!showWireframe?ROUTE_CLIP_DEPTH_BIAS:0)", page)
         self.assertIn("gl.uniform1f(gl.getUniformLocation(pickProgram,'uDepthBias'),mesh.depthBias?ROUTE_CLIP_DEPTH_BIAS:0)", page)
         self.assertIn("const renderMeshes=[...meshes.filter(m=>!m.depthBias),...meshes.filter(m=>m.depthBias)]", page)
@@ -133,8 +139,9 @@ console.log(JSON.stringify(Array.from(resolveDiagnosticUvs(shape,new Float32Arra
         self.assertIn('id="graph-expand"', embedded_page)
         self.assertIn("graph.classList.toggle('expanded')", embedded_page)
         self.assertIn("graphExpand.setAttribute('aria-pressed'", embedded_page)
-        self.assertIn(".world-graph{display:none;position:absolute;z-index:2;right:14px;top:76px;width:min(360px,38vw);height:min(58vh,560px)", embedded_page)
+        self.assertIn(".world-graph{left:14px;right:auto;top:auto;bottom:64px;width:min(340px,34vw);height:min(38vh,340px)", embedded_page)
         self.assertIn(".world-graph.expanded{width:min(440px,44vw);height:min(72vh,700px)", embedded_page)
+        self.assertIn("graphExpand.textContent=graph.classList.contains('expanded')?'Shrink':'Expand'", embedded_page)
         self.assertIn("graph.classList.toggle('open',graphOpen)", embedded_page)
         self.assertNotIn("#stage.graph-docked #view", embedded_page)
         self.assertNotIn("#stage.graph-docked", embedded_page)

@@ -1,5 +1,29 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Dock the graph into the viewport and improve road UV precision
+
+- The in-world Graph Editor now opens as a compact panel docked to the lower
+  left of the 3D viewport, with an expand/shrink control. It remains part of
+  the same WebGL view and selection/point dragging continue to sync with the
+  editor list.
+- The W1 route meshes repeat their texture UVs across long segments. The
+  preview now uses fragment `highp` where supported and falls back to `mediump`
+  on WebGL devices that lack fragment high precision; picking uses the same
+  precision choice.
+- The W1M0 road material `mtRFd01W1M0a` was missing the route classification
+  because it uses the `mtRF` family rather than `mtRW`. It now gets the same
+  route render ordering and depth treatment; W1's recognized road meshes rose
+  from 11 to 13. The captured W1M0 route is more continuous through the same
+  orbit, although small terrain/model fragments remain.
+- A fresh 42-shape W1 run in Chrome/SwiftShader completed a nine-angle orbit
+  sweep with WebGL active and no page or console errors. The graph measured
+  340×304 px in its docked state and 440×576 px expanded, then returned to its
+  compact size. The `mtRF` classification improved the W1M0 road in the same
+  view, while some small terrain/model fragments remain. These results do not
+  prove that every road artifact is fixed in the native WebView or Cemu.
+- Verification: **46 preview tests pass** and the graph expand/sync browser
+  check passes. Cemu gameplay was not part of this visual test.
+
 ## 2026-10-22 — Preserve Cemu gate screenshots and record a startup stop
 
 - Rechecked the live isolated Chain run. It stopped at the overworld gate on
