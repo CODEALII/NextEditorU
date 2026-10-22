@@ -31,6 +31,7 @@ from .graph_validation import (
 )
 from .mesh import MAX_FACE_CORNERS, transform_obj_geometry
 from .recent_projects import RecentProjects
+from .editor_layout_preferences import EditorLayoutPreferences
 from .graph_profile_preferences import GraphProfilePreferences
 from .session_recovery import SessionRecovery, StaleRecoveryError
 
@@ -457,6 +458,7 @@ class WorldStudio(ttk.Frame):
         self.project = copy.deepcopy(project or demo_project())
         self.project_path = None
         self.recent_projects = RecentProjects()
+        self.layout_preferences = EditorLayoutPreferences()
         self.recovery_store = SessionRecovery()
         self._recovery_project_path = None
         self._recovery_baseline_sha256 = None
@@ -482,7 +484,9 @@ class WorldStudio(ttk.Frame):
         self._embedded_preview_revision = 0
         self._webview_host = None
         self._runtime_cleanup_done = False
-        self.graph_visible = True
+        # The embedded 3D scene is the primary graph editing surface. Keep the
+        # legacy 2D graph available on demand without taking viewport space by default.
+        self.graph_visible = self.layout_preferences.graph_visible(default=False)
         self._view_split_after_id = None
         self._build()
         self._load_mesh()
@@ -546,7 +550,9 @@ class WorldStudio(ttk.Frame):
         self.redo_button = ttk.Button(history_bar, text="Redo  Ctrl+Y", command=self.redo, state="disabled")
         self.redo_button.pack(side="left", padx=2)
         self.graph_view_button = ttk.Button(
-            history_bar, text="Hide 2D graph", command=self.toggle_graph_view)
+            history_bar,
+            text="Hide 2D graph" if self.graph_visible else "Show 2D graph",
+            command=self.toggle_graph_view)
         self.graph_view_button.pack(side="left", padx=(12, 2))
         self.viewport_hint = ttk.Label(self, text="3D world viewport · drag to orbit · right-drag to pan · wheel to zoom · select points in the viewport or list.", padding=(10, 5), foreground="#9fb4c7")
         self.viewport_hint.pack(fill="x")
@@ -560,7 +566,7 @@ class WorldStudio(ttk.Frame):
         self.graph_frame = ttk.Frame(self.view_split)
         ttk.Label(self.viewport_pane, text="3D WORLD", padding=(8, 5),
                   foreground="#9fb4c7").pack(fill="x")
-        ttk.Label(self.graph_frame, text="GRAPH EDITOR", padding=(8, 5),
+        ttk.Label(self.graph_frame, text="2D GRAPH · OPTIONAL", padding=(8, 5),
                   foreground="#9fb4c7").pack(fill="x")
         self.viewport_frame = ttk.Frame(self.viewport_pane)
         self.viewport_frame.pack(fill="both", expand=True)
@@ -569,6 +575,8 @@ class WorldStudio(ttk.Frame):
         self._build_embedded_viewport()
         self.view_split.add(self.viewport_pane, weight=3)
         self.view_split.add(self.graph_frame, weight=2)
+        if not self.graph_visible:
+            self.view_split.forget(self.graph_frame)
         self._view_split_positioned = False
         self.view_split.bind("<Map>", self._position_initial_view_split, add="+")
         body.add(self.view_split, weight=4)
@@ -646,17 +654,20 @@ class WorldStudio(ttk.Frame):
             self.view_split.forget(self.graph_frame)
             self.graph_visible = False
             self.graph_view_button.configure(text="Show 2D graph")
-            return
-
-        self.view_split.add(self.graph_frame, weight=2)
-        self.graph_visible = True
-        self.graph_view_button.configure(text="Hide 2D graph")
-        if self._view_split_after_id is not None:
-            try:
-                self.after_cancel(self._view_split_after_id)
-            except tk.TclError:
-                pass
-        self._view_split_after_id = self.after_idle(self._restore_view_split_position)
+        else:
+            self.view_split.add(self.graph_frame, weight=2)
+            self.graph_visible = True
+            self.graph_view_button.configure(text="Hide 2D graph")
+            if self._view_split_after_id is not None:
+                try:
+                    self.after_cancel(self._view_split_after_id)
+                except tk.TclError:
+                    pass
+            self._view_split_after_id = self.after_idle(self._restore_view_split_position)
+        try:
+            self.layout_preferences.set_graph_visible(self.graph_visible)
+        except (OSError, ValueError) as error:
+            self.status.set(f"Layout changed, but the preference could not be saved: {error}")
 
     def _restore_view_split_position(self):
         self._view_split_after_id = None
@@ -1332,6 +1343,10 @@ class WorldStudio(ttk.Frame):
                     rotations=getattr(self.native, "object_rotations", {}),
                     scales=getattr(self.native, "object_scales", {}))
                 shapes = extract_rigid_model(preview_model, preview_model_name)
+                from .preview3d import route_surface_needs_depth_bias
+                for shape in shapes:
+                    shape["depthBias"] = route_surface_needs_depth_bias(
+                        shape.get("name", ""), shape.get("material", ""))
                 point_index = {row[1]: index for index, row in enumerate(self.native.points.rows)
                                if len(row) > 1}
                 editable_bones = {

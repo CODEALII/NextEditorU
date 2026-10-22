@@ -10,11 +10,22 @@ import unittest
 from pathlib import Path
 
 from worldstudio.editor import validate_preview
-from worldstudio.preview3d import build_document
+from worldstudio.preview3d import build_document, route_surface_needs_depth_bias
 from worldstudio.project import resolve_project_path, store_project_path
 
 
 class PreviewSafetyTests(unittest.TestCase):
+    def test_native_route_surfaces_get_depth_bias_without_affecting_terrain(self):
+        self.assertTrue(route_surface_needs_depth_bias("beltmodel27__mtRW102W1S0a", "RW102W1S0a"))
+        self.assertTrue(route_surface_needs_depth_bias("routeOpague1", "mtRouteOpague"))
+        self.assertFalse(route_surface_needs_depth_bias("polySurface1489__mtGrass", "mtGrass"))
+        page = build_document({"shapes": [{"name": "road", "depthBias": True,
+                                            "positions": [], "indices": []}],
+                               "nodes": [], "routes": []})
+        self.assertIn("mesh.depthBias=metadata.depthBias===true", page)
+        self.assertIn("gl.polygonOffset(-1,-1)", page)
+        self.assertIn("gl.disable(gl.POLYGON_OFFSET_FILL)", page)
+
     def test_preview_project_rejects_invalid_saved_terrain_transform(self):
         project = {"format": "worldstudio-preview-v1", "nodes": [], "routes": [],
                    "terrain_transform": {"scale": [1, 0, 1],

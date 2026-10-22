@@ -1,5 +1,18 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Make the 3D world the primary graph editor and stabilize route surfaces
+
+- Native world route meshes identified by their BFRES route names/materials now
+  use a small WebGL polygon depth offset in the preview and mesh-picking pass.
+  The adjustment is scoped to route surfaces; grass and ordinary geometry keep
+  the existing depth behavior. This addresses the coplanar grass/road flicker
+  visible while orbiting, but still needs a live visual check in the desktop app.
+- The 3D viewport now opens as the main graph editing surface, with the old
+  synchronized 2D graph available through **Show 2D graph** and hidden by
+  default. The choice persists in local editor settings.
+- Added regression checks for route-only depth bias, scene metadata propagation,
+  and the default/optional graph-pane behavior. No Cemu gameplay claim is made.
+
 ## 2026-10-22 — Detect stale terrain UV and normal attributes
 
 - New OBJ/glTF terrain imports now store an additional SHA-256 for parsed UVs
@@ -13,11 +26,11 @@
 
 ## 2026-10-22 — Add a focused 3D viewport layout
 
-- Added a persistent **Hide 2D graph / Show 2D graph** control beside Undo/Redo.
-  Hiding the secondary graph lets the embedded WebGL world use the full editor
-  work area; restoring it returns to the synchronized split layout.
-- Added a Tk regression covering both pane states and button labels. The change
-  only affects editor layout and does not imply new in-game verification.
+- This earlier layout milestone added the persistent **Hide 2D graph / Show 2D
+  graph** control beside Undo/Redo. The follow-up above now makes 3D the default
+  graph surface and keeps the 2D graph optional.
+- Added a Tk regression covering both pane states and button labels. No in-game
+  behavior is implied.
 
 ## 2026-10-22 — Verify glTF sidecar changes against preview projects
 

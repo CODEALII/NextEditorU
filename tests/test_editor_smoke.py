@@ -15,6 +15,7 @@ from worldstudio.editor import (CameraDataWindow, NativeStudio, ObjTransformDial
                                 WorldStudio, demo_project, fit_preview_scale,
                                 preview_attributes_sha256, preview_geometry_sha256,
                                 project_preview_point, read_import_mesh)
+from worldstudio.editor_layout_preferences import EditorLayoutPreferences
 from worldstudio.camera import OffsetTable
 from worldstudio.recent_projects import RecentProjects
 from worldstudio.graph_profile_preferences import GraphProfilePreferences
@@ -107,6 +108,8 @@ class EditorSmokeTests(unittest.TestCase):
         self.app = NativeStudio(self.root, self.native,
                                 graph_profile_preferences=self.graph_profile_preferences)
         self.app.recent_projects = RecentProjects(Path(self.recent_tmp.name) / "recent.json")
+        self.app.layout_preferences = EditorLayoutPreferences(
+            Path(self.recent_tmp.name) / "editor-layout.json")
         self.root.update()
 
     def tearDown(self):
@@ -645,7 +648,7 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertEqual(self.app.canvas.itemcget(route_items[0], "fill"), "#38edb6")
         self.assertEqual(float(self.app.canvas.itemcget(route_items[0], "width")), 5.0)
 
-    def test_loaded_scene_keeps_3d_and_graph_panes_visible(self):
+    def test_loaded_scene_keeps_3d_as_primary_with_optional_2d_graph(self):
         calls = []
         self.app._ensure_embedded_view = lambda: None
         self.app._embedded_preview_dir = self.recent_tmp
@@ -660,25 +663,27 @@ class EditorSmokeTests(unittest.TestCase):
 
         panes = self.app.view_split.panes()
         self.assertIn(str(self.app.viewport_pane), panes)
-        self.assertIn(str(self.app.graph_frame), panes)
+        self.assertNotIn(str(self.app.graph_frame), panes)
         self.assertEqual([kind for kind, _ in calls], ["load", "ready"])
         ready_callback = calls[-1][1]
         ready_callback()
 
-    def test_graph_can_be_hidden_to_maximize_3d_and_restored(self):
+    def test_optional_2d_graph_can_be_shown_and_hidden(self):
         self.root.update()
-        self.assertTrue(self.app.graph_visible)
-        self.assertIn(str(self.app.graph_frame), self.app.view_split.panes())
-
-        self.app.toggle_graph_view()
         self.assertFalse(self.app.graph_visible)
         self.assertNotIn(str(self.app.graph_frame), self.app.view_split.panes())
-        self.assertEqual(self.app.graph_view_button.cget("text"), "Show 2D graph")
 
         self.app.toggle_graph_view()
         self.assertTrue(self.app.graph_visible)
         self.assertIn(str(self.app.graph_frame), self.app.view_split.panes())
         self.assertEqual(self.app.graph_view_button.cget("text"), "Hide 2D graph")
+        self.assertTrue(EditorLayoutPreferences(self.app.layout_preferences.path).graph_visible())
+
+        self.app.toggle_graph_view()
+        self.assertFalse(self.app.graph_visible)
+        self.assertNotIn(str(self.app.graph_frame), self.app.view_split.panes())
+        self.assertEqual(self.app.graph_view_button.cget("text"), "Show 2D graph")
+        self.assertFalse(EditorLayoutPreferences(self.app.layout_preferences.path).graph_visible())
 
     def test_webview_host_frame_keeps_viewport_pane_managed(self):
         class FakeWebView:
