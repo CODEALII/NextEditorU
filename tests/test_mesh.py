@@ -190,6 +190,21 @@ class MeshTests(unittest.TestCase):
                          {'format': 0x80d, 'offset': 16})
         self.assertEqual(shapes[0]['vertexAttributes']['_u1'],
                          {'format': 7, 'offset': 24})
+        self.assertEqual(shapes[0]['submeshes'], [{'indexOffset': 0, 'indexCount': 6}])
+
+    def test_static_model_preserves_contiguous_submesh_index_ranges(self):
+        data = bytearray(fixture())
+        struct.pack_into('>H', data, 0x48c, 2)
+        struct.pack_into('>II', data, 0x4e0, 0, 3)
+        struct.pack_into('>II', data, 0x4e8, 6, 3)
+
+        shape = extract_rigid_model(bytes(data))[0]
+
+        self.assertEqual(shape['submeshes'], [
+            {'indexOffset': 0, 'indexCount': 3},
+            {'indexOffset': 3, 'indexCount': 3},
+        ])
+        self.assertEqual(shape['indices'], [0, 1, 2, 0, 0, 0])
 
     def test_supported_vertex_color_formats_decode_without_clamping_source_values(self):
         data = struct.pack('>4B4e', 0, 64, 128, 255, 0.25, 1.5, -0.5, 1.0)
@@ -521,6 +536,8 @@ class LocalDumpMeshTests(unittest.TestCase):
         self.assertEqual(len(shapes),42)
         self.assertGreater(sum(len(shape['positions']) for shape in shapes),70000)
         self.assertGreater(sum(len(shape['indices']) for shape in shapes),300000)
+        self.assertTrue(all(sum(part['indexCount'] for part in shape['submeshes']) ==
+                            len(shape['indices']) for shape in shapes))
         from collections import Counter
         self.assertEqual(Counter(shape['vertexAttributes']['_u0']['format'] for shape in shapes),
                          {0x80d: 36, 0x7: 3, 0x207: 2, 0x4: 1})

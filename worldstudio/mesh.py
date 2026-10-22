@@ -202,10 +202,15 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
         submesh_count = r.u16(mesh+12)
         r.bounds(submeshes, submesh_count * 8)
         expected_count = 0
+        extracted_submeshes = []
         for part in range(submesh_count):
             offset, length = r.u32(submeshes+part*8), r.u32(submeshes+part*8+4)
             if offset != expected_count * 2 or length % 3:
                 raise ValueError(f'{shape_name}: non-contiguous triangle submesh')
+            extracted_submeshes.append({
+                'indexOffset': offset // 2,
+                'indexCount': length,
+            })
             expected_count += length
         if expected_count != index_count:
             raise ValueError(f'{shape_name}: submeshes do not cover the index buffer')
@@ -223,6 +228,7 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
             'boundBone': bone.name,
             'material': materials[material_index][0],
             'vertexSkinCount': data[shape + 22],
+            'submeshes': extracted_submeshes,
             'positions': positions,
             'normals': normals,
             'indices': indices,

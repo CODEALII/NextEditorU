@@ -1,5 +1,15 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Preserve BFRES submesh ranges in the embedded inspector
+
+- Rigid BFRES extraction now retains each validated submesh's contiguous
+  index offset and count, and the viewport inspector shows per-part ranges and
+  triangle counts. Geometry rendering continues to use the combined index
+  buffer; this change exposes the source grouping without changing it.
+- Synthetic tests cover split index ranges, labels and viewer parsing. A
+  local W1 regression confirms the preserved parts sum to every shape's full
+  index buffer. **113 mesh, preview and editor tests pass**.
+
 ## 2026-10-22 — Link BFRES mesh inspection to editable bone selection
 
 - Static rigid-shape extraction now carries the already-validated rest-pose
@@ -8,7 +18,8 @@
   existing viewport RPC, synchronizing its editor properties and world overlay.
   This is navigation only; arbitrary shape transforms stay read-only.
 - Added synthetic extraction and Node-backed UI regressions for binding labels
-  and editor selection. Focused tests pass; broader regression is next.
+  and editor selection. The 112-test mesh, viewer and editor regression passed;
+  a later W7 integration assertion also confirms bone-to-row mapping.
 
 ## 2026-10-22 — Persist graph-check gates per source archive
 
