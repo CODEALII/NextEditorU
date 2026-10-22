@@ -22,6 +22,8 @@
   reference profile's exact controller file. A mismatch is recorded and blocks
   Cemu launch. Tests cover equal profiles, emulated-device mismatch and
   prelaunch failure evidence.
+- Full repository regression after this runner change: **363 tests passed**
+  (`python -m unittest discover -s tests`, 317.356 seconds).
 
 ## 2026-10-22 — Verify the embedded viewport and matched Cemu movement
 
