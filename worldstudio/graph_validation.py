@@ -224,6 +224,76 @@ def build_native_connection_draft(point_rows, route_rows, known_references,
     }
 
 
+def apply_native_connection_draft(point_rows, route_rows, draft):
+    """Return copied point/route tables with a validated connection applied.
+
+    The input tables are never mutated. This also rechecks that the draft still
+    targets the same point and that every path ID will have a route-table row,
+    so callers can replace both tables together as one editor history step.
+    """
+    if not isinstance(draft, dict):
+        raise ValueError("Route connection draft is invalid")
+    source_index = draft.get("source_index")
+    source_name = draft.get("source")
+    target = draft.get("target")
+    destination_column = draft.get("destination_column")
+    path_column = draft.get("path_column")
+    chain = draft.get("chain")
+    new_rows = draft.get("route_rows")
+    if (type(source_index) is not int or not 0 <= source_index < len(point_rows) or
+            not isinstance(source_name, str) or not isinstance(target, str) or
+            destination_column not in (3, 6) or path_column != destination_column + 1 or
+            not isinstance(chain, (list, tuple)) or not chain or
+            any(not isinstance(route_id, str) or not _ROUTE_ID.fullmatch(route_id)
+                for route_id in chain) or
+            len(set(chain)) != len(chain) or
+            not isinstance(new_rows, list)):
+        raise ValueError("Route connection draft has invalid fields")
+    world_match = re.match(r"W[1-9]", source_name)
+    if (not _POINT_ID.fullmatch(source_name) or not _POINT_ID.fullmatch(target) or
+            not world_match or not target.startswith(world_match.group(0)) or
+            any(endpoint.startswith("W") and
+                not endpoint.startswith(world_match.group(0))
+                for route_id in chain for endpoint in (route_id[1:5], route_id[5:9]))):
+        raise ValueError("Route connection draft leaves its source world")
+    source_row = point_rows[source_index]
+    if (not isinstance(source_row, (list, tuple)) or len(source_row) != 9 or
+            source_row[1] != source_name):
+        raise ValueError("Route connection source changed; rebuild the draft")
+    if sum(isinstance(row, (list, tuple)) and len(row) == 9 and row[1] == target
+           for row in point_rows) != 1:
+        raise ValueError("Route connection destination changed; rebuild the draft")
+    if _macro_path_reaches(chain, source_name, target) is not True:
+        raise ValueError("Route connection path no longer reaches its destination")
+
+    existing = {
+        row[0] for row in route_rows
+        if isinstance(row, (list, tuple)) and len(row) == 3 and
+        isinstance(row[0], str) and _ROUTE_ID.fullmatch(row[0])
+    }
+    added = set()
+    if any(not isinstance(row, (list, tuple)) for row in route_rows):
+        raise ValueError("Current route table contains an unsupported row")
+    copied_routes = [list(row) for row in route_rows]
+    for row in new_rows:
+        if (not isinstance(row, (list, tuple)) or len(row) != 3 or
+                not isinstance(row[0], str) or not _ROUTE_ID.fullmatch(row[0]) or
+                row[0] in existing or row[0] in added or
+                not isinstance(row[1], str) or not row[1].strip()):
+            raise ValueError("Route connection contains an invalid or duplicate route row")
+        added.add(row[0])
+        copied_routes.append(list(row))
+    if not set(chain).issubset(existing | added):
+        raise ValueError("Route connection path is missing one or more route-table rows")
+
+    if any(not isinstance(row, (list, tuple)) for row in point_rows):
+        raise ValueError("Current point table contains an unsupported row")
+    copied_points = [list(row) for row in point_rows]
+    copied_points[source_index][destination_column] = target
+    copied_points[source_index][path_column] = ",".join(chain)
+    return copied_points, copied_routes
+
+
 def _tokens(value):
     return [token.strip() for token in value.split(",") if token.strip()]
 

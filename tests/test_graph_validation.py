@@ -1,6 +1,7 @@
 import unittest
 
 from worldstudio.graph_validation import (
+    apply_native_connection_draft,
     build_native_connection_draft,
     build_native_route_row,
     native_macro_path_choices,
@@ -76,16 +77,37 @@ class NativeRouteDraftTests(unittest.TestCase):
             points, [], references, {"W101", "K001", "W103"},
             0, "W103", "normal", "road", "W1")
 
-        points[0][draft["destination_column"]] = draft["target"]
-        points[0][draft["path_column"]] = ",".join(draft["chain"])
-        routes = [row[:] for row in draft["route_rows"]]
+        changed_points, routes = apply_native_connection_draft(points, [], draft)
         issues = validate_native_world(
-            points, routes, known_references=references,
+            changed_points, routes, known_references=references,
             initial_points=initial_points, initial_routes=initial_routes,
             world_prefix="W1", entry_points=("W101",),
             required_locations=("W103",))
 
         self.assertEqual(issues, [])
+        self.assertEqual(points[0][3:5], ["", ""])
+
+    def test_applying_connection_draft_is_atomic_and_rejects_stale_inputs(self):
+        points = [point(0, "W101"), point(1, "W103")]
+        routes = []
+        draft = build_native_connection_draft(
+            points, routes, {"RW101W103"}, {"W101", "W103"},
+            0, "W103", "normal", "road", "W1")
+
+        changed_points, changed_routes = apply_native_connection_draft(points, routes, draft)
+        self.assertEqual(changed_points[0][3:5], ["W103", "RW101W103"])
+        self.assertEqual(changed_routes, [["RW101W103", "road", ""]])
+        self.assertEqual(points[0][3:5], ["", ""])
+        self.assertEqual(routes, [])
+
+        stale_points = [row[:] for row in points]
+        stale_points[0][1] = "W102"
+        with self.assertRaisesRegex(ValueError, "source changed"):
+            apply_native_connection_draft(stale_points, routes, draft)
+
+        missing_rows = dict(draft, route_rows=[])
+        with self.assertRaisesRegex(ValueError, "missing one or more"):
+            apply_native_connection_draft(points, routes, missing_rows)
 
     def test_macro_chain_status_checks_direct_and_multihop_order(self):
         refs = {"RW101K001", "RK001W103"}

@@ -19,6 +19,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from .bfres import Skeletons
 from .gltf import read_glb
 from .graph_validation import (
+    apply_native_connection_draft,
     build_native_connection_draft,
     build_native_route_row,
     native_macro_path_choices,
@@ -2602,9 +2603,15 @@ class NativeStudio(WorldStudio):
                 messagebox.showerror("Cannot build route", str(error), parent=window)
                 update_preview()
                 return
-            point[draft["destination_column"]] = target
-            point[draft["path_column"]] = ",".join(draft["chain"])
-            self.native.routes.rows.extend(draft["route_rows"])
+            try:
+                point_rows, route_rows = apply_native_connection_draft(
+                    self.native.points.rows, self.native.routes.rows, draft)
+            except ValueError as error:
+                messagebox.showerror("Cannot build route", str(error), parent=window)
+                update_preview()
+                return
+            self.native.points.rows = point_rows
+            self.native.routes.rows = route_rows
             self.dirty = True
             self._record_edit()
             self.refresh()

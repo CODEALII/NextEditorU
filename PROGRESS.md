@@ -1,5 +1,18 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Apply route connection drafts atomically
+
+- Route connection submission now revalidates the same-world point pair, the
+  ordered BFRES path, and every required route-table row before replacing either
+  editor table. The application helper returns copied point and route tables,
+  so stale or incomplete drafts fail without partially changing the project;
+  the editor swaps both results in one Undo-history step.
+- Tests verify stale-source and missing-row rejection, unchanged input tables,
+  and that an applied draft passes the local export graph gate. Focused graph/UI
+  checks passed **29 tests**; the full repository suite passed **377 tests** in
+  318.416 seconds. This remains offline evidence; traversal and progression
+  require Cemu verification.
+
 ## 2026-10-22 — Build a point route connection as one draft
 
 - Added a selected-point workflow that searches the resolved local BFRES
