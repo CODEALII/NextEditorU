@@ -1,5 +1,23 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Edit supported BFRES object rotations and scale
+
+- The embedded inspector now exposes local XYZ, Euler rotation in degrees and
+  positive local scale for uniquely bound static shape bones in the supported
+  affine subset. Rotation and scale are applied to the actual BFRES transform,
+  checked by reparsing the edited hierarchy, and reflected in an asynchronous
+  scene rebuild. Unsupported quaternion/special hierarchy transforms stay
+  read-only.
+- Project save/load, recovery snapshots, Undo/Redo, validation and archive
+  export include the new transform values. Validation whitelists rotation and
+  scale edits against source-bound object bones instead of trusting project
+  keys. A W5a archive regression checks edited preview geometry, invalid inputs,
+  save/load, export, and byte-identical source preservation.
+- Verification: the full suite passed **358 tests in 321.655 seconds**; after
+  adding source-binding whitelist checks, the W5a integration regression passed
+  again. `compileall` and `git diff --check` passed. Cemu placement and
+  animation behavior remain unverified.
+
 ## 2026-10-22 — Edit supported rigid BFRES object transforms
 
 - The resource reader now finds static rigid-shape bindings without decoding

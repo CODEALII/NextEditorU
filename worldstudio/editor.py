@@ -16,6 +16,7 @@ import threading
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
+from .bfres import Skeletons
 from .gltf import read_glb
 from .graph_validation import (
     build_native_route_row,
@@ -804,6 +805,8 @@ class WorldStudio(ttk.Frame):
                 "routes": copy.deepcopy(native.routes.rows),
                 "positions": copy.deepcopy(native.positions),
                 "object_positions": copy.deepcopy(getattr(native, "object_positions", {})),
+                "object_rotations": copy.deepcopy(getattr(native, "object_rotations", {})),
+                "object_scales": copy.deepcopy(getattr(native, "object_scales", {})),
                 "layout": copy.deepcopy(native.layout),
                 "terrain": native.terrain,
                 "geometry": native.geometry,
@@ -851,6 +854,10 @@ class WorldStudio(ttk.Frame):
             native.positions = copy.deepcopy(state["positions"])
             native.object_positions = copy.deepcopy(
                 state.get("object_positions", getattr(native, "object_positions", {})))
+            native.object_rotations = copy.deepcopy(
+                state.get("object_rotations", getattr(native, "object_rotations", {})))
+            native.object_scales = copy.deepcopy(
+                state.get("object_scales", getattr(native, "object_scales", {})))
             native.layout = copy.deepcopy(state["layout"])
             native.terrain = state["terrain"]
             native.geometry = state["geometry"]
@@ -956,23 +963,42 @@ class WorldStudio(ttk.Frame):
             required = {"points", "routes", "positions", "layout", "terrain",
                         "geometry", "bone_renames", "camera_edits", "mesh"}
             object_positions = payload.get("object_positions", {})
-            if not isinstance(object_positions, dict):
+            object_rotations = payload.get("object_rotations", {})
+            object_scales = payload.get("object_scales", {})
+            if not all(isinstance(values, dict) for values in
+                       (object_positions, object_rotations, object_scales)):
                 return False
             supported_objects = getattr(self.native, "object_shape_bindings", {})
-            for name, xyz in object_positions.items():
-                try:
-                    if (name not in supported_objects or not isinstance(xyz, (list, tuple)) or
-                            len(xyz) != 3 or any(isinstance(value, bool) for value in xyz) or
-                            any(not math.isfinite(float(value)) or abs(float(value)) > 1e7
-                                for value in xyz)):
+            supported_scales = supported_objects
+            model = getattr(self.native, "preview_model_name", None)
+            supported_rotations = {
+                bone.name for bone in self.native.skeletons.models.get(model, ())
+                if bone.name in supported_objects and bone.flags & (1 << 12)
+            }
+            for values, supported, mode in (
+                    (object_positions, supported_objects, "position"),
+                    (object_rotations, supported_rotations, "rotation"),
+                    (object_scales, supported_scales, "scale")):
+                for name, xyz in values.items():
+                    try:
+                        if (name not in supported or not isinstance(xyz, (list, tuple)) or
+                                len(xyz) != 3 or any(isinstance(value, bool) for value in xyz) or
+                                any(not math.isfinite(float(value)) for value in xyz)):
+                            return False
+                        vector = tuple(float(value) for value in xyz)
+                        if (mode == "position" and any(abs(value) > 1e7 for value in vector) or
+                                mode == "rotation" and any(abs(value) > 36000 for value in vector) or
+                                mode == "scale" and any(not 1e-4 <= value <= 1e4 for value in vector)):
+                            return False
+                    except (TypeError, ValueError, OverflowError):
                         return False
-                except (TypeError, ValueError, OverflowError):
-                    return False
             return (required.issubset(payload) and
                     isinstance(payload["points"], list) and
                     isinstance(payload["routes"], list) and
                     isinstance(payload["positions"], dict) and
                     ("object_positions" not in payload or isinstance(payload["object_positions"], dict)) and
+                    ("object_rotations" not in payload or isinstance(payload["object_rotations"], dict)) and
+                    ("object_scales" not in payload or isinstance(payload["object_scales"], dict)) and
                     isinstance(payload["layout"], dict) and
                     isinstance(payload["bone_renames"], list) and
                     isinstance(payload["camera_edits"], dict) and
@@ -1153,9 +1179,15 @@ class WorldStudio(ttk.Frame):
 
     def _current_preview_geometry_signature(self):
         object_positions = getattr(self.native, "object_positions", {})
+        object_rotations = getattr(self.native, "object_rotations", {})
+        object_scales = getattr(self.native, "object_scales", {})
         return (self.native.terrain, id(self.native.geometry), tuple(sorted(
             (name, tuple(float(value) for value in xyz))
-            for name, xyz in object_positions.items())))
+            for name, xyz in object_positions.items())), tuple(sorted(
+            (name, tuple(float(value) for value in xyz))
+            for name, xyz in object_rotations.items())), tuple(sorted(
+            (name, tuple(float(value) for value in xyz))
+            for name, xyz in object_scales.items())))
 
     def _export_scene_to_external(self):
         if self.preview_scene:
@@ -1186,6 +1218,9 @@ class WorldStudio(ttk.Frame):
                 preview_positions = dict(self.native.positions)
                 preview_positions.update(getattr(self.native, "object_positions", {}))
                 preview_model = self.native.skeletons.patch_positions(preview_positions)
+                preview_model = Skeletons(preview_model).patch_object_transforms(
+                    rotations=getattr(self.native, "object_rotations", {}),
+                    scales=getattr(self.native, "object_scales", {}))
                 shapes = extract_rigid_model(preview_model, preview_model_name)
                 point_index = {row[1]: index for index, row in enumerate(self.native.points.rows)
                                if len(row) > 1}
@@ -2152,6 +2187,7 @@ class NativeStudio(WorldStudio):
             for child in self.form.winfo_children():
                 child.destroy()
             self.properties, self.position_properties = {}, {}
+            self.object_rotation_properties, self.object_scale_properties = {}, {}
             model = (getattr(self.native, "preview_model_name", self.native.path_model)
                      if kind == "object" else self.native.path_model)
             bones = self.native.skeletons.models[model]
@@ -2180,6 +2216,12 @@ class NativeStudio(WorldStudio):
                 self.show_native_position(
                     index, len(metadata), position_map=self.native.object_positions,
                     caption="BFRES object local XYZ — embedded shape transform")
+                row = len(metadata) + 4
+                self.object_rotation_properties = self.show_object_vector(
+                    "Local rotation (degrees)", self.native.object_rotations.get(index),
+                    row)
+                self.object_scale_properties = self.show_object_vector(
+                    "Local scale", self.native.object_scales.get(index), row + 4)
             else:
                 self.show_native_position(index, len(metadata))
             self.form.columnconfigure(1, weight=1)
@@ -2310,6 +2352,21 @@ class NativeStudio(WorldStudio):
             self.position_properties[key] = var
             ttk.Entry(self.form, textvariable=var).grid(row=start + offset + 1, column=1, sticky="ew", padx=(5, 0), pady=3)
 
+    def show_object_vector(self, label, values, start):
+        ttk.Label(self.form, text=label).grid(row=start, columnspan=2, sticky="w", pady=(8, 3))
+        controls = {}
+        if values is None:
+            ttk.Label(self.form, text="Read-only transform format").grid(
+                row=start + 1, columnspan=2, sticky="w")
+            return controls
+        for offset, axis in enumerate("xyz"):
+            ttk.Label(self.form, text=axis).grid(row=start + offset + 1, column=0, sticky="w")
+            variable = tk.StringVar(value=str(values[offset]))
+            controls[axis] = variable
+            ttk.Entry(self.form, textvariable=variable).grid(
+                row=start + offset + 1, column=1, sticky="ew", padx=(5, 0), pady=3)
+        return controls
+
     def apply(self):
         if self.exporting:
             return
@@ -2321,8 +2378,16 @@ class NativeStudio(WorldStudio):
             position = [float(self.position_properties[k].get()) for k in ("x", "y", "z")] if kind in ("point", "bone", "object") else None
             if position and not all(math.isfinite(value) for value in position):
                 raise ValueError("Coordinates must be finite")
+            rotation = ([float(self.object_rotation_properties[k].get()) for k in ("x", "y", "z")]
+                        if kind == "object" and self.object_rotation_properties else None)
+            scale = ([float(self.object_scale_properties[k].get()) for k in ("x", "y", "z")]
+                     if kind == "object" and self.object_scale_properties else None)
+            if rotation is not None and not all(math.isfinite(value) and abs(value) <= 36000 for value in rotation):
+                raise ValueError("Rotation must be finite and within +/-36000 degrees")
+            if scale is not None and not all(math.isfinite(value) and 1e-4 <= value <= 1e4 for value in scale):
+                raise ValueError("Scale components must be between 1e-4 and 1e4")
         except ValueError as error:
-            messagebox.showerror("Invalid coordinates", str(error), parent=self)
+            messagebox.showerror("Invalid transform", str(error), parent=self)
             return
         if kind == "bone":
             self.native.positions[index] = position
@@ -2333,10 +2398,14 @@ class NativeStudio(WorldStudio):
             return
         if kind == "object":
             self.native.object_positions[index] = position
+            if rotation is not None:
+                self.native.object_rotations[index] = rotation
+            if scale is not None:
+                self.native.object_scales[index] = scale
             self.dirty = True
             self._record_edit()
             self.refresh()
-            self.status.set(f"Updated BFRES object {index} local XYZ; embedded preview rebuild queued. In-game appearance remains unverified.")
+            self.status.set(f"Updated BFRES object {index} local transform; embedded preview rebuild queued. In-game appearance remains unverified.")
             return
         rows = self.native.points.rows if kind == "point" else self.native.routes.rows
         edited_row = [self.properties[i].get() for i in sorted(self.properties)]

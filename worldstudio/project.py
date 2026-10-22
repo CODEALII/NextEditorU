@@ -197,6 +197,16 @@ class WorldProject:
             for bone in self.skeletons.models[self.preview_model_name]
             if bone.name in self.object_shape_bindings
         }
+        self.object_rotations = {
+            bone.name: [math.degrees(value) for value in bone.rotation[:3]]
+            for bone in self.skeletons.models[self.preview_model_name]
+            if bone.name in self.object_shape_bindings and bone.flags & (1 << 12)
+        }
+        self.object_scales = {
+            bone.name: list(bone.scale)
+            for bone in self.skeletons.models[self.preview_model_name]
+            if bone.name in self.object_shape_bindings
+        }
         self.layout = {}
         self.terrain = None
         self.geometry = None
@@ -349,6 +359,37 @@ class WorldProject:
             except (TypeError, ValueError, OverflowError):
                 errors.append(f'Object position {name}: expected three finite coordinates within +/-1e7')
 
+        for field_name, values in (('rotation', getattr(self, 'object_rotations', {})),
+                                   ('scale', getattr(self, 'object_scales', {}))):
+            if not isinstance(values, dict):
+                errors.append(f'BFRES object {field_name}s must be an object')
+                continue
+            bound_names = set(getattr(self, 'object_shape_bindings', {}))
+            if field_name == 'rotation':
+                preview_bones = getattr(self, 'skeletons').models.get(
+                    getattr(self, 'preview_model_name', None), ())
+                supported = {bone.name for bone in preview_bones
+                             if bone.name in bound_names and bone.flags & (1 << 12)}
+            else:
+                supported = bound_names
+            for name, vector in values.items():
+                if not isinstance(name, str) or name not in supported:
+                    errors.append(f'Object {field_name} {name!r}: transform is not supported')
+                    continue
+                try:
+                    if (not isinstance(vector, (list, tuple)) or len(vector) != 3 or
+                            any(isinstance(value, bool) for value in vector)):
+                        raise ValueError
+                    numbers = tuple(float(value) for value in vector)
+                    limit_ok = (all(abs(value) <= 36000. for value in numbers)
+                                if field_name == 'rotation' else
+                                all(1e-4 <= value <= 1e4 for value in numbers))
+                    if not all(math.isfinite(value) for value in numbers) or not limit_ok:
+                        raise ValueError
+                except (TypeError, ValueError, OverflowError):
+                    expected = 'three finite degrees within +/-36000' if field_name == 'rotation' else 'three positive scales within 1e-4..1e4'
+                    errors.append(f'Object {field_name} {name}: expected {expected}')
+
         point_rows = getattr(self.points, 'rows', None)
         if not isinstance(point_rows, (list, tuple)):
             errors.append('Point table must be a list of rows')
@@ -464,6 +505,7 @@ class WorldProject:
             'points': self.points.rows, 'routes': self.routes.rows,
             'layout': self.layout, 'positions': self.positions,
             'object_positions': self.object_positions, 'terrain': terrain,
+            'object_rotations': self.object_rotations, 'object_scales': self.object_scales,
             'geometry': self.geometry, 'bone_renames': self.bone_renames,
             'camera_edits': self.camera_edits,
             'camera_source_sha256': {n: sha(v) for n,v in self.camera_original.items()}}, indent=2)
@@ -488,6 +530,10 @@ class WorldProject:
         object_positions = data.get('object_positions', {})
         if not isinstance(object_positions, dict):
             raise ValueError('Project BFRES object positions must be an object')
+        object_rotations = data.get('object_rotations', {})
+        object_scales = data.get('object_scales', {})
+        if not isinstance(object_rotations, dict) or not isinstance(object_scales, dict):
+            raise ValueError('Project BFRES object transforms must be objects')
         layout = data.get('layout', {})
         if not isinstance(layout, dict):
             raise ValueError('Project layout must be an object')
@@ -511,6 +557,8 @@ class WorldProject:
         self.layout = layout
         self.positions.update(positions)
         self.object_positions.update(object_positions)
+        self.object_rotations.update(object_rotations)
+        self.object_scales.update(object_scales)
         self.terrain = resolve_project_path(terrain, path)
         self.geometry = data.get('geometry')
         self.bone_renames = bone_renames
@@ -547,6 +595,8 @@ class WorldProject:
         patched_positions = dict(self.positions)
         patched_positions.update(self.object_positions)
         patched_model = self.skeletons.patch_positions(patched_positions)
+        patched_model = Skeletons(patched_model).patch_object_transforms(
+            rotations=self.object_rotations, scales=self.object_scales)
         rename_reports = []
         if self.bone_renames:
             from .bfres_names import rename_bone

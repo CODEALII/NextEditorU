@@ -798,6 +798,16 @@ class EditorSmokeTests(unittest.TestCase):
         native = WorldProject.open(source_copy)
         self.assertTrue(native.object_positions)
         bone_name = next(iter(native.object_positions))
+        with self.assertRaisesRegex(ValueError, "invalid Euler rotation"):
+            native.skeletons.patch_object_transforms(
+                rotations={bone_name: [0.0, 36001.0, 0.0]})
+        with self.assertRaisesRegex(ValueError, "scale components"):
+            native.skeletons.patch_object_transforms(
+                scales={bone_name: [0.0, 1.0, 1.0]})
+        native.object_rotations["W101"] = [0.0, 0.0, 0.0]
+        self.assertTrue(any("Object rotation 'W101': transform is not supported" in issue
+                            for issue in native.validate()))
+        native.object_rotations.pop("W101")
         studio_top = tk.Toplevel(self.root)
         studio_top.withdraw()
         studio = NativeStudio(studio_top, native)
@@ -808,8 +818,13 @@ class EditorSmokeTests(unittest.TestCase):
             studio.tree.selection_set(object_iid)
             studio.select_tree()
             self.assertEqual(studio.native_selection, ("object", bone_name))
+            recovery_payload = studio._capture_edit_state()
+            recovery_payload["object_scales"]["W101"] = [1.0, 1.0, 1.0]
+            self.assertFalse(studio._recovery_payload_valid(recovery_payload))
             self.assertEqual(studio.position_properties["x"].get(), str(native.object_positions[bone_name][0]))
             starting_position = list(native.object_positions[bone_name])
+            starting_rotation = list(native.object_rotations[bone_name])
+            starting_scale = list(native.object_scales[bone_name])
 
             graph = studio.view_project()
             before_scene = studio._build_3d_preview(graph)
@@ -844,15 +859,45 @@ class EditorSmokeTests(unittest.TestCase):
                     self.assertAlmostEqual(delta[axis], deltas[0][axis], places=4)
             self.assertGreater(sum(abs(value) for value in deltas[0]), 1.0)
 
+            studio.tree.selection_set(object_iid)
+            studio.select_tree()
+            moved_rotation = list(starting_rotation)
+            moved_rotation[1] += 20.0
+            moved_scale = list(starting_scale)
+            moved_scale[0] *= 1.15
+            studio.object_rotation_properties["y"].set(str(moved_rotation[1]))
+            studio.object_scale_properties["x"].set(str(moved_scale[0]))
+            studio.apply()
+            self.assertEqual(native.object_rotations[bone_name], moved_rotation)
+            self.assertEqual(native.object_scales[bone_name], moved_scale)
+            transformed_scene = studio._build_3d_preview(graph)
+            transformed = next(shape for shape in transformed_scene["shapes"]
+                               if shape["name"] == shape_name)
+            self.assertNotEqual(transformed["positions"], after["positions"])
+            studio.undo()
+            self.assertEqual(native.object_rotations[bone_name], starting_rotation)
+            self.assertEqual(native.object_scales[bone_name], starting_scale)
+            studio.redo()
+            self.assertEqual(native.object_rotations[bone_name], moved_rotation)
+            self.assertEqual(native.object_scales[bone_name], moved_scale)
+
             project_dir = tempfile.TemporaryDirectory()
             project_path = Path(project_dir.name) / "object-edits.nws.json"
             native.save(project_path)
             reopened = WorldProject.load(project_path)
             self.assertEqual(reopened.object_positions, native.object_positions)
+            self.assertEqual(reopened.object_rotations, native.object_rotations)
+            self.assertEqual(reopened.object_scales, native.object_scales)
             output = Path(project_dir.name) / "object-edited.szs"
             native.export(output)
             exported = WorldProject.open(output)
             self.assertEqual(exported.object_positions[bone_name], native.object_positions[bone_name])
+            for actual, expected in zip(exported.object_rotations[bone_name],
+                                        native.object_rotations[bone_name]):
+                self.assertAlmostEqual(actual, expected, places=4)
+            for actual, expected in zip(exported.object_scales[bone_name],
+                                        native.object_scales[bone_name]):
+                self.assertAlmostEqual(actual, expected, places=5)
             self.assertEqual(source_copy.read_bytes(), original_archive)
         finally:
             if project_dir is not None:

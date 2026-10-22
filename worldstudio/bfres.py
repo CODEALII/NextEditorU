@@ -307,3 +307,48 @@ class Skeletons:
             # Clear local/cumulative TranslateZero optimizations.
             struct.pack_into('>I', out, b.offset + 16, b.flags & ~((1 << 27) | (1 << 31)))
         return bytes(out)
+
+    def patch_object_transforms(self, *, rotations=None, scales=None):
+        """Patch supported object-bone rotation degrees and positive local scales.
+
+        Rotation edits are deliberately limited to the observed XYZ Euler form;
+        quaternion and special hierarchy branches remain read-only in the UI.
+        The result is reparsed and every edited bone must remain in the affine
+        rest-pose subset used by the static preview.
+        """
+        rotations = rotations or {}
+        scales = scales or {}
+        out = bytearray(self.data)
+        changed = {}
+        for name, degrees in rotations.items():
+            bone = self.unique(name)
+            if not bone.flags & (1 << 12):
+                raise ValueError(f'{name}: only XYZ Euler rotation edits are supported')
+            if (not isinstance(degrees, (tuple, list)) or len(degrees) != 3 or
+                    any(isinstance(value, bool) for value in degrees) or
+                    any(not math.isfinite(float(value)) or abs(float(value)) > 36000.
+                        for value in degrees)):
+                raise ValueError(f'{name}: invalid Euler rotation')
+            radians = tuple(math.radians(float(value)) for value in degrees)
+            if radians != bone.rotation[:3]:
+                struct.pack_into('>3f', out, bone.offset + 32, *radians)
+                changed.setdefault(bone.model, set()).add(name)
+        for name, xyz in scales.items():
+            bone = self.unique(name)
+            if (not isinstance(xyz, (tuple, list)) or len(xyz) != 3 or
+                    any(isinstance(value, bool) for value in xyz) or
+                    any(not math.isfinite(float(value)) or not 1e-4 <= float(value) <= 1e4
+                        for value in xyz)):
+                raise ValueError(f'{name}: scale components must be finite and within 1e-4..1e4')
+            scale = tuple(float(value) for value in xyz)
+            if scale != bone.scale:
+                struct.pack_into('>3f', out, bone.offset + 20, *scale)
+                changed.setdefault(bone.model, set()).add(name)
+        if changed:
+            patched = Skeletons(bytes(out))
+            for model, names in changed.items():
+                supported = patched.world_affine_transforms(model)
+                for name in names:
+                    if name not in supported:
+                        raise ValueError(f'{name}: edited transform left the supported affine hierarchy')
+        return bytes(out)
