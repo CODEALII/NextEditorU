@@ -2,23 +2,33 @@
 
 ## 2026-10-22 — Dock the graph into the 3D world and improve road depth precision
 
-- Enlarged the embedded graph to a full-height overlay that is open and expanded
-  by default. Its SVG layout adapts to the viewport, so point positions and labels
-  use the available height rather than remaining compressed in a small inset.
-  Point/route selection stays synchronized with the list and 3D world. A layout
-  preference version bump makes sessions saved with the old separate graph pane
+- Reworked the embedded graph from a covering overlay into a full-height docked
+  pane inside the 3D viewport. The WebGL canvas and world labels resize to the
+  remaining area, keeping the terrain visible beside the editable graph. Its SVG
+  layout adapts to the pane height, and point/route selection stays synchronized
+  with the list and 3D world. A layout preference version bump makes sessions
+  saved with the old separate graph pane
   start in the integrated 3D workflow; the optional side graph can still be
   toggled and saved again.
 - Raised the minimum camera near plane from 0.1% to 0.5% of world radius. At a
   close zoom in the camera-math regression, this lowers the far/near ratio from
   1,250 to 250, improving depth-buffer resolution where roads and terrain sit
   close together. The route-only clip-space bias remains in place.
-- Regression checks cover the updated depth range, expanded responsive graph,
-  and migration of old layout preferences. The focused preview/editor suite
-  passes **91 tests**, including generated JavaScript checks.
-  The computer-use runtime could not initialize (`Trusted RPC service is not
-  configured`), so this does not yet verify camera orbit appearance in the
-  native WebView or confirm every road artifact is gone.
+- A fresh local W1 page was rendered in installed Chrome/SwiftShader at 1280×900.
+- Four camera-orbit gestures kept WebGL active without page errors; selecting W102
+  from the docked graph selected `point:2` and centered the world camera. Layout
+  smoke checks at 1280×900, 840×760, and 600×650 confirmed a 12 px gap between
+  the live canvas and graph, and that Preview Controls stays on the canvas side.
+  Hiding the graph restores the full 1280 px canvas, then showing it re-docks.
+  Screenshots are in ignored `local/evidence/current-orbit-render/`. The main
+  roads remain visible while orbiting, but smaller W1M0 texture/geometry
+  fragments remain. This headless check does not verify the native WebView2
+  renderer or claim that every road artifact is fixed. Computer Use itself
+  remains unavailable because its Trusted-RPC service is not configured.
+- Regression checks cover docked canvas sizing, the updated depth range, the
+  responsive graph, and migration of old layout preferences. The focused
+  preview/editor suite passes **91 tests**, including generated JavaScript
+  checks.
 
 ## 2026-10-22 — Prevent projected terrain from flipping existing faces
 
