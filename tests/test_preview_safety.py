@@ -350,24 +350,24 @@ console.log(JSON.stringify({regular:Array.from(regular),mirrored:Array.from(mirr
 const registry={shapes:element(),selection:element()};
 const document={getElementById:id=>registry[id],createElement:tag=>element(tag)};
 function element(tag){const e={tagName:tag,children:[],dataset:{},listeners:{},attributes:{},style:{},className:'',textContent:'',hidden:false,append(...items){this.children.push(...items)},appendChild(item){this.children.push(item);return item},replaceChildren(...items){this.children=items},setAttribute(k,v){this.attributes[k]=v},addEventListener(k,fn){this.listeners[k]=fn},classList:{add(name){e.className=[...new Set((e.className+' '+name).trim().split(/\s+/))].join(' ')},remove(name){e.className=e.className.split(/\s+/).filter(x=>x!==name).join(' ')},contains(name){return e.className.split(/\s+/).includes(name)}}};return e}
-let focusedMesh=null;function focusMesh(mesh){focusedMesh=mesh}
+let focusedMesh=null,selectedEditorId='',rpcSelection=null;function focusMesh(mesh){focusedMesh=mesh}function selectEditorItem(id){selectedEditorId=id}globalThis.window={tkwry:{invoke:(name,payload)=>{rpcSelection={name,payload}}}}
 """ + helper + r"""
-const a={name:'Grass <test>',material:'mtGrass',color:[.2,.4,.6],textureName:'Grass_alb',normalTextureName:'Grass_nml',vertexCount:12,triangleCount:8,hasUvs:true,visible:true};
+const a={name:'Grass <test>',material:'mtGrass',color:[.2,.4,.6],textureName:'Grass_alb',normalTextureName:'Grass_nml',vertexCount:12,triangleCount:8,hasUvs:true,visible:true,boundBone:'W101',editorId:'point:0'};
 const b={name:'Rock',material:'mtRock',color:[.3,.3,.3],textureName:'',normalTextureName:'',vertexCount:9,triangleCount:4,hasUvs:false,visible:true};
 a.shaderMetadata={archiveName:'shader',programName:'route',samplerSymbols:{_o0:'cTexMapRouteMask'},uniformNames:['texmtx0'],vertexSkinCount:0,variationCount:6,variationSelection:{candidate_index:2,candidate_count:6,selection_model:'AGL material-option lookup; shape variation unresolved',macro_values:[{name:'MODE',value:'1',source:'material-option'}],unresolved_macros:['NUM_SKINNING_VTX'],ignored_options:[]},attributeBindings:{_u4:{shader_name:'aTexCoordRouteMask',source_attribute:'_u2',present:true,format:0x80d,offset:24}}};
 addShapeRow(a);addShapeRow(b);a.row.children[2].listeners.click();
 if(!a.row.classList.contains('selected'))throw Error('selected row is not marked');
 const first=registry.selection.children.map(x=>x.textContent).join('\n');
-if(!first.includes('Grass <test>')||!first.includes('12 vertices / 8 triangles')||!first.includes('Grass_alb')||!first.includes('Grass_nml (BC5 SNORM map)'))throw Error(first);
+if(!first.includes('Grass <test>')||!first.includes('12 vertices / 8 triangles')||!first.includes('Grass_alb')||!first.includes('Grass_nml (BC5 SNORM map)')||!first.includes('Rigid rest-pose bone: W101'))throw Error(first);
 const shaderPanel=registry.selection.children.find(x=>x.className==='shader-interface');if(!shaderPanel)throw Error('missing expandable shader inspector');
 const shaderText=shaderPanel.children.map(x=>x.textContent).join('\n');
 if(!shaderPanel.children[0].textContent.includes('AGL material-option candidate: 2 / 6')||!shaderText.includes('BFRES vertex skin count: 0; skinning macro value mapping remains unresolved')||!shaderText.includes('Unresolved shape-specific inputs: NUM_SKINNING_VTX')||!shaderText.includes('Vertex input _u4: aTexCoordRouteMask <- BFRES _u2 (format 0x80D at 24)')||!shaderText.includes('Samplers: _o0=cTexMapRouteMask'))throw Error(shaderText);
-registry.selection.children.at(-1).listeners.click();if(focusedMesh!==a)throw Error('focus action is not linked to selection');
+registry.selection.children.find(x=>x.className==='focus-mesh'&&x.textContent==='Focus mesh').listeners.click();if(focusedMesh!==a)throw Error('focus action is not linked to selection');const boundButton=registry.selection.children.find(x=>x.textContent==='Select bound bone in editor');if(!boundButton)throw Error('missing bound-bone editor action');boundButton.listeners.click();if(selectedEditorId!=='point:0'||rpcSelection?.name!=='select_item'||rpcSelection.payload.payload.editorId!=='point:0')throw Error('bound bone did not synchronize editor selection');
 b.row.children[2].listeners.click();
 if(a.row.classList.contains('selected')||!b.row.classList.contains('selected'))throw Error('selection did not move');
 if(!registry.selection.children.map(x=>x.textContent).join('\n').includes('UV coordinates: absent'))throw Error('missing UV status');
 if(a.row.children[2].tagName!=='button'||a.row.children[2].attributes['aria-label']!=='Inspect Grass <test>')throw Error('selection button is not accessible');
-registry.selection.children.at(-1).listeners.click();if(focusedMesh!==b)throw Error('focus action did not follow selection');
+registry.selection.children.find(x=>x.className==='focus-mesh'&&x.textContent==='Focus mesh').listeners.click();if(focusedMesh!==b)throw Error('focus action did not follow selection');
 console.log('mesh selection inspector ok');
 """
         result = subprocess.run([node, "-e", probe], capture_output=True, text=True)
@@ -643,7 +643,8 @@ console.log(JSON.stringify({direction:Array.from(previewLightDirection),intensit
         page = build_document(scene)
         packed = json.loads(re.search(r"const scene=(.*?);", page).group(1))
         self.assertEqual(packed["shapes"][0]["textureSrt"], {"texmtx0": srt})
-        self.assertIn("mesh.textureSrt=textureSrtByShape.get(mesh.name)||{}", page)
+        self.assertIn("mesh.textureSrt=metadata.textureSrt||{}", page)
+        self.assertIn("mesh.boundBone=metadata.boundBone||''", page)
         self.assertIn("row.textContent=textureSrtLabel(name,srt)", page)
         self.assertIn("transform math and sampler association are unresolved.", page)
         self.assertIn("Assigned program declares ${matched.join(', ')}", page)

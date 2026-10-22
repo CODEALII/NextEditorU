@@ -181,6 +181,7 @@ class MeshTests(unittest.TestCase):
         shapes = extract_rigid_model(fixture())
         self.assertEqual(len(shapes), 1)
         self.assertEqual(shapes[0]['name'], DEFAULT_SHAPE)
+        self.assertEqual(shapes[0]['boundBone'], 'root')
         self.assertEqual(shapes[0]['material'], 'mtGrass')
         self.assertEqual(shapes[0]['positions'][:3], self.vertices)
         self.assertEqual(shapes[0]['indices'], [0, 1, 2, 0, 0, 0])

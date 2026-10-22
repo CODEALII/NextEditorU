@@ -217,6 +217,10 @@ def extract_rigid_model(data, model=DEFAULT_MODEL):
             raise ValueError(f'{shape_name}: missing material reference')
         extracted = {
             'name': shape_name,
+            # This rigid shape is already transformed by the bound bone's
+            # rest-pose matrix above. Keep the binding for editor navigation;
+            # it is metadata only and does not imply animation/skinning.
+            'boundBone': bone.name,
             'material': materials[material_index][0],
             'vertexSkinCount': data[shape + 22],
             'positions': positions,

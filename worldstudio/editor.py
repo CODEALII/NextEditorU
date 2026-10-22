@@ -1159,6 +1159,20 @@ class WorldStudio(ttk.Frame):
                 if preview_model_name not in self.native.skeletons.models:
                     preview_model_name = DEFAULT_MODEL
                 shapes = extract_rigid_model(self.native.model, preview_model_name)
+                point_index = {row[1]: index for index, row in enumerate(self.native.points.rows)
+                               if len(row) > 1}
+                editable_bones = {
+                    bone.name for bones in self.native.skeletons.models.values()
+                    for bone in bones
+                    if bone.name in self.native.positions and
+                    bone.name not in point_index and bone.name.startswith(("K", "R", "F"))
+                }
+                for shape in shapes:
+                    bound_bone = shape.get("boundBone")
+                    if bound_bone in point_index:
+                        shape["editorId"] = f"point:{point_index[bound_bone]}"
+                    elif bound_bone in editable_bones:
+                        shape["editorId"] = f"bone:{bound_bone}"
                 terrain_projection_report = None
                 textures = {}
                 normal_textures = {}
@@ -1263,7 +1277,6 @@ class WorldStudio(ttk.Frame):
                     )
                 visible_nodes = {n["id"]: n for n in graph["nodes"]
                                  if not n.get("fallback") and all(type(n.get(k)) in (int, float) for k in ("x", "y", "z"))}
-                point_index = {row[1]: index for index, row in enumerate(self.native.points.rows) if len(row) > 1}
                 nodes = [{"id": n["id"], "editorId": (f"point:{point_index[n['id']]}" if n["id"] in point_index else f"bone:{n['id']}"),
                           "x": float(n["x"]), "y": float(n["y"]), "z": float(n["z"])}
                          for n in visible_nodes.values()]

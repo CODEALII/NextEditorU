@@ -769,6 +769,15 @@ class EditorSmokeTests(unittest.TestCase):
             self.assertTrue(scene["nodes"])
             self.assertTrue(all(node.get("editorId", "").startswith(("point:", "bone:"))
                                 for node in scene["nodes"]))
+            point_index = {row[1]: index for index, row in enumerate(studio.native.points.rows)
+                           if len(row) > 1}
+            self.assertTrue(all(shape.get("boundBone") for shape in scene["shapes"]))
+            for shape in scene["shapes"]:
+                bone = shape["boundBone"]
+                expected = (f"point:{point_index[bone]}" if bone in point_index else
+                            f"bone:{bone}" if bone in studio.native.positions and
+                            bone.startswith(("K", "R", "F")) else None)
+                self.assertEqual(shape.get("editorId"), expected, shape["name"])
             positions = [point for shape in scene["shapes"] for point in shape["positions"]]
             low = [min(point[axis] for point in positions) for axis in range(3)]
             high = [max(point[axis] for point in positions) for axis in range(3)]

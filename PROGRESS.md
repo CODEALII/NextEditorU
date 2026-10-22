@@ -1,5 +1,15 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Link BFRES mesh inspection to editable bone selection
+
+- Static rigid-shape extraction now carries the already-validated rest-pose
+  bone binding into the embedded inspector. When it corresponds to a native
+  point or supported editable bone, a button selects that row through the
+  existing viewport RPC, synchronizing its editor properties and world overlay.
+  This is navigation only; arbitrary shape transforms stay read-only.
+- Added synthetic extraction and Node-backed UI regressions for binding labels
+  and editor selection. Focused tests pass; broader regression is next.
+
 ## 2026-10-22 — Persist graph-check gates per source archive
 
 - The native editor now remembers the explicit graph profile in a separate
