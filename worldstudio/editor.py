@@ -1832,13 +1832,14 @@ class WorldStudio(ttk.Frame):
             return
         self._runtime_cleanup_done = True
         for callback_name in ("_preview_poll_after", "_preview_update_after", "_preview_open_after",
-                              "_fit_after_id"):
+                              "_fit_after_id", "_recovery_after_id"):
             callback_id = getattr(self, callback_name, None)
             if callback_id is not None:
                 try:
                     self.after_cancel(callback_id)
                 except tk.TclError:
                     pass
+                setattr(self, callback_name, None)
         if self.preview_widget:
             try:
                 self.preview_widget.destroy()

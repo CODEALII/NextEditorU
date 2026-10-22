@@ -202,6 +202,22 @@ class EditorSmokeTests(unittest.TestCase):
             self.app._clear_recovery(project_path)
             self.app._set_recovery_context(None)
 
+    def test_editor_destroy_cancels_pending_recovery_callback(self):
+        project_path = Path(self.recent_tmp.name) / "pending-recovery.json"
+        project_path.write_text('{"saved": true}', encoding="utf-8")
+        self.app._set_recovery_context(project_path)
+        self.app.dirty = True
+        self.app.recovery_delay_ms = 60_000
+        self.app._schedule_recovery()
+
+        self.assertIsNotNone(self.app._recovery_after_id)
+        self.app.destroy()
+        self.assertIsNone(self.app._recovery_after_id)
+        del self.app
+        # Processing Tk events after child teardown must not dispatch a stale
+        # bound-method callback against the destroyed editor widget.
+        self.root.update()
+
     def test_native_session_from_szs_recovers_without_modifying_source(self):
         root = Path(self.recent_tmp.name)
         source_path = root / "world.szs"

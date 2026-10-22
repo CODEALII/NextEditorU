@@ -1959,3 +1959,14 @@ camera behavior and a fully playable custom world remain open.
   isolated Cemu window; no input was sent after the user said “Später.”
 - Updated `README.md` and `docs/INTEGRATION.md` to distinguish the verified
   gameplay from the remaining route-attribution and progression questions.
+
+## 2026-10-22 — Cancel session recovery during editor teardown
+
+- The editor teardown path canceled preview and auto-fit timers but left a
+  debounced `_write_recovery` callback queued. When the Tk frame was destroyed,
+  that callback could be dispatched against a missing Tcl command. Teardown now
+  cancels and clears the recovery timer alongside the other editor callbacks.
+- Added a regression that schedules a pending recovery write, destroys the
+  editor, and processes Tk events to ensure no stale callback runs. The focused
+  editor and preview safety suites pass (**77 tests**), with no Tcl teardown
+  diagnostic. `git diff --check` passes.
