@@ -1,5 +1,22 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Stabilize native roads during viewport movement
+
+- The existing fixed clip-space bias was replaced for route surfaces by WebGL
+  polygon offset (`factor=-1`, `units=-1`), which accounts for polygon slope as
+  well as depth-buffer precision. The offset is enabled only for the native
+  route overlay pass, reset before the path and node overlays, and also used by
+  mesh picking so the visible road and selectable road agree. Terrain geometry
+  is not offset. The 3D viewport already starts with its editable graph docked
+  beside the world; the separate graph pane remains an optional view.
+- `python -m unittest tests.test_preview_safety -v` passes **43 tests**,
+  including generated JavaScript parsing and route-vs-terrain render-state
+  checks. This is a renderer-level fix; the Cemu comparison could not run in
+  this turn because the isolated launch displayed Cemu's “Unknown file type”
+  dialog for the configured RPX before any input was sent. No game or save
+  changes were made. Visual confirmation in the user's embedded WebView remains
+  outstanding.
+
 ## 2026-10-22 — Bound repeat-wrapped route UV offsets in the embedded viewport
 
 - Native W1 route albedo samplers use repeat addressing, while their stored

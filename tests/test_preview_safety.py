@@ -15,7 +15,7 @@ from worldstudio.project import resolve_project_path, store_project_path
 
 
 class PreviewSafetyTests(unittest.TestCase):
-    def test_native_route_surfaces_get_depth_bias_without_affecting_terrain(self):
+    def test_native_route_surfaces_get_polygon_offset_without_affecting_terrain(self):
         self.assertTrue(route_surface_needs_depth_bias("beltmodel27__mtRW102W1S0a", "RW102W1S0a"))
         self.assertTrue(route_surface_needs_depth_bias("routeOpague1", "mtRouteOpague"))
         self.assertFalse(route_surface_needs_depth_bias("polySurface1489__mtGrass", "mtGrass"))
@@ -24,14 +24,17 @@ class PreviewSafetyTests(unittest.TestCase):
                                "nodes": [], "routes": []})
         self.assertIn("mesh.depthBias=metadata.depthBias===true", page)
         self.assertIn("clip.z-=uDepthBias*clip.w", page)
-        self.assertIn("m.depthBias&&!showWireframe?0.00008:0", page)
-        self.assertIn("mesh.depthBias?0.00008:0", page)
+        self.assertIn("function applyRouteDepthOffset(enabled)", page)
+        self.assertIn("gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-1,-1)", page)
+        self.assertIn("applyRouteDepthOffset(m.depthBias&&!showWireframe)", page)
+        self.assertIn("applyRouteDepthOffset(mesh.depthBias)", page)
+        self.assertIn("gl.uniform1f(gl.getUniformLocation(meshProgram,'uDepthBias'),0)", page)
         self.assertIn("const renderMeshes=[...meshes.filter(m=>!m.depthBias),...meshes.filter(m=>m.depthBias)]", page)
         self.assertIn("uRouteBlend>0.5&&texel.a<=0.001", page)
         self.assertIn("gl_FragColor=vec4(c,uRouteBlend>0.5?texel.a:1.0)", page)
         self.assertIn("gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false)", page)
         self.assertIn("if(routeBlend){gl.depthMask(true);gl.disable(gl.BLEND)}", page)
-        self.assertNotIn("POLYGON_OFFSET_FILL", page)
+        self.assertIn("applyRouteDepthOffset(false)", page)
 
     def test_embedded_graph_toggle_remains_visible_over_the_world(self):
         page = build_document({"shapes": [], "nodes": [{"id": "W101", "x": 0, "y": 0, "z": 0}], "routes": []}, embedded=True)
