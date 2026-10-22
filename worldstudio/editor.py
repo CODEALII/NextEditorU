@@ -27,6 +27,7 @@ from .graph_validation import (
 )
 from .mesh import MAX_FACE_CORNERS, transform_obj_geometry
 from .recent_projects import RecentProjects
+from .graph_profile_preferences import GraphProfilePreferences
 from .session_recovery import SessionRecovery, StaleRecoveryError
 
 
@@ -1778,11 +1779,12 @@ class WorldStudio(ttk.Frame):
 class NativeStudio(WorldStudio):
     """Edit native point/route tables while preserving unsupported columns."""
 
-    def __init__(self, master, native, project_path=None):
+    def __init__(self, master, native, project_path=None, graph_profile_preferences=None):
         self.native = native
         self.exporting = False
         self.graph_profile_path = None
         self.graph_profile_label = tk.StringVar(master, value="Graph check: off")
+        self.graph_profile_preferences = graph_profile_preferences or GraphProfilePreferences()
         self._auto_fit = True
         self._fit_after_id = None
         self.export_results = queue.Queue()
@@ -1795,6 +1797,7 @@ class NativeStudio(WorldStudio):
         self.project_path = Path(project_path) if project_path is not None else None
         self.status.set(f"Loaded {native.source.name} • coordinates: " +
                         ("BFRES hierarchy-transformed rest pose; unsupported branches use labeled layouts" if native.positions else "editor layout only; game transforms unknown"))
+        self._restore_graph_profile()
         self.canvas.bind("<Map>", self._schedule_auto_fit, add="+")
         self.canvas.bind("<Configure>",
                          lambda event: self._schedule_auto_fit(event, delay_ms=90), add="+")
@@ -2453,6 +2456,7 @@ class NativeStudio(WorldStudio):
         for child in self.form.winfo_children():
             child.destroy()
         self.status.set(f"Opened {native.source.name}; " + ("hierarchy-transformed BFRES rest pose; purple points use editor layout" if native.positions else "editor layout; game coordinates unavailable"))
+        self._restore_graph_profile()
         self._reset_edit_history()
         self._set_recovery_context(project_path or native.source, offer=True)
 
@@ -2709,6 +2713,12 @@ class NativeStudio(WorldStudio):
             return
         self.graph_profile_path = Path(path)
         self.graph_profile_label.set(f"Graph check: {self.graph_profile_path.name}")
+        try:
+            self.graph_profile_preferences.set(self.native.source_sha256,
+                                               self.graph_profile_path)
+        except (OSError, ValueError) as error:
+            self.status.set(f"Profile selected for this session but could not be saved: {error}")
+            return
         self.status.set(
             f"Export gate enabled: {', '.join(profile['entry_points'])} must reach "
             f"{', '.join(profile['required_locations'])}; game unlock rules are not inferred.")
@@ -2718,7 +2728,34 @@ class NativeStudio(WorldStudio):
             return
         self.graph_profile_path = None
         self.graph_profile_label.set("Graph check: off")
+        try:
+            self.graph_profile_preferences.set(self.native.source_sha256, None)
+        except (OSError, ValueError) as error:
+            self.status.set(f"Profile disabled for this session but preference could not be saved: {error}")
+            return
         self.status.set("Graph-profile export gate disabled")
+
+    def _restore_graph_profile(self):
+        """Restore only a stored profile that still parses for this world."""
+        source_hash = getattr(self.native, "source_sha256", None)
+        path = self.graph_profile_preferences.get(source_hash)
+        if path is None:
+            return
+        world = re.search(r"pointW([1-9])", getattr(self.native, "point_name", ""))
+        world_prefix = f"W{world[1]}" if world else None
+        try:
+            from .graph_validation import load_native_graph_profile
+            profile = load_native_graph_profile(path, world_prefix)
+        except (OSError, ValueError) as error:
+            self.graph_profile_path = None
+            self.graph_profile_label.set("Graph check: off")
+            self.status.set(f"Saved graph profile is unavailable; export gate remains off: {error}")
+            return
+        self.graph_profile_path = path
+        self.graph_profile_label.set(f"Graph check: {path.name}")
+        self.status.set(
+            f"Restored graph export gate: {', '.join(profile['entry_points'])} must reach "
+            f"{', '.join(profile['required_locations'])}; game unlock rules are not inferred.")
 
 
 class PathChainDialog(tk.Toplevel):

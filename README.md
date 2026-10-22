@@ -62,11 +62,13 @@ python -m worldstudio export build/my-chain/three-level-chain.nws.json --out bui
 
 This optional check blocks export if W101 cannot reach W102 and W103. It checks
 the selected static profile only; it does not model save flags or game unlocks.
-The native editor offers the same opt-in check from the **Graph check** toolbar
-menu. **Validate** and SZS export both apply the selected JSON profile; selecting
-a new source world clears it so a check cannot silently carry over. A successful
-profile-gated export records the normalized profile and its SHA-256 in the
-manifest while keeping `game_tested: false`.
+The native editor offers the same check from the **Graph check** toolbar menu.
+**Validate** and SZS export both apply the selected JSON profile. The choice is
+remembered in per-user settings for that exact source archive hash and reloaded
+only when its profile still parses for the world; a missing or mismatched
+profile leaves the gate off with an explanation. A successful profile-gated
+export records the normalized profile and its SHA-256 in the manifest while
+keeping `game_tested: false`.
 
 After exporting a saved project, reimport the archive and compare every member,
 the export manifest, and any camera companion files against a fresh export:

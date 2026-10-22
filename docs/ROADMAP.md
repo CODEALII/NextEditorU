@@ -4,7 +4,7 @@ This backlog follows verified project dependencies. “Done offline” means par
 
 ## Highest priority
 
-1. **Verify the custom W102-to-W103 route in Cemu.** The process-bound two-second WASD test visibly moves Mario from Crushing-Cogs Tower to the right-hand course node and onward on the unmodified Clean profile. Chain reached the overworld, but its movement comparison did not start at the confirmed same point. Identify the exact destination point, traverse the changed link with the same sustained input, and verify its course launch.
+1. **Verify the custom W102-to-W103 route in Cemu.** The process-bound two-second WASD test visibly moves Mario from Crushing-Cogs Tower to the right-hand course node and onward on the unmodified Clean profile. An archived Chain test with the exact patch hash held D for 1.5 seconds and visibly moved Mario from a road junction to the right-hand black course node, but neither internal point ID was captured; it is not a matched Clean comparison from the same confirmed start. Identify the exact start/destination point IDs, traverse the changed link with the same sustained input, and verify its course launch.
 2. **Visually validate topology-preserving terrain projection.** The previous `cemu-island-mainlight` whole-shape replacement loaded with large dark-green overlaps and clipped surfaces. The project exporter now changes 2,451 intersecting heights with a 128-unit boundary blend while preserving all 32,374 target triangles and both UV channels; test the updated archive against the same isolated Cemu profile before treating terrain as playable.
 3. **Broaden the preview data model safely.** Preserve per-shape mesh/submesh, vertex-buffer, material and bone references. Add attribute codecs and hierarchy transforms only for layouts found in local resources; continue rejecting unsupported formats with a precise diagnostic.
 
@@ -16,8 +16,8 @@ The BC1/BC3 base-color path has also been checked against all twelve local world
 
 ## Next editing milestones
 
-4. Add selectable scene objects and editable transforms with a reversible undo/redo history.
-5. Extend the explicit graph-profile workflow with optional profile selection in the desktop editor; the CLI already checks selected entry/required locations before export. Keep gameplay unlock semantics separate until verified.
+4. Extend scene-object transforms beyond supported world points. The editor already supports point selection, editable transforms for invertible native hierarchy branches, mesh inspection and undo/redo; arbitrary BFRES shape transform editing remains unsupported.
+5. The editor graph-profile gate now remembers its choice per source archive hash, revalidates it on reopen and applies the same profile to Validate and Export. Keep gameplay unlock semantics separate until verified.
 6. Expand terrain import beyond one fixed-capacity grass shape only after mesh insertion or replacement has a demonstrated archive roundtrip.
 7. Investigate animation formats and camera runtime behavior using concrete local files and targeted evidence.
 

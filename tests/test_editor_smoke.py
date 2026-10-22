@@ -15,6 +15,7 @@ from worldstudio.editor import (CameraDataWindow, NativeStudio, ObjTransformDial
                                 project_preview_point)
 from worldstudio.camera import OffsetTable
 from worldstudio.recent_projects import RecentProjects
+from worldstudio.graph_profile_preferences import GraphProfilePreferences
 from worldstudio.project import WorldProject, resolve_project_path
 from worldstudio.session_recovery import SessionRecovery
 
@@ -22,6 +23,8 @@ from worldstudio.session_recovery import SessionRecovery
 class NativeFixture:
     def __init__(self):
         self.source = Path("synthetic.szs")
+        self.source_sha256 = "a" * 64
+        self.point_name = "pointW1.csv"
         self.points = SimpleNamespace(rows=[
             ["0", "W101", "", "W102", "RW101W102", "", "", "", ""],
             ["1", "W102", "", "", "", "", "", "", ""],
@@ -95,8 +98,11 @@ class EditorSmokeTests(unittest.TestCase):
             self.skipTest(f"Tk unavailable: {error}")
         self.root.withdraw()
         self.native = NativeFixture()
-        self.app = NativeStudio(self.root, self.native)
         self.recent_tmp = tempfile.TemporaryDirectory()
+        self.graph_profile_preferences = GraphProfilePreferences(
+            Path(self.recent_tmp.name) / "graph-profiles.json")
+        self.app = NativeStudio(self.root, self.native,
+                                graph_profile_preferences=self.graph_profile_preferences)
         self.app.recent_projects = RecentProjects(Path(self.recent_tmp.name) / "recent.json")
         self.root.update()
 
@@ -269,10 +275,38 @@ class EditorSmokeTests(unittest.TestCase):
                          "Graph check: w1-core-progression.json")
         self.assertIn("W101", self.app.status.get())
         self.assertIn("not inferred", self.app.status.get())
+        self.assertEqual(self.graph_profile_preferences.get(self.native.source_sha256),
+                         profile_path.resolve())
+
+        self.app.replace_native(self.native, None)
+        self.assertEqual(self.app.graph_profile_path, profile_path.resolve())
+        self.assertEqual(self.app.graph_profile_label.get(),
+                         "Graph check: w1-core-progression.json")
 
         self.app.clear_graph_profile()
         self.assertIsNone(self.app.graph_profile_path)
         self.assertEqual(self.app.graph_profile_label.get(), "Graph check: off")
+        self.assertIsNone(self.graph_profile_preferences.get(self.native.source_sha256))
+
+    def test_saved_graph_profile_is_restored_only_when_valid_for_open_world(self):
+        profile_path = Path(__file__).parents[1] / "profiles" / "w1-core-progression.json"
+        self.graph_profile_preferences.set(self.native.source_sha256, profile_path)
+        self.app._restore_graph_profile()
+        self.assertEqual(self.app.graph_profile_path, profile_path.resolve())
+        self.assertEqual(self.app.graph_profile_label.get(),
+                         "Graph check: w1-core-progression.json")
+
+        other_world = NativeFixture()
+        other_world.point_name = "pointW2.csv"
+        other_world.source_sha256 = "b" * 64
+        self.graph_profile_preferences.set(other_world.source_sha256, profile_path)
+        self.app.native = other_world
+        self.app.graph_profile_path = None
+        self.app.graph_profile_label.set("Graph check: off")
+        self.app._restore_graph_profile()
+        self.assertIsNone(self.app.graph_profile_path)
+        self.assertEqual(self.app.graph_profile_label.get(), "Graph check: off")
+        self.assertIn("unavailable", self.app.status.get())
 
     def test_profile_gate_blocks_native_export_before_output_picker(self):
         self.app.graph_profile_path = Path("profiles/w1-core-progression.json")

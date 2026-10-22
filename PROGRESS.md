@@ -1,5 +1,19 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Persist graph-check gates per source archive
+
+- The native editor now remembers the explicit graph profile in a separate
+  per-user preferences file keyed by the exact source archive SHA-256. Reopening
+  the same source restores the profile only after bounded parsing and a world
+  prefix match; missing or mismatched profile files leave the gate off and
+  explain why. Disabling the gate removes only that source's preference.
+- Added preference-store tests for source-hash binding, clearing, invalid hashes
+  and malformed/oversized data, plus Tk coverage for choosing, reopening,
+  restoring, wrong-world rejection and continuing to gate Validate/Export.
+  **66 focused tests pass**; compileall and `git diff --check` pass. The setting
+  does not encode or claim runtime unlock behavior. The full suite passes:
+  **356 tests in 284.620 seconds**.
+
 ## 2026-10-22 — Full regression and embedded-editor visual check
 
 - The full local suite passed: **352 tests in 334.371 seconds**. The worktree
