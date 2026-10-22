@@ -30,6 +30,28 @@ class CemuWindowSelectionTests(unittest.TestCase):
             "Crushing-Cogs Tower"))
         self.assertIn("intended start node", self.cemu_input_test.map_confirmation_prompt())
 
+    def test_course_action_parses_a_bounded_single_key(self):
+        self.assertEqual(self.cemu_input_test.parse_course_action("d:1200"), {
+            "keys": ["d"], "hold_ms": 1200,
+        })
+
+    def test_course_action_parses_case_insensitive_chord(self):
+        self.assertEqual(self.cemu_input_test.parse_course_action("X+D:250"), {
+            "keys": ["x", "d"], "hold_ms": 250,
+        })
+
+    def test_course_action_rejects_malformed_or_unbounded_input(self):
+        for value in ("", "d", "d:abc", "d:99", "d:5001", "d+d:300", "bad:300"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    self.cemu_input_test.parse_course_action(value)
+
+    def test_course_action_review_prompt_names_exact_capture(self):
+        prompt = self.cemu_input_test.course_action_observation_prompt(
+            "blooper-course", 3, ["d", "x"])
+        self.assertIn("blooper-course-course-step-3-D+X-after.bmp", prompt)
+        self.assertIn("observation", prompt)
+
     def test_title_click_targets_exact_game_window_center_and_releases_mouse(self):
         bounds = SimpleNamespace(left=100, top=50, right=900, bottom=650)
         window = {"rect": bounds, "width": 800, "height": 600}

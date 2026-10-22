@@ -1,5 +1,28 @@
 # Runtime evidence and test protocol
 
+## Screenshot-reviewed input inside a course — 2026-10-22
+
+`tools/cemu_input_test.py` accepts repeatable `--level-action KEY[+KEY]:MS`
+arguments after `--enter-level`, for example `--level-action d:2000
+--level-action x+d:500`. Each action is bounded to 100–5,000 ms, verifies the
+exact launched Cemu window is foreground, releases every held key in a `finally`
+block, and saves before/after screenshots. Review the displayed after image at
+each prompt; enter a short observation to continue or `N` to stop. This keeps
+course-control attempts reproducible without marking an unobserved clear as a
+pass.
+
+The Chain trial `chain-level-input-20261022-retry1` used the same verified
+profile, mapping, start node, and W1 pack as the matched route run. It entered
+Blooper's Secret Lair, then held D for 2,000 ms and X+D for 500 ms. In both
+after-images Mario remained visibly by the start pipe and no course progress
+was established, so the sequence was aborted at step 2. Pack SHA-256 remains
+`19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`; personal
+and common save hashes stayed at their matched baselines. The report records
+the Cemu PID/HWND, focus, controller hash, game-log hash, saves, inputs, and BMP
+paths in ignored `local/evidence/cemu-input-test/`. This result says nothing
+about completion or unlocks, and it does not establish why the course inputs
+failed to move Mario.
+
 ## Matched Clean/Chain traversal reaches different courses — 2026-10-22
 
 - Repeated the same process-bound test from **Crushing-Cogs Tower** in isolated

@@ -362,6 +362,30 @@ def level_clear_observation_prompt():
             '(operator observation only), or N to stop: ')
 
 
+def course_action_observation_prompt(case, index, keys):
+    label = '+'.join(key.upper() for key in keys)
+    return (f'Inspect {case}-course-step-{index}-{label}-after.bmp. Type a short '
+            'observation or press Enter to continue; N stops the sequence: ')
+
+
+def parse_course_action(value):
+    """Parse a bounded, process-bound course key chord such as d+x:350."""
+    if not isinstance(value, str) or ':' not in value:
+        raise ValueError('Course actions must use KEY[+KEY]:MILLISECONDS format')
+    chord, duration = value.rsplit(':', 1)
+    keys = tuple(key.strip().casefold() for key in chord.split('+'))
+    if (not keys or any(not key for key in keys) or len(set(keys)) != len(keys) or
+            any(key not in VK for key in keys)):
+        raise ValueError('Course action keys must be unique supported Cemu keys')
+    try:
+        hold_ms = int(duration)
+    except ValueError as error:
+        raise ValueError('Course action duration must be an integer') from error
+    if not 100 <= hold_ms <= 5000:
+        raise ValueError('Course action duration must be between 100 and 5000 ms')
+    return {'keys': list(keys), 'hold_ms': hold_ms}
+
+
 def wait_for_step_observation(prompt, *, pid, process=None, require_label=False):
     """Return (confirmed, visible_label); labels are operator reports, not machine OCR."""
     while True:
@@ -481,6 +505,8 @@ def run(args):
         'gameplay_verified': False,
         'progression_verified': False,
         'record_level_clear_requested': getattr(args, 'record_level_clear', False),
+        'course_actions': [parse_course_action(value)
+                           for value in getattr(args, 'level_actions', [])],
         'started_at': timestamp(),
         'profile': str(profile),
         'cemu_executable': str(exe.resolve()),
@@ -758,6 +784,55 @@ def run(args):
             level_capture = args.screenshot_dir / f'{args.case}-level-result.bmp'
             capture_window(window['hwnd'], level_capture)
             report['screenshots']['level_result'] = str(level_capture.resolve())
+            if report['course_actions']:
+                if not confirm_or_abort(
+                        report,
+                        'Review the saved course-start screenshot. Press Enter only when Mario is at the expected start; N/Esc aborts: ',
+                        'course_start', pid=pid, process=process):
+                    return
+                for index, action in enumerate(report['course_actions'], 1):
+                    keys = action['keys']
+                    foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
+                    action_stem = '+'.join(key.upper() for key in keys)
+                    before_action = args.screenshot_dir / (
+                        f'{args.case}-course-step-{index}-{action_stem}-before.bmp')
+                    capture_window(window['hwnd'], before_action)
+                    report['screenshots'][f'course_step_{index}_before'] = str(
+                        before_action.resolve())
+                    report['events'].append({
+                        'time': timestamp(), 'action': 'course_input_start',
+                        'step': index, 'keys': keys, 'hold_ms': action['hold_ms'],
+                        'foreground_hwnd': foreground,
+                    })
+                    for key in keys:
+                        key_event(key, True)
+                        pressed.add(key)
+                    try:
+                        time.sleep(action['hold_ms'] / 1000.)
+                    finally:
+                        for key in reversed(keys):
+                            key_event(key, False)
+                            pressed.discard(key)
+                    time.sleep(args.settle_wait)
+                    after_action = args.screenshot_dir / (
+                        f'{args.case}-course-step-{index}-{action_stem}-after.bmp')
+                    capture_window(window['hwnd'], after_action)
+                    report['screenshots'][f'course_step_{index}_after'] = str(
+                        after_action.resolve())
+                    confirmed, observation = wait_for_step_observation(
+                        course_action_observation_prompt(args.case, index, keys),
+                        pid=pid, process=process)
+                    report['events'].append({
+                        'time': timestamp(),
+                        'action': 'course_input_reviewed' if confirmed else 'course_input_aborted',
+                        'step': index, 'keys': keys, 'observed_location': observation,
+                        'observation_source': 'operator',
+                        'screenshot': str(after_action.resolve()),
+                    })
+                    if not confirmed:
+                        report['status'] = 'aborted'
+                        report['abort_gate'] = f'course_step_{index}'
+                        return
             if getattr(args, 'record_level_clear', False):
                 confirmed, observation = wait_for_step_observation(
                     level_clear_observation_prompt(),
@@ -863,6 +938,9 @@ def main(argv=None):
                         help='After entry, wait for manual course-clear/map-return confirmation, record the visible label and screenshot, then hash saves')
     parser.add_argument('--level-key-hold-ms', type=int, default=700)
     parser.add_argument('--level-wait', type=float, default=15.)
+    parser.add_argument('--level-action', dest='level_actions', action='append', default=[],
+                        metavar='KEY[+KEY]:MS',
+                        help='After level entry, hold one supported key/chord for 100–5000 ms; repeat for a screenshot-reviewed course sequence (for example --level-action d:1200 --level-action x+d:250)')
     parser.add_argument('--window-timeout', type=float, default=30.)
     parser.add_argument('--transition-wait', type=float, default=5.)
     parser.add_argument('--settle-wait', type=float, default=2.)
@@ -902,6 +980,15 @@ def main(argv=None):
         parser.error('--graph-profile requires --pack-file')
     if args.record_level_clear and not args.enter_level:
         parser.error('--record-level-clear requires --enter-level')
+    if args.level_actions and not args.enter_level:
+        parser.error('--level-action requires --enter-level')
+    if len(args.level_actions) > 64:
+        parser.error('At most 64 --level-action steps are allowed')
+    try:
+        for action in args.level_actions:
+            parse_course_action(action)
+    except ValueError as error:
+        parser.error(str(error))
     try:
         run(args)
     except (OSError, ValueError, RuntimeError) as error:

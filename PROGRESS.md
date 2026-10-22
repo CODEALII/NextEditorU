@@ -1,5 +1,27 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Add reproducible course-input checkpoints; course motion remains blocked
+
+- The Cemu runner now accepts bounded `--level-action KEY[+KEY]:MS` inputs
+  after level entry. It checks the launched process-specific window before
+  each hold, always releases the keys, records before/after screenshots, and
+  pauses for an operator observation or abort.
+- The Chain profile entered Blooper's Secret Lair with the verified W1 archive
+  (`19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`).
+  Mario remained by the starting pipe after D held for 2,000 ms and X+D for
+  500 ms. The run stopped at step 2; course movement, clear, unlocks, and
+  progression were not verified. Save hashes remained unchanged. Full report,
+  game-log hash and screenshot paths are recorded in
+  `docs/INTEGRATION.md` and ignored `local/evidence/cemu-input-test/`.
+- This exposes a remaining input/gameplay blocker after level start; it does
+  not change the successful matched overworld route traversal result. The
+  route-surface z-offset, mipmapping, and integrated graph viewport remain
+  mitigations/preview improvements; fragmented W1M0 road geometry is still
+  visible in camera sweeps, so road rendering is not claimed fully fixed.
+- Verification: `python -m unittest tests.test_cemu_input_windows -v` passes
+  26 tests; CLI and input bounds were checked, and the live run recorded the
+  exact Cemu process, controller profile, pack hash, saves, and game-log hash.
+
 ## 2026-10-22 — Verify modified W1 route traversal and level entry in Cemu
 
 - Repeated the same process-bound Cemu test on isolated Clean and Chain profiles
