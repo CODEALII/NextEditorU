@@ -1,5 +1,21 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Make the in-world graph editor easier to use and reduce route z-fighting
+
+- The graph remains an always-visible editor overlay inside the embedded 3D
+  viewport; its default width is now 360 px (up from 264 px), with a 540 px
+  expanded mode. Point and route selection still syncs with the 3D world and
+  editor list; the separate 2D graph remains optional.
+- Strengthened the depth offset for named native route meshes from `-2/-2` to
+  `-4/-4` in both render and picking passes. This targets camera-dependent
+  z-fighting where route surfaces lie close to the terrain. It does not fix
+  missing route texture detail, reproduce the game's shader, or establish
+  behavior in the embedded WebView2 or Cemu.
+- Verification: the focused preview suite passes **41 tests**, including both
+  render and picking passes. The actual Tk/WebView2 viewport was not relaunched
+  for a visual check in this run; compare multiple camera angles there before
+  calling the road artifact fully fixed.
+
 ## 2026-10-22 — Reduce route-texture minification shimmer
 
 - Power-of-two `_a0` base-color textures now generate mipmaps and use trilinear

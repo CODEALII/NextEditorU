@@ -23,8 +23,8 @@ class PreviewSafetyTests(unittest.TestCase):
                                             "positions": [], "indices": []}],
                                "nodes": [], "routes": []})
         self.assertIn("mesh.depthBias=metadata.depthBias===true", page)
-        self.assertIn("gl.polygonOffset(-2,-2)", page)
-        self.assertEqual(page.count("gl.polygonOffset(-2,-2)"), 2)
+        self.assertIn("gl.polygonOffset(-4,-4)", page)
+        self.assertEqual(page.count("gl.polygonOffset(-4,-4)"), 2)
         self.assertIn("gl.disable(gl.POLYGON_OFFSET_FILL)", page)
 
     def test_preview_project_rejects_invalid_saved_terrain_transform(self):
@@ -65,7 +65,9 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn('id="graph-expand"', embedded_page)
         self.assertIn("graph.classList.toggle('expanded')", embedded_page)
         self.assertIn("graphExpand.setAttribute('aria-pressed'", embedded_page)
-        self.assertIn(".world-graph.expanded{width:min(520px,72vw)", embedded_page)
+        self.assertIn(".world-graph{display:none;position:absolute;z-index:2;right:12px;top:76px;width:min(360px,42vw);max-height:50vh", embedded_page)
+        self.assertIn(".world-graph.expanded{width:min(540px,72vw)", embedded_page)
+        self.assertIn("graph.classList.add('open')", embedded_page)
         self.assertIn('id="world-graph-svg"', embedded_page)
         self.assertIn('viewBox="0 0 280 175"', embedded_page)
         self.assertIn("const labelBoxes=[]", embedded_page)
