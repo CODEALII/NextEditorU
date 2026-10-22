@@ -424,7 +424,7 @@ class GlbReaderTests(unittest.TestCase):
         self.assertEqual((report["vertices"], report["triangles"]), (3, 1))
 
     @unittest.skipUnless(DEFAULT_SOURCE.is_file(), "Local user-owned W1 dump unavailable")
-    def test_glb_project_export_roundtrip_preserves_native_grass_topology(self):
+    def test_gltf_project_export_roundtrip_preserves_native_grass_topology(self):
         root = Path(__file__).resolve().parents[1]
         obj_path = root / "examples" / "island-game.obj"
         vertices, faces, _, _ = read_obj(obj_path, include_attributes=True)
@@ -443,12 +443,20 @@ class GlbReaderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as folder:
             folder = Path(folder)
-            glb_path = folder / "island.glb"
-            glb_path.write_bytes(_geometry_glb(
+            glb_data = _geometry_glb(
                 normalized_vertices, normalized_faces, uvs, normals,
-                node={"scale": [0.99, 1., 0.99]}))
+                node={"scale": [0.99, 1., 0.99]})
+            json_length = struct.unpack_from("<I", glb_data, 12)[0]
+            gltf_document = json.loads(glb_data[20:20 + json_length].decode("utf-8"))
+            binary_offset = 28 + json_length
+            binary_length = struct.unpack_from("<I", glb_data, 20 + json_length)[0]
+            sidecar = glb_data[binary_offset:binary_offset + binary_length]
+            gltf_document["buffers"][0]["uri"] = "island.bin"
+            gltf_path = folder / "island.gltf"
+            (folder / "island.bin").write_bytes(sidecar)
+            gltf_path.write_text(json.dumps(gltf_document), encoding="utf-8")
             imported, warnings = read_import_mesh(
-                glb_path, include_attributes=True, include_report=True)
+                gltf_path, include_attributes=True, include_report=True)
             self.assertEqual(warnings, ())
             source_model = Archive(original_archive).read(project.model_name)
             preview_shapes = extract_rigid_model(source_model, project.model_name.removesuffix(".bfres") + "_World")
@@ -461,9 +469,9 @@ class GlbReaderTests(unittest.TestCase):
                 "vertices": imported[0], "faces": imported[1],
                 "uvs": imported[2], "normals": imported[3],
             }
-            project.terrain = str(glb_path)
+            project.terrain = str(gltf_path)
             project_path = folder / "terrain.nws.json"
-            output_path = folder / "CS_W1-glb-terrain.szs"
+            output_path = folder / "CS_W1-gltf-terrain.szs"
             project.save(project_path)
             reopened_project = WorldProject.load(project_path)
             manifest = reopened_project.export(output_path)

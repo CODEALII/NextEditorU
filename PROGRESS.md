@@ -8,10 +8,11 @@
   are rejected; the declared lengths and aggregate 64 MiB payload bound are
   checked before geometry parsing.
 - Updated terrain import dialogs and added fixtures for sidecars, multiple
-  buffers, base64 data, unsafe URIs and editor dispatch. `python -m unittest
-  tests.test_gltf` passed **23 tests**. This verifies offline geometry import;
-  terrain appearance, collision, and the importer UI in a live session remain
-  unverified in Cemu.
+  buffers, base64 data, unsafe URIs and editor dispatch. The local W1 export
+  roundtrip now drives an external-buffer `.gltf` through project save/reopen,
+  topology-preserving preview, and BFRES archive export; source archive bytes,
+  indices and UVs remain protected. Focused import tests passed **23 tests**;
+  terrain appearance and collision remain unverified in Cemu.
 
 ## 2026-10-22 — Keep route-connection UI in sync through undo and redo
 
