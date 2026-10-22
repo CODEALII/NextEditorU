@@ -224,8 +224,6 @@ def _scene_mesh_instances(document, mesh_count):
         children = _array(node.get("children", []), "node children")
         pending.append((index, True, world_transform))
         pending.extend((child, False, world_transform) for child in reversed(children))
-    if len({mesh_index for mesh_index, _ in referenced_meshes}) != len(referenced_meshes):
-        raise ValueError("GLB mesh is instanced more than once; flatten instances before import")
     return referenced_meshes
 
 

@@ -1,5 +1,17 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Expand repeated static GLB meshes per scene node
+
+- The GLB importer now duplicates a shared static mesh for each distinct active
+  scene node that references it, applying that node's composed transform before
+  merging the geometry. Existing 65,535-vertex, 200,000-triangle and 4,096-node
+  limits still bound expansion. Reusing the same node from multiple parents
+  remains rejected.
+- Added tests for a translated duplicate mesh and repeated-node DAG rejection.
+  `python -m unittest tests.test_gltf tests.test_mesh` passes **57 tests**;
+  Python compilation and `git diff --check` pass. This changes import geometry
+  only; game terrain appearance is still unknown.
+
 ## 2026-10-22 — Suggest unique static route chains in the point editor
 
 - The native path-chain picker now searches resolved BFRES endpoint names for

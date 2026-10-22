@@ -218,6 +218,29 @@ class GlbReaderTests(unittest.TestCase):
         geometry, _ = parse_glb(_glb(document, binary))
         self.assertEqual(geometry[1], [(0, 1, 2), (3, 4, 5)])
 
+    def test_expands_static_mesh_instances_with_each_node_transform(self):
+        document, binary = _fixture()
+        document["nodes"] = [
+            {"mesh": 0},
+            {"mesh": 0, "translation": [2, 0, 0]},
+        ]
+        document["scenes"] = [{"nodes": [0, 1]}]
+        geometry, _ = parse_glb(_glb(document, binary))
+        self.assertEqual(geometry[0], [
+            (0., 0., 0.), (0., 0., 1.), (1., 0., 0.),
+            (2., 0., 0.), (2., 0., 1.), (3., 0., 0.),
+        ])
+        self.assertEqual(geometry[1], [(0, 1, 2), (3, 4, 5)])
+
+    def test_rejects_node_dag_instances(self):
+        document, binary = _fixture()
+        document["nodes"] = [
+            {"children": [2]}, {"children": [2]}, {"mesh": 0},
+        ]
+        document["scenes"] = [{"nodes": [0, 1]}]
+        with self.assertRaisesRegex(ValueError, "node is instanced more than once"):
+            parse_glb(_glb(document, binary))
+
     def test_applies_node_trs_and_nested_parent_transforms(self):
         document, binary = _fixture(node={
             "mesh": 0,
