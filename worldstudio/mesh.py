@@ -74,6 +74,28 @@ def _decode_vertex_color_attribute(data, offset, fmt):
     raise ValueError(f'Unsupported vertex color format 0x{fmt:x}')
 
 
+def rigid_shape_bindings(data, model=DEFAULT_MODEL):
+    """Return supported model-shape to rigid-bone bindings without decoding vertices."""
+    r = Skeletons(data)
+    if r.version != 0x03000001:
+        raise ValueError('3D preview only supports BFRES version 0x03000001')
+    models = dict(r.dictionary(r.ptr(32)))
+    if model not in models:
+        raise ValueError(f'Missing BFRES model: {model}')
+    bones_by_index = {bone.index: bone for bone in r.models.get(model, ())}
+    transforms = r.world_affine_transforms(model)
+    bindings = {}
+    for shape_name, shape in r.dictionary(r.ptr(models[model] + 20)):
+        r.bounds(shape, 64)
+        if (data[shape:shape + 4] != b'FSHP' or data[shape + 22] or
+                data[shape + 23] != 1 or data[shape + 24] or r.u16(shape + 20)):
+            continue
+        bone = bones_by_index.get(r.u16(shape + 16))
+        if bone is not None and bone.name in transforms:
+            bindings[shape_name] = bone.name
+    return bindings
+
+
 def extract_rigid_model(data, model=DEFAULT_MODEL):
     """Read static triangle shapes from one supported Wii U model.
 

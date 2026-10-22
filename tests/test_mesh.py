@@ -7,7 +7,8 @@ from unittest.mock import patch
 
 import worldstudio.mesh as mesh
 from worldstudio.mesh import (DEFAULT_SHAPE, _decode_vertex_color_attribute, _geometry,
-                              extract_rigid_model, replace_rigid_mesh)
+                              extract_rigid_model, replace_rigid_mesh,
+                              rigid_shape_bindings)
 from worldstudio.archive import Archive
 from worldstudio.bfres import Skeletons
 
@@ -191,6 +192,7 @@ class MeshTests(unittest.TestCase):
         self.assertEqual(shapes[0]['vertexAttributes']['_u1'],
                          {'format': 7, 'offset': 24})
         self.assertEqual(shapes[0]['submeshes'], [{'indexOffset': 0, 'indexCount': 6}])
+        self.assertEqual(rigid_shape_bindings(fixture()), {DEFAULT_SHAPE: 'root'})
 
     def test_static_model_preserves_contiguous_submesh_index_ranges(self):
         data = bytearray(fixture())

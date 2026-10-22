@@ -803,6 +803,7 @@ class WorldStudio(ttk.Frame):
                 "points": copy.deepcopy(native.points.rows),
                 "routes": copy.deepcopy(native.routes.rows),
                 "positions": copy.deepcopy(native.positions),
+                "object_positions": copy.deepcopy(getattr(native, "object_positions", {})),
                 "layout": copy.deepcopy(native.layout),
                 "terrain": native.terrain,
                 "geometry": native.geometry,
@@ -848,6 +849,8 @@ class WorldStudio(ttk.Frame):
             native.points.rows = copy.deepcopy(state["points"])
             native.routes.rows = copy.deepcopy(state["routes"])
             native.positions = copy.deepcopy(state["positions"])
+            native.object_positions = copy.deepcopy(
+                state.get("object_positions", getattr(native, "object_positions", {})))
             native.layout = copy.deepcopy(state["layout"])
             native.terrain = state["terrain"]
             native.geometry = state["geometry"]
@@ -952,10 +955,24 @@ class WorldStudio(ttk.Frame):
         if payload["kind"] == "native":
             required = {"points", "routes", "positions", "layout", "terrain",
                         "geometry", "bone_renames", "camera_edits", "mesh"}
+            object_positions = payload.get("object_positions", {})
+            if not isinstance(object_positions, dict):
+                return False
+            supported_objects = getattr(self.native, "object_shape_bindings", {})
+            for name, xyz in object_positions.items():
+                try:
+                    if (name not in supported_objects or not isinstance(xyz, (list, tuple)) or
+                            len(xyz) != 3 or any(isinstance(value, bool) for value in xyz) or
+                            any(not math.isfinite(float(value)) or abs(float(value)) > 1e7
+                                for value in xyz)):
+                        return False
+                except (TypeError, ValueError, OverflowError):
+                    return False
             return (required.issubset(payload) and
                     isinstance(payload["points"], list) and
                     isinstance(payload["routes"], list) and
                     isinstance(payload["positions"], dict) and
+                    ("object_positions" not in payload or isinstance(payload["object_positions"], dict)) and
                     isinstance(payload["layout"], dict) and
                     isinstance(payload["bone_renames"], list) and
                     isinstance(payload["camera_edits"], dict) and
@@ -1127,12 +1144,18 @@ class WorldStudio(ttk.Frame):
         self.preview_widget.load_url(
             f"https://tkwry.localhost/index.html?revision={self._embedded_preview_revision}")
         if hasattr(self, "native"):
-            self._preview_geometry_signature = (self.native.terrain, id(self.native.geometry))
+            self._preview_geometry_signature = self._current_preview_geometry_signature()
         self.preview_widget.when_ready(self._on_embedded_view_ready)
 
     def _on_embedded_view_ready(self):
         """Apply current list selection after the embedded page navigates."""
         self._sync_viewport_selection()
+
+    def _current_preview_geometry_signature(self):
+        object_positions = getattr(self.native, "object_positions", {})
+        return (self.native.terrain, id(self.native.geometry), tuple(sorted(
+            (name, tuple(float(value) for value in xyz))
+            for name, xyz in object_positions.items())))
 
     def _export_scene_to_external(self):
         if self.preview_scene:
@@ -1155,10 +1178,15 @@ class WorldStudio(ttk.Frame):
                                                attach_normal_map_textures,
                                                attach_texture_srt_parameters)
                 report("Preview: reading static BFRES geometry…")
-                preview_model_name = f"{self.native.source.stem}_World"
+                preview_model_name = getattr(self.native, "preview_model_name",
+                                              f"{self.native.source.stem}_World")
                 if preview_model_name not in self.native.skeletons.models:
-                    preview_model_name = DEFAULT_MODEL
-                shapes = extract_rigid_model(self.native.model, preview_model_name)
+                    preview_model_name = (DEFAULT_MODEL if DEFAULT_MODEL in self.native.skeletons.models
+                                          else self.native.path_model)
+                preview_positions = dict(self.native.positions)
+                preview_positions.update(getattr(self.native, "object_positions", {}))
+                preview_model = self.native.skeletons.patch_positions(preview_positions)
+                shapes = extract_rigid_model(preview_model, preview_model_name)
                 point_index = {row[1]: index for index, row in enumerate(self.native.points.rows)
                                if len(row) > 1}
                 editable_bones = {
@@ -1171,6 +1199,8 @@ class WorldStudio(ttk.Frame):
                     bound_bone = shape.get("boundBone")
                     if bound_bone in point_index:
                         shape["editorId"] = f"point:{point_index[bound_bone]}"
+                    elif bound_bone in getattr(self.native, "object_positions", {}):
+                        shape["editorId"] = f"object:{bound_bone}"
                     elif bound_bone in editable_bones:
                         shape["editorId"] = f"bone:{bound_bone}"
                 terrain_projection_report = None
@@ -1954,11 +1984,21 @@ class NativeStudio(WorldStudio):
                     continue
                 self.tree.insert("", "end", iid=f"bone:{bone.name}", text=bone.name, values=("bone XYZ",))
                 shown += 1
+        object_model = getattr(self.native, "preview_model_name", self.native.path_model)
+        for bone in self.native.skeletons.models.get(object_model, ()):
+            if bone.name not in getattr(self.native, "object_positions", {}):
+                continue
+            total += 1
+            if not self._tree_filter_matches(bone.name, "BFRES object"):
+                continue
+            self.tree.insert("", "end", iid=f"object:{bone.name}", text=bone.name,
+                             values=("BFRES object",))
+            shown += 1
         self._finish_tree_refresh(selection, shown, total)
         if not selection or not self.tree.selection():
             self.tree.yview_moveto(0)
         self.draw()
-        if self.preview_scene and self._preview_geometry_signature != (self.native.terrain, id(self.native.geometry)):
+        if self.preview_scene and self._preview_geometry_signature != self._current_preview_geometry_signature():
             self._schedule_embedded_preview_build()
         else:
             self._schedule_viewport_overlay_update()
@@ -2106,13 +2146,15 @@ class NativeStudio(WorldStudio):
             return
         self._sync_viewport_selection()
         kind, index = selection[0].split(":", 1)
-        if kind == "bone":
+        if kind in ("bone", "object"):
             self.native_selection = kind, index
-            self.selected = ("route", index) if index.startswith("R") else ("node", index)
+            self.selected = (("route", index) if index.startswith("R") else ("node", index)) if kind == "bone" else None
             for child in self.form.winfo_children():
                 child.destroy()
             self.properties, self.position_properties = {}, {}
-            bones = self.native.skeletons.models[self.native.path_model]
+            model = (getattr(self.native, "preview_model_name", self.native.path_model)
+                     if kind == "object" else self.native.path_model)
+            bones = self.native.skeletons.models[model]
             bone = next(bone for bone in bones if bone.name == index)
             parent = next((f"{item.index}: {item.name}" for item in bones if item.index == bone.parent), "none (root)")
             metadata = [("bone", index), ("model", bone.model), ("parent", parent)]
@@ -2126,7 +2168,20 @@ class NativeStudio(WorldStudio):
                 entry.insert(0, str(value))
                 entry.configure(state="readonly")
                 entry.grid(row=row_number, column=1, sticky="ew", padx=(5, 0), pady=3)
-            self.show_native_position(index, len(metadata))
+            if kind == "object":
+                shape_names = getattr(self.native, "object_shape_bindings", {}).get(index, ())
+                metadata.append(("bound shapes", ", ".join(shape_names) or "static BFRES shape"))
+                row_number = len(metadata) - 1
+                ttk.Label(self.form, text=metadata[row_number][0]).grid(row=row_number, column=0, sticky="w", pady=3)
+                entry = ttk.Entry(self.form)
+                entry.insert(0, metadata[row_number][1])
+                entry.configure(state="readonly")
+                entry.grid(row=row_number, column=1, sticky="ew", padx=(5, 0), pady=3)
+                self.show_native_position(
+                    index, len(metadata), position_map=self.native.object_positions,
+                    caption="BFRES object local XYZ — embedded shape transform")
+            else:
+                self.show_native_position(index, len(metadata))
             self.form.columnconfigure(1, weight=1)
             self.draw()
             return
@@ -2241,11 +2296,12 @@ class NativeStudio(WorldStudio):
         if dialog.result is not None:
             variable.set(dialog.result)
 
-    def show_native_position(self, name, start):
-        actual = name in self.native.positions
-        position = self.native.positions.get(name) or self.native.layout.get(name) or [0, 0, 0]
-        caption = "BFRES local XYZ — child paths move with their parent" if actual else "Preview layout XYZ — does not change game transforms"
-        if actual and name not in self.native.world_positions:
+    def show_native_position(self, name, start, *, position_map=None, caption=None):
+        position_map = self.native.positions if position_map is None else position_map
+        actual = name in position_map
+        position = position_map.get(name) or self.native.layout.get(name) or [0, 0, 0]
+        caption = caption or ("BFRES local XYZ — child paths move with their parent" if actual else "Preview layout XYZ — does not change game transforms")
+        if actual and position_map is self.native.positions and name not in self.native.world_positions:
             caption += "; rest transform unsupported, displayed as layout"
         ttk.Label(self.form, text=caption, wraplength=290).grid(row=start, columnspan=2, sticky="w", pady=(8, 3))
         for offset, key in enumerate(("x", "y", "z")):
@@ -2262,7 +2318,7 @@ class NativeStudio(WorldStudio):
             return
         kind, index = selection
         try:
-            position = [float(self.position_properties[k].get()) for k in ("x", "y", "z")] if kind in ("point", "bone") else None
+            position = [float(self.position_properties[k].get()) for k in ("x", "y", "z")] if kind in ("point", "bone", "object") else None
             if position and not all(math.isfinite(value) for value in position):
                 raise ValueError("Coordinates must be finite")
         except ValueError as error:
@@ -2274,6 +2330,13 @@ class NativeStudio(WorldStudio):
             self._record_edit()
             self.refresh()
             self.status.set(f"Updated {index} local XYZ; hierarchy rest positions refreshed. Animation behavior remains unverified.")
+            return
+        if kind == "object":
+            self.native.object_positions[index] = position
+            self.dirty = True
+            self._record_edit()
+            self.refresh()
+            self.status.set(f"Updated BFRES object {index} local XYZ; embedded preview rebuild queued. In-game appearance remains unverified.")
             return
         rows = self.native.points.rows if kind == "point" else self.native.routes.rows
         edited_row = [self.properties[i].get() for i in sorted(self.properties)]

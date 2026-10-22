@@ -167,9 +167,36 @@ class WorldProject:
         point_names = {r[1] for r in self.points.rows}
         self.path_model = max(self.skeletons.models,
             key=lambda m: sum(b.name in point_names for b in self.skeletons.models[m]))
+        preview_model = f'{self.source.stem}_World'
+        if preview_model not in self.skeletons.models:
+            world_models = [name for name in self.skeletons.models if name.endswith('_World')]
+            if len(world_models) == 1:
+                preview_model = world_models[0]
+            else:
+                from .mesh import DEFAULT_MODEL
+                preview_model = DEFAULT_MODEL if DEFAULT_MODEL in self.skeletons.models else self.path_model
+        self.preview_model_name = preview_model
         self.positions = {b.name: list(b.position) for b in self.skeletons.models[self.path_model]
                           if len(self.skeletons.bones[b.name]) == 1 and
                           re.fullmatch(r'(?:[WFK][A-Za-z0-9]{3}|R[A-Za-z0-9]{8})', b.name)}
+        from .mesh import rigid_shape_bindings
+        shape_bindings = rigid_shape_bindings(self.model, self.preview_model_name)
+        self.object_shape_bindings = {}
+        point_names = {row[1] for row in self.points.rows if len(row) > 1}
+        path_position_names = set(self.positions)
+        for shape_name, bone_name in shape_bindings.items():
+            bone = next((item for item in self.skeletons.models[self.preview_model_name]
+                         if item.name == bone_name), None)
+            if (bone is None or bone.parent == -1 or bone_name in point_names or
+                    bone_name in path_position_names or
+                    len(self.skeletons.bones.get(bone_name, ())) != 1):
+                continue
+            self.object_shape_bindings.setdefault(bone_name, []).append(shape_name)
+        self.object_positions = {
+            bone.name: list(bone.position)
+            for bone in self.skeletons.models[self.preview_model_name]
+            if bone.name in self.object_shape_bindings
+        }
         self.layout = {}
         self.terrain = None
         self.geometry = None
@@ -304,6 +331,24 @@ class WorldProject:
             except (TypeError, ValueError, OverflowError):
                 errors.append(f'Position {name}: expected three finite coordinates within +/-1e7')
 
+        object_positions = getattr(self, 'object_positions', {})
+        if not isinstance(object_positions, dict):
+            errors.append('BFRES object positions must be an object')
+            object_positions = {}
+        for name, xyz in object_positions.items():
+            if (not isinstance(name, str) or name not in getattr(self, 'object_shape_bindings', {})):
+                errors.append(f'Object position {name!r}: bone is not a unique supported rigid-shape binding')
+                continue
+            try:
+                if (not isinstance(xyz, (list, tuple)) or len(xyz) != 3 or
+                        any(isinstance(value, bool) for value in xyz)):
+                    raise ValueError
+                values = tuple(float(value) for value in xyz)
+                if not all(math.isfinite(value) and abs(value) <= 1e7 for value in values):
+                    raise ValueError
+            except (TypeError, ValueError, OverflowError):
+                errors.append(f'Object position {name}: expected three finite coordinates within +/-1e7')
+
         point_rows = getattr(self.points, 'rows', None)
         if not isinstance(point_rows, (list, tuple)):
             errors.append('Point table must be a list of rows')
@@ -417,7 +462,8 @@ class WorldProject:
         content = json.dumps({'format': 'nsmbu-world-studio', 'version': 1,
             'source': str(self.source), 'source_sha256': self.source_sha256,
             'points': self.points.rows, 'routes': self.routes.rows,
-            'layout': self.layout, 'positions': self.positions, 'terrain': terrain,
+            'layout': self.layout, 'positions': self.positions,
+            'object_positions': self.object_positions, 'terrain': terrain,
             'geometry': self.geometry, 'bone_renames': self.bone_renames,
             'camera_edits': self.camera_edits,
             'camera_source_sha256': {n: sha(v) for n,v in self.camera_original.items()}}, indent=2)
@@ -439,6 +485,9 @@ class WorldProject:
         positions = data.get('positions', {})
         if not isinstance(positions, dict):
             raise ValueError('Project positions must be an object')
+        object_positions = data.get('object_positions', {})
+        if not isinstance(object_positions, dict):
+            raise ValueError('Project BFRES object positions must be an object')
         layout = data.get('layout', {})
         if not isinstance(layout, dict):
             raise ValueError('Project layout must be an object')
@@ -461,6 +510,7 @@ class WorldProject:
         self.routes.rows = data.get('routes')
         self.layout = layout
         self.positions.update(positions)
+        self.object_positions.update(object_positions)
         self.terrain = resolve_project_path(terrain, path)
         self.geometry = data.get('geometry')
         self.bone_renames = bone_renames
@@ -494,7 +544,9 @@ class WorldProject:
             encoded = self.camera_table(name).build()
             if encoded != self.camera_original[name]:
                 camera_outputs[name] = encoded
-        patched_model = self.skeletons.patch_positions(self.positions)
+        patched_positions = dict(self.positions)
+        patched_positions.update(self.object_positions)
+        patched_model = self.skeletons.patch_positions(patched_positions)
         rename_reports = []
         if self.bone_renames:
             from .bfres_names import rename_bone

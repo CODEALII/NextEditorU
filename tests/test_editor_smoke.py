@@ -787,6 +787,78 @@ class EditorSmokeTests(unittest.TestCase):
         finally:
             top.destroy()
 
+    def test_local_static_object_bone_edits_update_preview_and_export(self):
+        root = Path(__file__).resolve().parents[1]
+        source = root / "NSMBU Modding Project/content/Common/course_select/CS_W5a.szs"
+        if not source.is_file():
+            self.skipTest("User-provided local W5a dump unavailable")
+        source_copy = Path(self.recent_tmp.name) / "CS_W5a.szs"
+        original_archive = source.read_bytes()
+        source_copy.write_bytes(original_archive)
+        native = WorldProject.open(source_copy)
+        self.assertTrue(native.object_positions)
+        bone_name = next(iter(native.object_positions))
+        studio_top = tk.Toplevel(self.root)
+        studio_top.withdraw()
+        studio = NativeStudio(studio_top, native)
+        project_dir = None
+        try:
+            object_iid = f"object:{bone_name}"
+            self.assertTrue(studio.tree.exists(object_iid))
+            studio.tree.selection_set(object_iid)
+            studio.select_tree()
+            self.assertEqual(studio.native_selection, ("object", bone_name))
+            self.assertEqual(studio.position_properties["x"].get(), str(native.object_positions[bone_name][0]))
+            starting_position = list(native.object_positions[bone_name])
+
+            graph = studio.view_project()
+            before_scene = studio._build_3d_preview(graph)
+            shape_name = native.object_shape_bindings[bone_name][0]
+            before_matches = [shape for shape in before_scene["shapes"] if shape["name"] == shape_name]
+            self.assertTrue(before_matches, (shape_name, [shape["name"] for shape in before_scene["shapes"]]))
+            before = before_matches[0]
+            self.assertEqual(before.get("editorId"), f"object:{bone_name}")
+            old_positions = before["positions"]
+            scheduled = []
+            studio.preview_scene = before_scene
+            studio._preview_geometry_signature = studio._current_preview_geometry_signature()
+            studio._schedule_embedded_preview_build = lambda: scheduled.append("rebuild")
+            studio._schedule_viewport_overlay_update = lambda: scheduled.append("overlay")
+            moved_position = list(starting_position)
+            moved_position[0] += 12.0
+            studio.position_properties["x"].set(str(moved_position[0]))
+            studio.apply()
+            self.assertEqual(native.object_positions[bone_name], moved_position)
+            self.assertIn("rebuild", scheduled)
+            studio.undo()
+            self.assertEqual(native.object_positions[bone_name], starting_position)
+            studio.redo()
+            self.assertEqual(native.object_positions[bone_name], moved_position)
+            after_scene = studio._build_3d_preview(graph)
+            after = next(shape for shape in after_scene["shapes"] if shape["name"] == shape_name)
+            self.assertNotEqual(after["positions"], old_positions)
+            deltas = [[new[axis] - old[axis] for axis in range(3)]
+                      for old, new in zip(old_positions, after["positions"])]
+            for delta in deltas:
+                for axis in range(3):
+                    self.assertAlmostEqual(delta[axis], deltas[0][axis], places=4)
+            self.assertGreater(sum(abs(value) for value in deltas[0]), 1.0)
+
+            project_dir = tempfile.TemporaryDirectory()
+            project_path = Path(project_dir.name) / "object-edits.nws.json"
+            native.save(project_path)
+            reopened = WorldProject.load(project_path)
+            self.assertEqual(reopened.object_positions, native.object_positions)
+            output = Path(project_dir.name) / "object-edited.szs"
+            native.export(output)
+            exported = WorldProject.open(output)
+            self.assertEqual(exported.object_positions[bone_name], native.object_positions[bone_name])
+            self.assertEqual(source_copy.read_bytes(), original_archive)
+        finally:
+            if project_dir is not None:
+                project_dir.cleanup()
+            studio_top.destroy()
+
     def test_lightweight_editor_keeps_its_direct_obj_preview_path(self):
         studio = object.__new__(WorldStudio)
         status = SimpleNamespace(set=lambda value: setattr(status, "value", value))

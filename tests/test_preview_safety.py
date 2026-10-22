@@ -40,6 +40,8 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("pickWorldNode", page)
         self.assertIn("overlays.selectedRoute", page)
         self.assertIn("updateSelectionOverlays()", page)
+        self.assertIn("const object=meshes.find(mesh=>mesh.editorId===selectedEditorId)", page)
+        self.assertIn("else if(object){selectMesh(object);if(focus)focusMesh(object)}", page)
         self.assertIn("drawOverlay(overlays.selectedRoute,[.24,1,.68,1]", page)
         self.assertIn("units=2*depth*Math.tan", page)
         self.assertIn("lastAppliedX:e.clientX", page)

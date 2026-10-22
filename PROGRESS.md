@@ -1,5 +1,22 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Edit supported rigid BFRES object transforms
+
+- The resource reader now finds static rigid-shape bindings without decoding
+  vertices twice. Unique, non-root bindings in the supported affine subset get
+  a separate `object_positions` project field and BFRES object rows in the
+  native editor. Selecting a bound shape focuses it; local XYZ edits trigger a
+  background viewport rebuild and participate in undo, redo, save, recovery,
+  validation and export. Rotation, scale, duplicate bindings and unsupported
+  shape layouts remain read-only.
+- A local W5a integration regression selects a bound object, moves its shape in
+  the rebuilt scene, checks undo/redo, saves/reopens the project and exports a
+  patched archive while verifying the original archive stays byte-identical.
+  Verification: 143 tests passed across mesh extraction, embedded preview
+  selection, editor smoke, resource roundtrips, camera projects and recovery;
+  `compileall` and `git diff --check` also passed. Runtime behavior in Cemu is
+  still unverified.
+
 ## 2026-10-22 — Preserve BFRES submesh ranges in the embedded inspector
 
 - Rigid BFRES extraction now retains each validated submesh's contiguous

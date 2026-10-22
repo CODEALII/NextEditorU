@@ -16,7 +16,7 @@ The BC1/BC3 base-color path has also been checked against all twelve local world
 
 ## Next editing milestones
 
-4. Extend scene-object transforms beyond supported world points. Shape inspection now exposes the rigid rest-pose bone binding and can select its matching point/editable bone row. The editor already supports point selection, editable transforms for invertible native hierarchy branches, mesh inspection and undo/redo; arbitrary BFRES shape transform editing remains unsupported.
+4. Extend scene-object transforms beyond supported world points. The editor now exposes unique, supported rigid-shape child bones as local XYZ object transforms; selecting the row focuses its bound mesh, edits rebuild the preview, and edits export with Undo/Redo support. Rotation/scale editing, duplicated-bone bindings, unsupported transform branches, arbitrary BFRES geometry editing, and in-game object placement remain open.
 5. The editor graph-profile gate now remembers its choice per source archive hash, revalidates it on reopen and applies the same profile to Validate and Export. Keep gameplay unlock semantics separate until verified.
 6. Expand terrain import beyond one fixed-capacity grass shape only after mesh insertion or replacement has a demonstrated archive roundtrip.
 7. Investigate animation formats and camera runtime behavior using concrete local files and targeted evidence.
