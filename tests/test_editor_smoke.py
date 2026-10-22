@@ -8,6 +8,7 @@ import time
 import tempfile
 import unittest
 import json
+import struct
 from unittest.mock import patch
 
 from worldstudio.editor import (CameraDataWindow, NativeStudio, ObjTransformDialog, PathChainDialog,
@@ -1059,6 +1060,63 @@ class EditorSmokeTests(unittest.TestCase):
 
 
 class PreviewProjectPathTests(unittest.TestCase):
+    def test_preview_geometry_fingerprint_tracks_gltf_sidecar_changes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            scene_path = root / "terrain.gltf"
+            binary_path = root / "terrain.bin"
+
+            def write_sidecar(last_x):
+                binary = (struct.pack("<9f", 0, 0, 0, 0, 0, 1, last_x, 0, 0) +
+                          struct.pack("<3H", 0, 1, 2))
+                binary_path.write_bytes(binary)
+                document = {
+                    "asset": {"version": "2.0"},
+                    "buffers": [{"uri": "terrain.bin", "byteLength": len(binary)}],
+                    "bufferViews": [
+                        {"buffer": 0, "byteLength": 36},
+                        {"buffer": 0, "byteOffset": 36, "byteLength": 6},
+                    ],
+                    "accessors": [
+                        {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
+                        {"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"},
+                    ],
+                    "meshes": [{"primitives": [{"attributes": {"POSITION": 0},
+                                                  "indices": 1}]}],
+                    "nodes": [{"mesh": 0}], "scenes": [{"nodes": [0]}], "scene": 0,
+                }
+                scene_path.write_text(json.dumps(document), encoding="utf-8")
+
+            write_sidecar(1)
+            project_path = root / "preview.json"
+            project = demo_project()
+            project["terrain"] = "terrain.gltf"
+            project["terrain_geometry_sha256"] = preview_geometry_sha256(
+                read_import_mesh(scene_path))
+            project_path.write_text(json.dumps(project), encoding="utf-8")
+
+            editor = object.__new__(WorldStudio)
+            status = SimpleNamespace(value="", set=lambda value: setattr(status, "value", value))
+            editor.status = status
+            editor.project = None
+            editor.project_path = None
+            editor.selected = None
+            editor.dirty = False
+            editor.recent_projects = RecentProjects(root / "recent.json")
+            editor.refresh = lambda: None
+            editor._reset_edit_history = lambda: None
+            editor._record_recent_project = lambda path: None
+            editor._set_recovery_context = lambda *args, **kwargs: None
+            editor._clear_recovery = lambda *args: None
+
+            editor.open_project_path(project_path)
+            self.assertEqual(editor.mesh[0], [(0., 0., 0.), (0., 0., 1.), (1., 0., 0.)])
+
+            write_sidecar(2)
+            editor.open_project_path(project_path)
+            self.assertEqual(editor.mesh, ([], []))
+            self.assertIn("terrain geometry changed since import", status.value)
+
     def test_relative_terrain_survives_open_save_and_save_to_another_folder(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

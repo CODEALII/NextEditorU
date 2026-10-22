@@ -1,5 +1,15 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Verify glTF sidecar changes against preview projects
+
+- Added an editor-level regression that opens a JSON glTF backed by a local
+  `.bin` sidecar, then changes the sidecar's vertex data and confirms the
+  stored geometry fingerprint blocks the stale preview.
+- The editor smoke suite passed **45 tests** and the glTF suite passed **23
+  tests**. This verifies the fingerprint follows parsed glTF geometry across
+  external-buffer resolution; it does not validate material handling or Cemu
+  terrain behavior.
+
 ## 2026-10-22 — Detect changed preview terrain geometry
 
 - New OBJ/glTF preview imports store a SHA-256 fingerprint of the parsed vertex
