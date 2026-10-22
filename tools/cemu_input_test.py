@@ -357,6 +357,11 @@ def step_review_prompt(case, index, key, next_key=None, *, require_label=False):
             'Type N to abort, or press Enter to submit the observation: ')
 
 
+def level_clear_observation_prompt():
+    return ('Complete the course and return to the overworld. Type the visible course/node label '
+            '(operator observation only), or N to stop: ')
+
+
 def wait_for_step_observation(prompt, *, pid, process=None, require_label=False):
     """Return (confirmed, visible_label); labels are operator reports, not machine OCR."""
     while True:
@@ -473,6 +478,9 @@ def run(args):
     profile_pack = (profile / 'graphicPacks' / args.pack_name / 'content/Common/course_select/CS_W1.szs')
     report = {
         'case': args.case,
+        'gameplay_verified': False,
+        'progression_verified': False,
+        'record_level_clear_requested': getattr(args, 'record_level_clear', False),
         'started_at': timestamp(),
         'profile': str(profile),
         'cemu_executable': str(exe.resolve()),
@@ -750,6 +758,25 @@ def run(args):
             level_capture = args.screenshot_dir / f'{args.case}-level-result.bmp'
             capture_window(window['hwnd'], level_capture)
             report['screenshots']['level_result'] = str(level_capture.resolve())
+            if getattr(args, 'record_level_clear', False):
+                confirmed, observation = wait_for_step_observation(
+                    level_clear_observation_prompt(),
+                    pid=pid, process=process, require_label=True)
+                clear_event = {'time': timestamp(),
+                               'action': 'level_clear_return_observed' if confirmed
+                               else 'level_clear_observation_aborted',
+                               'observed_location': observation,
+                               'observation_source': 'operator'}
+                report['events'].append(clear_event)
+                if not confirmed:
+                    report['status'] = 'aborted'
+                    report['abort_gate'] = 'level_clear_return'
+                    return
+                foreground = focus_and_verify(pid, window['hwnd'], args.focus_timeout)
+                clear_capture = args.screenshot_dir / f'{args.case}-after-level-clear.bmp'
+                capture_window(window['hwnd'], clear_capture)
+                report['screenshots']['after_level_clear'] = str(clear_capture.resolve())
+                clear_event['screenshot'] = str(clear_capture.resolve())
         report['final_save_hashes'] = save_hashes(profile)
         report['game_log'] = str((profile / 'log.txt').resolve())
         report['game_log_sha256'] = sha256(profile / 'log.txt') if (profile / 'log.txt').is_file() else None
@@ -832,6 +859,8 @@ def main(argv=None):
                         help='Graphic-pack folder name inside the isolated profile')
     parser.add_argument('--enter-level', action='store_true',
                         help='After movement, wait for confirmation on the destination node and press Z/A')
+    parser.add_argument('--record-level-clear', action='store_true',
+                        help='After entry, wait for manual course-clear/map-return confirmation, record the visible label and screenshot, then hash saves')
     parser.add_argument('--level-key-hold-ms', type=int, default=700)
     parser.add_argument('--level-wait', type=float, default=15.)
     parser.add_argument('--window-timeout', type=float, default=30.)
@@ -871,6 +900,8 @@ def main(argv=None):
         parser.error('--pack-name may contain only ASCII letters, digits, dash and underscore')
     if args.graph_profile and not args.pack_file:
         parser.error('--graph-profile requires --pack-file')
+    if args.record_level_clear and not args.enter_level:
+        parser.error('--record-level-clear requires --enter-level')
     try:
         run(args)
     except (OSError, ValueError, RuntimeError) as error:

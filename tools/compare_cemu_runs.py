@@ -10,6 +10,7 @@ from pathlib import Path
 MATCHED_FIELDS = (
     "rpx_sha256", "cemu_executable_sha256", "controller_sha256", "sequence",
     "start_label", "hold_ms", "settle_wait_ms", "baseline_save_hashes",
+    "record_level_clear_requested",
 )
 
 
@@ -64,6 +65,15 @@ def compare_runs(clean, modified, *, expected_pack_sha256=None):
             issues.append(f"{label} run status is not completed")
         if run.get("pause_after_each_step") is not True:
             issues.append(f"{label} run did not pause for every movement step")
+        if run.get("record_level_clear_requested"):
+            clear_events = [event for event in run.get("events", [])
+                            if isinstance(event, dict) and event.get("action") == "level_clear_return_observed"]
+            if not clear_events:
+                issues.append(f"{label} run requested but lacks a confirmed level-clear observation")
+            for event in clear_events:
+                evidence = _screenshot_evidence(run, event)
+                if evidence.get("error"):
+                    issues.append(f"{label} level-clear evidence: {evidence['error']}")
         if not run.get("sequence"):
             issues.append(f"{label} run has no directional sequence")
         confirmed = {event.get("gate") for event in run.get("events", [])
@@ -146,6 +156,14 @@ def compare_runs(clean, modified, *, expected_pack_sha256=None):
         "modified_case": modified.get("case"),
         "steps": steps,
         "save_changes": save_changes,
+        "level_clear_observations": {
+            label: [{"observation": _screenshot_evidence(run, event), "time": event.get("time")}
+                    for event in run.get("events", [])
+                    if isinstance(event, dict) and event.get("action") == "level_clear_return_observed"]
+            for label, run in (("clean", clean), ("modified", modified))
+        },
+        "gameplay_verified": False,
+        "progression_verified": False,
         "issues": issues,
     }
 

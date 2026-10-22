@@ -149,6 +149,11 @@ class CemuWindowSelectionTests(unittest.TestCase):
         self.assertFalse(confirmed)
         self.assertIsNone(label)
 
+    def test_level_clear_prompt_is_explicitly_an_operator_observation(self):
+        prompt = self.cemu_input_test.level_clear_observation_prompt()
+        self.assertIn("return to the overworld", prompt)
+        self.assertIn("operator observation only", prompt)
+
     def test_ignores_titled_auxiliary_gamepad_view_when_main_title_is_present(self):
         game = {"title": "Cemu 1.26.2f [TitleId: 00050000-10101d00] New SUPER MARIO BROS. U"}
         auxiliary = {"title": "GamePad View - FPS: 60.00"}

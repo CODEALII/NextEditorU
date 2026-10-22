@@ -1,5 +1,18 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Capture manual course-clear and save evidence
+
+- Added optional `--record-level-clear`, which requires `--enter-level`, waits
+  after the loaded-course capture for the operator to finish the level and
+  return to the overworld, then records the visible label/screenshot and final
+  save hashes. The report explicitly keeps gameplay and progression flags false.
+- The run comparator requires matching clear-test settings and validates each
+  clear screenshot/label while reporting save-file changes; it does not certify
+  the game's unlock rule or persistence semantics.
+- Windows runner, comparator and preflight tests pass (**39 tests**); the full
+  repository suite passes **388 tests in 316.995 seconds**. No Cemu input or
+  level completion was performed in this code-verification step.
+
 ## 2026-10-22 — Compare matched Cemu route runs from their evidence files
 
 - Added `tools/compare_cemu_runs.py` to require matching base RPX, Cemu binary,

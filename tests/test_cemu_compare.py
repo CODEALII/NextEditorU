@@ -19,6 +19,7 @@ class CemuRunCompareTests(unittest.TestCase):
         return {
             "case": case, "status": "completed", "pause_after_each_step": True,
             "sequence": ["a", "d"], "start_label": "Tower", "hold_ms": 2000,
+            "record_level_clear_requested": False,
             "settle_wait_ms": 2000, "rpx_sha256": "rpx", "cemu_executable_sha256": "cemu",
             "controller_sha256": "controller", "baseline_save_hashes": saves,
             "final_save_hashes": saves, "pack_sha256": pack,
@@ -48,6 +49,22 @@ class CemuRunCompareTests(unittest.TestCase):
         self.assertTrue(result["matched_inputs"]["sequence"])
         self.assertTrue(result["steps"][1]["labels_differ"])
         self.assertIn("screenshot_sha256", result["steps"][0]["clean"])
+
+    def test_level_clear_is_reported_as_operator_observation_and_keeps_claim_false(self):
+        clean = self.run_fixture("clean", label="Acorn Plains")
+        modified = self.run_fixture("chain", label="Acorn Plains", pack="pack-hash")
+        for run in (clean, modified):
+            run["record_level_clear_requested"] = True
+            run["events"].append({"action": "level_clear_return_observed",
+                                  "observed_location": "Acorn Plains",
+                                  "observation_source": "operator",
+                                  "screenshot": str(self.screenshot)})
+        result = compare_runs(clean, modified, expected_pack_sha256="pack-hash")
+        self.assertTrue(result["comparable"])
+        self.assertFalse(result["gameplay_verified"])
+        self.assertFalse(result["progression_verified"])
+        self.assertEqual(result["level_clear_observations"]["modified"][0]["observation"]["label"],
+                         "Acorn Plains")
 
     def test_flags_mismatched_inputs_and_missing_observation(self):
         clean = self.run_fixture("clean", label="")

@@ -622,8 +622,8 @@ the user, so no new emulator instance was started for this change.
   interpreting the following `D` result as a W102-to-W103 traversal. The
   runner independently enforces the profile/manifest/archive/save preflight
   before launching Cemu and saves any prelaunch rejection as a result JSON.
-  At each manual gate, press `N` or `Esc` to stop before another input is sent
-  (`N` also works when stdin is not an interactive terminal). The result JSON
+  At map-confirmation gates, press `N` or `Esc` to stop; at a step-label prompt,
+  type `N` and press Enter. No next direction is sent after an abort. The result JSON
   records the aborted gate, screenshots, saves and log hashes; an isolated Cemu
   started by the runner is closed normally, while an attached instance is left
   running. Compare both result files afterward:
@@ -639,6 +639,15 @@ the user, so no new emulator instance was started for this change.
   Historical reports without executable/RPX hashes or step labels are marked
   non-comparable. The command sequence remains a ready protocol, not gameplay
   evidence until the new runs are completed.
+
+For a controlled course-clear/save check after movement has been established,
+run the Chain profile from the verified Acorn Plains start with the recorded
+`S` then `W` path and add `--enter-level --record-level-clear`. The runner
+captures the loaded course, waits while the operator completes it and returns
+to the map, records the visible destination label and screenshot, then hashes
+both save files. This documents an operator-observed clear/map return; the
+result still keeps `progression_verified:false` until a Clean comparison and
+save/reload behavior establish the game rule.
 
 ## Profile-provenance Cemu package — 2026-10-22
 
