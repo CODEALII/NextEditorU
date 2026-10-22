@@ -20,8 +20,13 @@
   `5de5ecae3f91c13841ac5a16f0511b7af765ff63628cb95ce65bde721689c9df`,
   `common`: `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`).
   An initial automated run failed its exact-window focus check before capturing
-  the map; a follow-up launch reached the title/cutscene but did not complete the
-  runner's manual map-confirmation gate. No visual terrain comparison is claimed.
+  the map. The latest clean-baseline run passed exact-window focus (PID 23100,
+  HWND 2691920), clicked the US title prompt, then remained in the opening/demo
+  sequence and stopped at the runner's manual overworld gate. Both save hashes
+  remained unchanged. Its result and title screenshot are in
+  `local/evidence/cemu-input-test/terrain-clean-pro-baseline-live-20261022-final-result.json`
+  and `...-after-title-click.bmp`; no map, movement, or terrain comparison was
+  captured, so no visual terrain result is claimed.
 
 ## 2026-10-22 — Stabilize native road surfaces and expose the in-world graph control
 
