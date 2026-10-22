@@ -1,5 +1,22 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Put the graph editor into the 3D viewport and reinforce route depth bias
+
+- Added a compact SVG graph inset directly over the embedded WebGL viewport. It
+  draws native point links in world X/Z, starts open in the desktop viewport,
+  and has a hide/show control. Clicking a point or route in the inset selects
+  the same editor row and focuses the 3D camera; selecting from the list or 3D
+  view updates its highlight. Moving points remains a direct 3D drag, while the
+  old native 2D graph is retained as an optional side panel.
+- Increased the scoped route-mesh polygon offset from `-1/-1` to `-2/-2` in
+  both render and mesh-picking passes. Grass and other world geometry are not
+  offset. This targets orbit-dependent coplanar route flicker; live desktop
+  visual confirmation is still needed to establish that the user's reported
+  locations are fully fixed.
+- Verification: focused editor and preview suites pass (**87 tests**), the
+  generated embedded WebGL script passes `node --check`, and `git diff --check`
+  passes. No Cemu/game-renderer behavior is implied.
+
 ## 2026-10-22 — Revalidate matched Clean/Chain Cemu test profiles
 
 - Read-only preflight returned `ready:true` for the isolated Clean GamePad

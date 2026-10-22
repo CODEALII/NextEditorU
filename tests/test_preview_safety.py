@@ -23,7 +23,8 @@ class PreviewSafetyTests(unittest.TestCase):
                                             "positions": [], "indices": []}],
                                "nodes": [], "routes": []})
         self.assertIn("mesh.depthBias=metadata.depthBias===true", page)
-        self.assertIn("gl.polygonOffset(-1,-1)", page)
+        self.assertIn("gl.polygonOffset(-2,-2)", page)
+        self.assertEqual(page.count("gl.polygonOffset(-2,-2)"), 2)
         self.assertIn("gl.disable(gl.POLYGON_OFFSET_FILL)", page)
 
     def test_preview_project_rejects_invalid_saved_terrain_transform(self):
@@ -60,10 +61,19 @@ class PreviewSafetyTests(unittest.TestCase):
 
         self.assertIn('<body class="embedded">', embedded_page)
         self.assertIn('id="controls-toggle"', embedded_page)
+        self.assertIn('id="graph-toggle"', embedded_page)
+        self.assertIn('id="world-graph-svg"', embedded_page)
         self.assertIn(".embedded .side{display:none}", embedded_page)
         self.assertIn("panel.classList.toggle('open')", embedded_page)
+        self.assertIn("graph.classList.add('open')", embedded_page)
+        self.assertIn("graphToggle.addEventListener('click'", embedded_page)
+        self.assertIn("function updateGraphInset()", embedded_page)
+        self.assertIn("line.setAttribute('class','edge'", embedded_page)
+        self.assertIn("circle.setAttribute('class','node'", embedded_page)
+        self.assertIn("updateGraphInset()", embedded_page)
         self.assertIn('<body class="">', external_page)
         self.assertNotIn('id="controls-toggle"', external_page)
+        self.assertNotIn('id="graph-toggle"', external_page)
 
     def test_embedded_viewport_has_selection_and_incremental_overlay_api(self):
         page = build_document({"shapes": [], "nodes": [{"id": "W101", "editorId": "point:0",
@@ -77,6 +87,8 @@ class PreviewSafetyTests(unittest.TestCase):
         self.assertIn("invoke('move_item'", page)
         self.assertIn("pickWorldNode", page)
         self.assertIn("overlays.selectedRoute", page)
+        self.assertIn("id=\"world-graph\"", page)
+        self.assertIn("data-editor-id", page)
         self.assertIn("updateSelectionOverlays()", page)
         self.assertIn("const object=meshes.find(mesh=>mesh.editorId===selectedEditorId)", page)
         self.assertIn("else if(object){selectMesh(object);if(focus)focusMesh(object)}", page)

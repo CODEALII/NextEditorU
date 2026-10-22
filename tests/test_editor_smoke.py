@@ -676,13 +676,13 @@ class EditorSmokeTests(unittest.TestCase):
         self.app.toggle_graph_view()
         self.assertTrue(self.app.graph_visible)
         self.assertIn(str(self.app.graph_frame), self.app.view_split.panes())
-        self.assertEqual(self.app.graph_view_button.cget("text"), "Hide 2D graph")
+        self.assertEqual(self.app.graph_view_button.cget("text"), "Close 2D graph panel")
         self.assertTrue(EditorLayoutPreferences(self.app.layout_preferences.path).graph_visible())
 
         self.app.toggle_graph_view()
         self.assertFalse(self.app.graph_visible)
         self.assertNotIn(str(self.app.graph_frame), self.app.view_split.panes())
-        self.assertEqual(self.app.graph_view_button.cget("text"), "Show 2D graph")
+        self.assertEqual(self.app.graph_view_button.cget("text"), "Open 2D graph panel")
         self.assertFalse(EditorLayoutPreferences(self.app.layout_preferences.path).graph_visible())
 
     def test_webview_host_frame_keeps_viewport_pane_managed(self):

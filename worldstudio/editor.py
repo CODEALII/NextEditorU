@@ -551,10 +551,10 @@ class WorldStudio(ttk.Frame):
         self.redo_button.pack(side="left", padx=2)
         self.graph_view_button = ttk.Button(
             history_bar,
-            text="Hide 2D graph" if self.graph_visible else "Show 2D graph",
+            text="Close 2D graph panel" if self.graph_visible else "Open 2D graph panel",
             command=self.toggle_graph_view)
         self.graph_view_button.pack(side="left", padx=(12, 2))
-        self.viewport_hint = ttk.Label(self, text="3D world viewport · drag to orbit · right-drag to pan · wheel to zoom · select points in the viewport or list.", padding=(10, 5), foreground="#9fb4c7")
+        self.viewport_hint = ttk.Label(self, text="3D graph editor · select nodes/routes in the inset, world, or list · drag a point in 3D to move it · right-drag to pan · wheel to zoom.", padding=(10, 5), foreground="#9fb4c7")
         self.viewport_hint.pack(fill="x")
         body = ttk.Panedwindow(self, orient="horizontal")
         body.pack(fill="both", expand=True, padx=8)
@@ -564,9 +564,9 @@ class WorldStudio(ttk.Frame):
         self.view_split = ttk.Panedwindow(body, orient="horizontal")
         self.viewport_pane = ttk.Frame(self.view_split)
         self.graph_frame = ttk.Frame(self.view_split)
-        ttk.Label(self.viewport_pane, text="3D WORLD", padding=(8, 5),
+        ttk.Label(self.viewport_pane, text="3D WORLD · GRAPH EDITOR", padding=(8, 5),
                   foreground="#9fb4c7").pack(fill="x")
-        ttk.Label(self.graph_frame, text="2D GRAPH · OPTIONAL", padding=(8, 5),
+        ttk.Label(self.graph_frame, text="2D GRAPH · OPTIONAL SIDE PANEL", padding=(8, 5),
                   foreground="#9fb4c7").pack(fill="x")
         self.viewport_frame = ttk.Frame(self.viewport_pane)
         self.viewport_frame.pack(fill="both", expand=True)
@@ -653,11 +653,11 @@ class WorldStudio(ttk.Frame):
         if self.graph_visible:
             self.view_split.forget(self.graph_frame)
             self.graph_visible = False
-            self.graph_view_button.configure(text="Show 2D graph")
+            self.graph_view_button.configure(text="Open 2D graph panel")
         else:
             self.view_split.add(self.graph_frame, weight=2)
             self.graph_visible = True
-            self.graph_view_button.configure(text="Hide 2D graph")
+            self.graph_view_button.configure(text="Close 2D graph panel")
             if self._view_split_after_id is not None:
                 try:
                     self.after_cancel(self._view_split_after_id)
@@ -2077,7 +2077,7 @@ class NativeStudio(WorldStudio):
 
     def _build(self):
         super()._build()
-        self.viewport_hint.configure(text="3D World is the main view · drag a point to move it · drag empty space to orbit · right-drag to pan · wheel to zoom. Click points or routes to edit them.")
+        self.viewport_hint.configure(text="3D graph editor · select nodes/routes in the inset, world, or list · drag a point in 3D to move it · drag empty space to orbit · right-drag to pan · wheel to zoom.")
         self.description.configure(text="Native point/segment fields are saved to CSV and exported in the SZS archive. "
             "Known bone XYZ edits modify BFRES; model names and engine indices remain protected. "
             "Camera controls affect this viewport only. OBJ/glTF terrain import projects the upper surface onto existing grass vertices, preserving source topology and UVs; collision and in-game appearance still need Cemu testing.")
