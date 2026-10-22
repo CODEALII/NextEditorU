@@ -99,6 +99,18 @@ For a controlled three-way movement comparison, use these isolated profiles in o
 
 Do not treat a successful boot or rendered map as a traversal pass. Keep every export manifest's `game_tested` field false until route, level, progression, persistence and camera checks have actually been observed.
 
+### 2026-10-22 matched Cemu route run
+
+The process-bound runner `tools/cemu_input_test.py` was run sequentially against `build/cemu-clean-gamepad-input-v3-20261021` and `build/cemu-chain-gamepad-input-v3-20261021`, with no second Cemu instance active. Both profiles used the same keyboard GamePad mapping and matching pre-test saves. After the title click and manual confirmation at `Crushing-Cogs Tower`, each profile received A, S, W held for 2,000 ms per step, with a saved screenshot and visual node-label confirmation between directions. The Clean destination was **Tilted Tunnel**; the Chain destination was **Blooper's Secret Lair**. On Chain, the runner sent Z for 700 ms and the course loaded. This establishes the changed route and level start in Cemu for this exact pack/profile; it does not establish course clear, unlock/progression behavior, or post-clear persistence.
+
+Reproduction command for the Chain leg (run Clean first with the Chain profile path supplied to both `--compare-*` options and omit `--pack-file`):
+
+```powershell
+python tools/cemu_input_test.py --profile build/cemu-chain-gamepad-input-v3-20261021 --rpx 'NSMBU Modding Project/code/red-pro2.rpx' --case chain-course-clear-tty-20261022 --start-label 'Crushing-Cogs Tower' --click-title --sequence a s w --hold-ms 2000 --pause-after-each-step --require-step-labels --compare-controller-to build/cemu-clean-gamepad-input-v3-20261021 --compare-save-to build/cemu-clean-gamepad-input-v3-20261021 --pack-file build/cemu-chain-gamepad-input-v3-20261021/graphicPacks/WorldStudioChain/content/Common/course_select/CS_W1.szs --pack-name WorldStudioChain --enter-level --record-level-clear --level-wait 20
+```
+
+The Chain archive SHA-256 is `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`. Both final saves matched exactly: `rp_personal_savedata.dat` SHA-256 `5de5ecae3f91c13841ac5a16f0511b7af765ff63628cb95ce65bde721689c9df`; `rp_savedata.dat` SHA-256 `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`. The Cemu log hashes differ because the Chain run loaded the graphic pack. The Chain result is intentionally `aborted` at `level_clear_return`; no clear or progression claim should be inferred. Both JSON reports and all captures, including `*-step-*-after.bmp` and `*-level-result.bmp`, are under ignored `local/evidence/cemu-input-test/`.
+
 ## Recent local regressions
 
 `tests.test_bfres_texture`, `tests.test_texture_preview`, and `tests.test_preview_safety` cover GX2 `_a0` S/T wrap parsing, the WebGL REPEAT/MIRRORED_REPEAT/CLAMP_TO_EDGE mapping, cache separation by wrap pair, and visible fallback notes for unsupported modes. Local W1 checks pin Mirror on `mtKusa` and Clamp on `mtDokanGreen`; the twelve-world model regression checks every displayed albedo's sampler metadata and confirms that non-Repeat textures are power-of-two. Sampler-to-UV selection and game shader behavior remain unverified.

@@ -1,5 +1,22 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Verify modified W1 route traversal and level entry in Cemu
+
+- Repeated the same process-bound Cemu test on isolated Clean and Chain profiles
+  from `Crushing-Cogs Tower`: hold A, S, and W for 2 seconds each, confirming
+  each step from its saved screenshot. Clean reached **Tilted Tunnel**; Chain
+  reached **Blooper's Secret Lair**. The two profiles use the same controller
+  mapping and have identical personal/common save hashes after the test.
+- On Chain, the automated Z entry started the actual **Blooper's Secret Lair**
+  course. This verifies the modified route and course start in Cemu. Course
+  completion, progression unlocks, and post-clear save/reload are still untested;
+  the run was stopped at the manual clear gate and is recorded as aborted there.
+- Chain `CS_W1.szs` SHA-256:
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`.
+  The result JSONs and before/after BMPs are in the ignored
+  `local/evidence/cemu-input-test/` directory. The runner recorded the Cemu log
+  hashes and save hashes in each report.
+
 ## 2026-10-22 — Connect the real W1 graph edges to editable route rows
 
 - The embedded graph previously drew the real W1 point-to-point routes but
@@ -14,10 +31,10 @@
   edge selected `segment:119`. Eight orbit steps completed with no JavaScript
   errors, WebGL error overlay, or GL error. Ignored captures are in
   `local/evidence/route-depth-bias-4/`.
-- The native Tk/WebView2 host and Cemu have not been visually rechecked. The
-  camera-angle screenshots still show source-level texture/geometry artifacts
-  near W1M0, so this resolves graph selection mapping but does not establish
-  that the road shimmer is fully fixed.
+- The native Tk/WebView2 host has not been visually rechecked. Headless camera
+  captures still show source-level texture/geometry artifacts near W1M0, so the
+  route-depth and mipmap work does not establish that road shimmer is fully
+  fixed in the desktop preview.
 - Verification: graph-validation, preview, and editor-smoke suites pass **121
   tests**. The captured local W1 page also confirms all eight visible routes
   have distinct editor-row IDs.
