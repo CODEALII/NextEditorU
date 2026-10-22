@@ -1,5 +1,26 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Verify the embedded viewport and matched Cemu movement
+
+- Live desktop inspection confirms the main Tk window keeps the WebView2 3D
+  world, 2D graph, and nodes/routes/property sidebar visible together. The
+  toolbar includes refresh and fit actions, and the viewport exposes its
+  Preview controls for camera, lighting, filters, and shape inspection.
+- The editor/preview regression suites passed **76 tests**. They cover the
+  persistent embedded host, list/viewport selection bridge, and incremental
+  point/route overlay refresh. A manual click interaction was inconclusive
+  because Computer Use reported `foreground window did not report a process
+  id`; the GUI and WebGL selection tests passed.
+- A process-bound, matched Cemu run held A and then D for 2,000 ms from the
+  visible `Crushing-Cogs Tower` start in Clean and Chain profiles. A reached
+  the same visible Acorn Plains course node in both. D left Mario at that node
+  in both while changing facing, so this does not verify the modified
+  W102→W103 route. The Chain archive hash was
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`; both
+  profiles had identical save hashes. Level entry and progression remain
+  untested. Detailed run JSON and screenshots are in ignored
+  `local/evidence/cemu-input-test/`.
+
 ## 2026-10-22 — Edit supported BFRES object rotations and scale
 
 - The embedded inspector now exposes local XYZ, Euler rotation in degrees and

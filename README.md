@@ -2,7 +2,7 @@
 
 **A research and editing toolkit for New Super Mario Bros. U world maps.**
 
-World Studio reads and edits selected world-map resources, builds experimental topology and terrain patches, and provides an integrated desktop editor with a persistent 3D world viewport. It is an actively researched prototype: resource handling and offline export are tested, Mario movement on the overworld is confirmed, and a complete playable custom overworld is not yet verified.
+World Studio reads and edits selected world-map resources, builds experimental topology and terrain patches, and provides an integrated desktop editor with a persistent 3D world viewport. It is an actively researched prototype: resource handling and offline export are tested, and a matched Cemu run confirms movement from the tower to the next visible course node in both stock and Chain profiles. The custom W102→W103 edge, level launch, progression, and a complete playable custom overworld are not yet verified.
 
 ![World Studio project progress dashboard](docs/progress.svg)
 
@@ -119,7 +119,7 @@ python -m unittest discover -s tests -v
 python -m compileall -q worldstudio tests tools
 ```
 
-A fresh headless Chrome/SwiftShader render of the local W1 scene, mesh inspector, and preview-light panel was visually inspected. This verifies the software-rendered preview path; user-browser GPU behavior remains open. Cemu movement, level launches, progression and save compatibility are still unverified. See [TESTING.md](docs/TESTING.md) for local checks and [ROADMAP.md](ROADMAP.md) for the next milestones.
+A fresh headless Chrome/SwiftShader render of the local W1 scene, mesh inspector, and preview-light panel was visually inspected. This verifies the software-rendered preview path; user-browser GPU behavior remains open. Cemu confirms the same held A input moves Mario from Crushing-Cogs Tower to the next visible Acorn Plains course node in both Clean and Chain profiles. A following D input changes facing but does not move Mario in either profile, so the intended W102→W103 traversal, level launch, progression, and save compatibility remain unverified. See [Runtime test notes](docs/INTEGRATION.md), [TESTING.md](docs/TESTING.md), and [ROADMAP.md](ROADMAP.md) for details and next milestones.
 
 ## Repository map
 

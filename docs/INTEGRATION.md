@@ -570,11 +570,36 @@ the user, so no new emulator instance was started for this change.
   `build/cemu-chain-profile-gated-20261022` from that export, using a copied
   save tree that preflight confirms byte-identical to Clean. Its Cemu 1.26
   keyboard profile has WASD on left-stick IDs 18–21 and Z on GamePad A. The
-  profile is configured and hash-checked; it has not been launched, so it has
-  no current-run log yet.
+  profile was subsequently launched for the matched movement test below.
 - `tools/cemu_preflight.py --graph-profile <profile.json>` now checks the
   selected profile against the packaged `CS_W1.szs.manifest.json`, verifies
   the manifest's archive hash against the bytes Cemu will load, and requires a
   passing profile for World 1. This gate is opt-in for old profiles. For this
   new profile, preflight returned `ready:true`, with matching saves, pack and
   graph profile. That is test setup evidence, not gameplay evidence.
+
+## Matched Clean/Chain movement run — 2026-10-22
+
+- Both isolated profiles were booted with the same controller profile
+  SHA-256 `7f27b62eb731fdd4c4eae10b2f8a77f19f0a233c0a469067db2034900f4d9b`,
+  start label `Crushing-Cogs Tower`, and two-second held sequence `A`, then
+  `D`. The Chain profile loaded the exact `WorldStudioChain` archive at SHA-256
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`; its
+  graph manifest passed `profiles/w1-core-progression.json`. The common save
+  hash matched Clean at
+  `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`.
+- Screenshots show that A moves Mario from the confirmed tower start to the
+  same visible Acorn Plains course node in both profiles. On the next held D,
+  Mario remains on that node in both profiles and changes facing. Since the
+  game UI does not display the internal point ID, this verifies baseline
+  movement and matching visible behavior, not traversal of W102→W103. It does
+  not establish a route-data failure; the tested D direction does not move on
+  the stock profile either. Level entry, progression, persistence, and terrain
+  remain untested.
+- Run records are
+  `local/evidence/cemu-input-test/clean-w102-w103-20261022-result.json` and
+  `local/evidence/cemu-input-test/chain-w102-w103-20261022-retry2-result.json`.
+  The paired step screenshots use the same basename with `step-1-a-before`,
+  `step-1-a-after`, `step-2-d-before`, and `step-2-d-after`. The Chain Cemu
+  instance was left open after the attached test; a separate runner that had
+  no interactive stdin was stopped without terminating the game.
