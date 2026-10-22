@@ -69,7 +69,7 @@ def _glb(document, binary):
     return struct.pack("<III", 0x46546C67, 2, total) + chunks
 
 
-def _geometry_glb(vertices, faces, uvs, normals):
+def _geometry_glb(vertices, faces, uvs, normals, *, node=None):
     """Pack validated terrain arrays as one embedded static GLB mesh."""
     values = []
     for point in vertices:
@@ -108,7 +108,7 @@ def _geometry_glb(vertices, faces, uvs, normals):
             "attributes": {"POSITION": 0, "TEXCOORD_0": 1, "NORMAL": 2},
             "indices": 3,
         }]}],
-        "nodes": [{"mesh": 0}], "scenes": [{"nodes": [0]}], "scene": 0,
+        "nodes": [{"mesh": 0, **(node or {})}], "scenes": [{"nodes": [0]}], "scene": 0,
     }
     return _glb(document, binary)
 
@@ -218,9 +218,66 @@ class GlbReaderTests(unittest.TestCase):
         geometry, _ = parse_glb(_glb(document, binary))
         self.assertEqual(geometry[1], [(0, 1, 2), (3, 4, 5)])
 
-    def test_rejects_non_identity_node_transforms_and_skinning(self):
-        document, binary = _fixture(node={"mesh": 0, "translation": [0, 2, 0]})
-        with self.assertRaisesRegex(ValueError, "bake transforms"):
+    def test_applies_node_trs_and_nested_parent_transforms(self):
+        document, binary = _fixture(node={
+            "mesh": 0,
+            "translation": [2, 3, 4],
+            "rotation": [0, 2 ** -0.5, 0, 2 ** -0.5],
+            "scale": [2, 1, 0.5],
+        })
+        geometry, _ = parse_glb(_glb(document, binary))
+        expected_positions = [(2., 3., 4.), (2.5, 3., 4.), (2., 3., 2.)]
+        for actual, expected in zip(geometry[0], expected_positions):
+            for value, target in zip(actual, expected):
+                self.assertAlmostEqual(value, target)
+        self.assertEqual(geometry[3], [(0., 1., 0.)] * 3)
+
+        document, binary = _fixture()
+        document["nodes"] = [
+            {"children": [1], "translation": [1, 0, 0]},
+            {"mesh": 0, "translation": [0, 2, 0]},
+        ]
+        document["scenes"] = [{"nodes": [0]}]
+        geometry, _ = parse_glb(_glb(document, binary))
+        self.assertEqual(geometry[0][0], (1., 2., 0.))
+        self.assertEqual(geometry[0][1], (1., 2., 1.))
+
+    def test_applies_affine_matrix_inverse_transpose_normals_and_mirror_winding(self):
+        document, binary = _fixture()
+        document["nodes"][0] = {
+            "mesh": 0,
+            "matrix": [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2, 0, 0, 1],
+        }
+        geometry, _ = parse_glb(_glb(document, binary))
+        self.assertEqual(geometry[0], [(2., 0., 0.), (2., 0., 1.), (1., 0., 0.)])
+        self.assertEqual(geometry[1], [(0, 2, 1)])
+
+        document, binary = _fixture()
+        position_bytes = binary[:36]
+        uv_bytes = binary[36:60]
+        normals = struct.pack("<9f", *([1., 1., 0.] * 3))
+        binary = position_bytes + uv_bytes + normals + binary[96:]
+        document["buffers"][0]["byteLength"] = len(binary)
+        document["nodes"][0] = {"mesh": 0, "scale": [2, 1, 0.5]}
+        geometry, _ = parse_glb(_glb(document, binary))
+        self.assertAlmostEqual(geometry[3][0][0], 1 / (5 ** 0.5))
+        self.assertAlmostEqual(geometry[3][0][1], 2 / (5 ** 0.5))
+
+    def test_rejects_invalid_affine_node_transforms_and_skinning(self):
+        document, binary = _fixture(node={"mesh": 0, "scale": [0, 1, 1]})
+        with self.assertRaisesRegex(ValueError, "invertible"):
+            parse_glb(_glb(document, binary))
+        document, binary = _fixture(node={"mesh": 0, "rotation": [0, 0, 0, 0]})
+        with self.assertRaisesRegex(ValueError, "normalized quaternion"):
+            parse_glb(_glb(document, binary))
+        matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+        matrix[3] = 0.25
+        document, binary = _fixture(node={"mesh": 0, "matrix": matrix})
+        with self.assertRaisesRegex(ValueError, "must be affine"):
+            parse_glb(_glb(document, binary))
+        document, binary = _fixture(node={"mesh": 0, "matrix": matrix,
+                                         "translation": [0, 0, 0]})
+        with self.assertRaisesRegex(ValueError, "both matrix and TRS"):
             parse_glb(_glb(document, binary))
         document, binary = _fixture(node={"mesh": 0, "skin": 0})
         with self.assertRaisesRegex(ValueError, "Skinned GLB"):
@@ -301,7 +358,8 @@ class GlbReaderTests(unittest.TestCase):
             folder = Path(folder)
             glb_path = folder / "island.glb"
             glb_path.write_bytes(_geometry_glb(
-                normalized_vertices, normalized_faces, uvs, normals))
+                normalized_vertices, normalized_faces, uvs, normals,
+                node={"scale": [0.99, 1., 0.99]}))
             imported, warnings = read_import_mesh(
                 glb_path, include_attributes=True, include_report=True)
             self.assertEqual(warnings, ())

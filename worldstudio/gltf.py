@@ -2,7 +2,7 @@
 
 This imports geometry for preview and topology-preserving terrain projection.
 It does not insert new BFRES meshes or evaluate materials, animation, skinning,
-or nodes with non-identity transforms.
+or skinned node poses. Static node transforms are applied to imported geometry.
 """
 from __future__ import annotations
 
@@ -61,45 +61,112 @@ def _item(values, index, label):
     return item
 
 
-def _identity_transform(node):
-    defaults = {"translation": (0., 0., 0.), "rotation": (0., 0., 0., 1.),
-                "scale": (1., 1., 1.)}
-    for key, expected in defaults.items():
-        values = node.get(key, expected)
-        if not isinstance(values, (list, tuple)) or len(values) != len(expected):
-            raise ValueError(f"GLB node {key} must have {len(expected)} values")
-        if any(type(value) not in (int, float) for value in values):
-            raise ValueError(f"GLB node {key} must contain finite numbers")
-        try:
-            values = tuple(float(value) for value in values)
-        except (TypeError, ValueError, OverflowError) as error:
-            raise ValueError(f"GLB node {key} must contain finite numbers") from error
-        if not all(math.isfinite(value) for value in values) or any(
-                not math.isclose(value, target, rel_tol=0.0, abs_tol=1e-8)
-                for value, target in zip(values, expected)):
-            raise ValueError(f"GLB node {key} transforms are unsupported; bake transforms before import")
+_IDENTITY4 = ((1., 0., 0., 0.), (0., 1., 0., 0.),
+              (0., 0., 1., 0.), (0., 0., 0., 1.))
+
+
+def _finite_vector(node, key, default, length, limit=1e7):
+    values = node.get(key, default)
+    if not isinstance(values, (list, tuple)) or len(values) != length:
+        raise ValueError(f"GLB node {key} must have {length} values")
+    if any(type(value) not in (int, float) for value in values):
+        raise ValueError(f"GLB node {key} must contain finite numbers")
+    try:
+        values = tuple(float(value) for value in values)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError(f"GLB node {key} must contain finite numbers") from error
+    if not all(math.isfinite(value) and abs(value) <= limit for value in values):
+        raise ValueError(f"GLB node {key} must contain finite numbers within supported bounds")
+    return values
+
+
+def _linear_determinant(matrix):
+    a, b, c = matrix[0][:3]
+    d, e, f = matrix[1][:3]
+    g, h, i = matrix[2][:3]
+    return a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+
+
+def _node_transform(node):
+    """Return one validated glTF node transform as a row-major affine matrix."""
     matrix = node.get("matrix")
     if matrix is not None:
-        identity = (1., 0., 0., 0., 0., 1., 0., 0.,
-                    0., 0., 1., 0., 0., 0., 0., 1.)
-        if not isinstance(matrix, list) or len(matrix) != 16:
-            raise ValueError("GLB node matrix must contain 16 values")
-        if any(type(value) not in (int, float) for value in matrix):
-            raise ValueError("GLB node matrix must contain finite numbers")
-        try:
-            values = tuple(float(value) for value in matrix)
-        except (TypeError, ValueError, OverflowError) as error:
-            raise ValueError("GLB node matrix must contain finite numbers") from error
-        if not all(math.isfinite(value) for value in values) or any(
-                not math.isclose(value, target, rel_tol=0.0, abs_tol=1e-8)
-                for value, target in zip(values, identity)):
-            raise ValueError("GLB node matrix transforms are unsupported; bake transforms before import")
+        if any(key in node for key in ("translation", "rotation", "scale")):
+            raise ValueError("GLB node cannot define both matrix and TRS transforms")
+        values = _finite_vector(node, "matrix", matrix, 16)
+        # glTF stores matrices column-major; convert to the row-major form used here.
+        result = tuple(tuple(values[column * 4 + row] for column in range(4))
+                       for row in range(4))
+        if any(not math.isclose(result[3][column], target, rel_tol=0.0, abs_tol=1e-8)
+               for column, target in enumerate((0., 0., 0., 1.))):
+            raise ValueError("GLB node matrix must be affine")
+    else:
+        translation = _finite_vector(node, "translation", (0., 0., 0.), 3)
+        rotation = _finite_vector(node, "rotation", (0., 0., 0., 1.), 4, limit=1.)
+        scale = _finite_vector(node, "scale", (1., 1., 1.), 3)
+        length = math.sqrt(sum(value * value for value in rotation))
+        if length < 1e-8 or abs(length - 1.) > 1e-4:
+            raise ValueError("GLB node rotation must be a normalized quaternion")
+        x, y, z, w = (value / length for value in rotation)
+        rotation_matrix = (
+            (1 - 2 * (y * y + z * z), 2 * (x * y - z * w),
+             2 * (x * z + y * w)),
+            (2 * (x * y + z * w), 1 - 2 * (x * x + z * z),
+             2 * (y * z - x * w)),
+            (2 * (x * z - y * w), 2 * (y * z + x * w),
+             1 - 2 * (x * x + y * y)),
+        )
+        result = tuple(tuple(rotation_matrix[row][column] * scale[column]
+                             for column in range(3)) + (translation[row],)
+                       for row in range(3)) + ((0., 0., 0., 1.),)
+    determinant = _linear_determinant(result)
+    if not math.isfinite(determinant) or abs(determinant) < 1e-12:
+        raise ValueError("GLB node transform must be invertible")
+    return result
 
 
-def _scene_mesh_indexes(document, mesh_count):
+def _multiply4(left, right):
+    return tuple(tuple(sum(left[row][k] * right[k][column] for k in range(4))
+                       for column in range(4)) for row in range(4))
+
+
+def _transform_position(matrix, position):
+    result = tuple(sum(matrix[row][column] * position[column] for column in range(3)) +
+                   matrix[row][3] for row in range(3))
+    if not all(math.isfinite(value) and abs(value) <= 1e7 for value in result):
+        raise ValueError("GLB transformed POSITION exceeds supported bounds")
+    return result
+
+
+def _normal_matrix(matrix):
+    """Precompute the affine inverse-transpose for one node transform."""
+    linear = tuple(row[:3] for row in matrix[:3])
+    a, b, c = linear[0]
+    d, e, f = linear[1]
+    g, h, i = linear[2]
+    cofactors = (
+        (e * i - f * h, f * g - d * i, d * h - e * g),
+        (c * h - b * i, a * i - c * g, b * g - a * h),
+        (b * f - c * e, c * d - a * f, a * e - b * d),
+    )
+    determinant = a * cofactors[0][0] + b * cofactors[0][1] + c * cofactors[0][2]
+    return tuple(tuple(value / determinant for value in row) for row in cofactors)
+
+
+def _transform_normal(normal_matrix, normal):
+    """Apply the affine inverse-transpose and normalize the resulting normal."""
+    transformed = tuple(sum(normal_matrix[row][column] * normal[column]
+                            for column in range(3)) for row in range(3))
+    length = math.sqrt(sum(value * value for value in transformed))
+    if not math.isfinite(length) or length < 1e-12:
+        raise ValueError("GLB transformed NORMAL is invalid")
+    return tuple(value / length for value in transformed)
+
+
+def _scene_mesh_instances(document, mesh_count):
     nodes = _list(document, "nodes")
     if not nodes:
-        return list(range(mesh_count))
+        return [(index, _IDENTITY4) for index in range(mesh_count)]
     scenes = _list(document, "scenes")
     if not scenes:
         child_indexes = set()
@@ -125,9 +192,9 @@ def _scene_mesh_indexes(document, mesh_count):
     active_nodes = set()
     referenced_meshes = []
     visiting = set()
-    pending = [(index, False) for index in reversed(roots)]
+    pending = [(index, False, _IDENTITY4) for index in reversed(roots)]
     while pending:
-        index, leaving = pending.pop()
+        index, leaving, parent_transform = pending.pop()
         index = _integer(index, "node index", maximum=max(0, len(nodes) - 1))
         if leaving:
             visiting.remove(index)
@@ -139,7 +206,10 @@ def _scene_mesh_indexes(document, mesh_count):
         node = _item(nodes, index, "node")
         visiting.add(index)
         active_nodes.add(index)
-        _identity_transform(node)
+        world_transform = _multiply4(parent_transform, _node_transform(node))
+        world_determinant = _linear_determinant(world_transform)
+        if not math.isfinite(world_determinant) or abs(world_determinant) < 1e-12:
+            raise ValueError("GLB node hierarchy produces a singular transform")
         if node.get("extensions"):
             raise ValueError("GLB node extensions are unsupported; bake node instancing before import")
         if node.get("skin") is not None:
@@ -150,11 +220,11 @@ def _scene_mesh_indexes(document, mesh_count):
             mesh_index = _integer(node["mesh"], "mesh index", maximum=max(0, mesh_count - 1))
             if mesh_index >= mesh_count:
                 raise ValueError("GLB node mesh index is out of range")
-            referenced_meshes.append(mesh_index)
+            referenced_meshes.append((mesh_index, world_transform))
         children = _array(node.get("children", []), "node children")
-        pending.append((index, True))
-        pending.extend((child, False) for child in reversed(children))
-    if len(set(referenced_meshes)) != len(referenced_meshes):
+        pending.append((index, True, world_transform))
+        pending.extend((child, False, world_transform) for child in reversed(children))
+    if len({mesh_index for mesh_index, _ in referenced_meshes}) != len(referenced_meshes):
         raise ValueError("GLB mesh is instanced more than once; flatten instances before import")
     return referenced_meshes
 
@@ -313,10 +383,10 @@ def parse_glb(data):
     meshes = _list(document, "meshes")
     if not meshes:
         raise ValueError("GLB contains no meshes")
-    mesh_indexes = _scene_mesh_indexes(document, len(meshes))
-    if not mesh_indexes:
+    mesh_instances = _scene_mesh_instances(document, len(meshes))
+    if not mesh_instances:
         raise ValueError("GLB active scene contains no mesh primitives")
-    if len(mesh_indexes) > MAX_GLB_PRIMITIVES:
+    if len(mesh_instances) > MAX_GLB_PRIMITIVES:
         raise ValueError(f"GLB exceeds the {MAX_GLB_PRIMITIVES:,}-mesh limit")
 
     positions, uvs, normals, faces = [], [], [], []
@@ -325,7 +395,9 @@ def parse_glb(data):
     has_normals = False
     optional_attributes = None
     primitive_count = 0
-    for mesh_index in mesh_indexes:
+    for mesh_index, node_transform in mesh_instances:
+        mirrored = _linear_determinant(node_transform) < 0
+        normal_transform = _normal_matrix(node_transform)
         mesh = _item(meshes, mesh_index, "mesh")
         if mesh.get("extensions"):
             raise ValueError("GLB mesh extensions are unsupported")
@@ -368,11 +440,13 @@ def parse_glb(data):
                 max_count=MAX_GLB_VERTICES - len(positions))
             count = len(part_positions)
             if "NORMAL" in attributes:
-                part_normals = _accessor_values(
+                source_normals = _accessor_values(
                     document, binary, attributes["NORMAL"], expected_type="VEC3", role="NORMAL",
                     max_count=count)
-                if len(part_normals) != count:
+                if len(source_normals) != count:
                     raise ValueError("GLB NORMAL and POSITION accessor counts differ")
+                part_normals = [_transform_normal(normal_transform, normal)
+                                for normal in source_normals]
                 has_normals = True
             else:
                 part_normals = [None] * count
@@ -397,11 +471,18 @@ def parse_glb(data):
                 raise ValueError(f"GLB exceeds the {MAX_GLB_TRIANGLES:,}-triangle limit")
             if any(index >= count for index in part_indices):
                 raise ValueError("GLB index references a missing vertex")
-            positions.extend(part_positions)
+            try:
+                positions.extend(_transform_position(node_transform, position)
+                                 for position in part_positions)
+            except ValueError as error:
+                raise ValueError(f"GLB mesh node {mesh_index}: {error}") from error
             uvs.extend(part_uvs)
             normals.extend(part_normals)
-            faces.extend(tuple(base + index for index in part_indices[offset:offset + 3])
-                         for offset in range(0, len(part_indices), 3))
+            for offset in range(0, len(part_indices), 3):
+                triangle = part_indices[offset:offset + 3]
+                if mirrored:
+                    triangle = (triangle[0], triangle[2], triangle[1])
+                faces.append(tuple(base + index for index in triangle))
 
     if document.get("animations"):
         warnings.add("GLB animations are ignored; imported geometry uses its static source pose")

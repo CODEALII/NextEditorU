@@ -1,5 +1,20 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Apply static GLB node transforms during terrain import
+
+- GLB terrain import now composes active-scene parent and child transforms,
+  supporting validated TRS quaternions/scales/translations and finite affine
+  matrices. Positions are transformed into scene coordinates, normals use the
+  inverse-transpose, and negative-determinant transforms reverse triangle
+  winding. Singular, projective and mixed matrix/TRS nodes remain rejected;
+  instancing, skinning and morphs remain outside the static import scope.
+- Added fixtures for rotated/nonuniformly scaled TRS, nested translation,
+  matrix-based mirroring, normal transformation and invalid transforms.
+  The W1 project export roundtrip now also consumes an imported GLB with a
+  non-identity node scale. `python -m unittest tests.test_gltf tests.test_mesh`
+  passes **55 tests**. Terrain export keeps its existing topology-preserving
+  behavior; Cemu appearance and collision remain unverified.
+
 ## 2026-10-22 — Cemu title-click support and Clean retry result
 
 - Added a runner path that left-clicks the center of the exact PID-bound Cemu
