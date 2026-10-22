@@ -13,7 +13,8 @@ from unittest.mock import patch
 
 from worldstudio.editor import (CameraDataWindow, NativeStudio, ObjTransformDialog, PathChainDialog,
                                 WorldStudio, demo_project, fit_preview_scale,
-                                preview_geometry_sha256, project_preview_point, read_import_mesh)
+                                preview_attributes_sha256, preview_geometry_sha256,
+                                project_preview_point, read_import_mesh)
 from worldstudio.camera import OffsetTable
 from worldstudio.recent_projects import RecentProjects
 from worldstudio.graph_profile_preferences import GraphProfilePreferences
@@ -1075,6 +1076,45 @@ class EditorSmokeTests(unittest.TestCase):
 
 
 class PreviewProjectPathTests(unittest.TestCase):
+    def test_saved_preview_detects_uv_or_normal_changes_in_terrain_source(self):
+        with tempfile.TemporaryDirectory() as folder:
+            terrain_path = Path(folder) / "terrain.obj"
+            project = {"terrain": str(terrain_path)}
+            editor = object.__new__(WorldStudio)
+            editor.project = project
+            editor.project_path = None
+            editor.mesh = ([], [])
+            status = SimpleNamespace(value="", set=lambda value: setattr(status, "value", value))
+            editor.status = status
+
+            def write_obj(normal_z, first_u=1):
+                terrain_path.write_text(
+                    "v 0 0 0\nv 1 0 0\nv 0 0 1\n"
+                    f"vt 0 0\nvt {first_u} 0\nvt 0 1\n"
+                    f"vn 0 1 {normal_z}\nf 1/1/1 2/2/1 3/3/1\n",
+                    encoding="utf-8")
+
+            write_obj(0)
+            initial_mesh = read_import_mesh(terrain_path, include_attributes=True)
+            project["terrain_geometry_sha256"] = preview_geometry_sha256(initial_mesh)
+            project["terrain_attributes_sha256"] = preview_attributes_sha256(initial_mesh)
+            self.assertTrue(editor._load_mesh())
+
+            # Positions and faces are unchanged; only the referenced normals differ.
+            write_obj(0.25)
+            changed_mesh = read_import_mesh(terrain_path, include_attributes=True)
+            self.assertEqual(preview_geometry_sha256(initial_mesh),
+                             preview_geometry_sha256(changed_mesh))
+            self.assertNotEqual(preview_attributes_sha256(initial_mesh),
+                                preview_attributes_sha256(changed_mesh))
+            self.assertFalse(editor._load_mesh())
+            self.assertEqual(editor.mesh, ([], []))
+            self.assertIn("UVs or normals changed since import", status.value)
+
+            write_obj(0, first_u=1.5)
+            self.assertFalse(editor._load_mesh())
+            self.assertIn("UVs or normals changed since import", status.value)
+
     def test_preview_geometry_fingerprint_tracks_gltf_sidecar_changes(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -1106,8 +1146,9 @@ class PreviewProjectPathTests(unittest.TestCase):
             project_path = root / "preview.json"
             project = demo_project()
             project["terrain"] = "terrain.gltf"
-            project["terrain_geometry_sha256"] = preview_geometry_sha256(
-                read_import_mesh(scene_path))
+            imported_mesh = read_import_mesh(scene_path, include_attributes=True)
+            project["terrain_geometry_sha256"] = preview_geometry_sha256(imported_mesh)
+            project["terrain_attributes_sha256"] = preview_attributes_sha256(imported_mesh)
             project_path.write_text(json.dumps(project), encoding="utf-8")
 
             editor = object.__new__(WorldStudio)
@@ -1150,6 +1191,8 @@ class PreviewProjectPathTests(unittest.TestCase):
             }
             source_data["terrain_geometry_sha256"] = preview_geometry_sha256(
                 read_import_mesh(terrain_path))
+            source_data["terrain_attributes_sha256"] = preview_attributes_sha256(
+                read_import_mesh(terrain_path, include_attributes=True))
             source_project.write_text(json.dumps(source_data), encoding="utf-8")
 
             editor = object.__new__(WorldStudio)
@@ -1168,7 +1211,8 @@ class PreviewProjectPathTests(unittest.TestCase):
 
             editor.open_project_path(source_project)
             self.assertEqual(Path(editor.project["terrain"]), terrain_path.resolve())
-            self.assertEqual(editor.mesh[0], [(1., 2., 3.), (3., 2., 3.), (1., 3., 3.)])
+            self.assertEqual(editor.mesh[0], [(1., 2., 3.), (3., 2., 3.), (1., 3., 3.)],
+                             status.value)
             self.assertTrue(editor.save())
             same_location = json.loads(source_project.read_text(encoding="utf-8"))
             self.assertEqual(resolve_project_path(same_location["terrain"], source_project),
@@ -1176,6 +1220,8 @@ class PreviewProjectPathTests(unittest.TestCase):
             self.assertEqual(same_location["terrain_transform"], source_data["terrain_transform"])
             self.assertEqual(same_location["terrain_geometry_sha256"],
                              source_data["terrain_geometry_sha256"])
+            self.assertEqual(same_location["terrain_attributes_sha256"],
+                             source_data["terrain_attributes_sha256"])
 
             save_as_path = root / "relocated" / "preview-copy.json"
             editor.project_path = None
@@ -1188,6 +1234,8 @@ class PreviewProjectPathTests(unittest.TestCase):
             self.assertEqual(relocated["terrain_transform"], source_data["terrain_transform"])
             self.assertEqual(relocated["terrain_geometry_sha256"],
                              source_data["terrain_geometry_sha256"])
+            self.assertEqual(relocated["terrain_attributes_sha256"],
+                             source_data["terrain_attributes_sha256"])
             editor.open_project_path(save_as_path)
             self.assertEqual(editor.mesh[0], [(1., 2., 3.), (3., 2., 3.), (1., 3., 3.)])
 

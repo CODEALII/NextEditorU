@@ -301,9 +301,20 @@ def normalize_obj_transform(settings):
 
 def preview_geometry_sha256(geometry):
     """Fingerprint the imported positions/topology independently of asset paths."""
-    vertices, faces = geometry
+    vertices, faces = geometry[:2]
     payload = json.dumps({"format": "worldstudio-preview-geometry-v1",
                           "vertices": vertices, "faces": faces},
+                         separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def preview_attributes_sha256(geometry):
+    """Fingerprint parsed UV/normal attributes independently of asset paths."""
+    if not isinstance(geometry, (tuple, list)) or len(geometry) != 4:
+        raise ValueError("terrain attribute fingerprint requires vertices, faces, UVs and normals")
+    _vertices, _faces, uvs, normals = geometry
+    payload = json.dumps({"format": "worldstudio-preview-attributes-v1",
+                          "uvs": uvs, "normals": normals},
                          separators=(",", ":"), allow_nan=False).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
@@ -351,6 +362,12 @@ def validate_preview(project):
         if (not isinstance(project["terrain_geometry_sha256"], str) or
                 not re.fullmatch(r"[0-9a-f]{64}", project["terrain_geometry_sha256"])):
             issues.append("Invalid terrain geometry fingerprint")
+    if "terrain_attributes_sha256" in project:
+        if not project.get("terrain"):
+            issues.append("terrain_attributes_sha256 requires a terrain source")
+        if (not isinstance(project["terrain_attributes_sha256"], str) or
+                not re.fullmatch(r"[0-9a-f]{64}", project["terrain_attributes_sha256"])):
+            issues.append("Invalid terrain attribute fingerprint")
     for node in project.get("nodes", []):
         name = node.get("id", "")
         if not isinstance(name, str) or not name.strip():
@@ -1156,13 +1173,19 @@ class WorldStudio(ttk.Frame):
             try:
                 from .project import resolve_project_path
                 terrain = resolve_project_path(path, self.project_path) if self.project_path else path
-                mesh = read_import_mesh(terrain)
+                has_attribute_fingerprint = "terrain_attributes_sha256" in self.project
+                mesh = read_import_mesh(terrain, include_attributes=has_attribute_fingerprint)
                 expected_hash = self.project.get("terrain_geometry_sha256")
                 if expected_hash and preview_geometry_sha256(mesh) != expected_hash:
                     raise ValueError("terrain geometry changed since import; re-import the asset to update it")
+                expected_attributes_hash = self.project.get("terrain_attributes_sha256")
+                if (expected_attributes_hash and
+                        preview_attributes_sha256(mesh) != expected_attributes_hash):
+                    raise ValueError("terrain UVs or normals changed since import; re-import the asset to update it")
                 settings = self.project.get("terrain_transform")
                 if settings is not None:
-                    mesh = apply_obj_transform((*mesh, None, None),
+                    transform_input = mesh if len(mesh) == 4 else (*mesh, None, None)
+                    mesh = apply_obj_transform(transform_input,
                                                normalize_obj_transform(settings))[:2]
                 self.mesh = mesh
                 self.terrain_load_error = None
@@ -1897,16 +1920,20 @@ class WorldStudio(ttk.Frame):
                                                      ("glTF models", "*.gltf *.glb")], parent=self)
         if path:
             try:
-                mesh, compatibility_warnings = read_import_mesh(path, include_report=True)
+                mesh, compatibility_warnings = read_import_mesh(
+                    path, include_attributes=True, include_report=True)
                 geometry_sha256 = preview_geometry_sha256(mesh)
+                attributes_sha256 = preview_attributes_sha256(mesh)
                 transform = ObjTransformDialog(self.winfo_toplevel())
                 if transform.result is None:
                     return
                 transform_settings = normalize_obj_transform(transform.result)
-                mesh = apply_obj_transform((*mesh, None, None), transform_settings)[:2]
+                transform_input = mesh if len(mesh) == 4 else (*mesh, None, None)
+                mesh = apply_obj_transform(transform_input, transform_settings)[:2]
                 self.project["terrain"], self.mesh = str(Path(path).resolve()), mesh
                 self.project["terrain_transform"] = transform_settings
                 self.project["terrain_geometry_sha256"] = geometry_sha256
+                self.project["terrain_attributes_sha256"] = attributes_sha256
                 self.dirty = True
                 self._record_edit()
                 self.fit()

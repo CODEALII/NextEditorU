@@ -1,5 +1,16 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Detect stale terrain UV and normal attributes
+
+- New OBJ/glTF terrain imports now store an additional SHA-256 for parsed UVs
+  and normals. Reopening blocks the preview if these attributes change even
+  when vertex positions and face topology stay the same. Older projects retain
+  their previous geometry-only check and continue to open.
+- Added editor and validation regressions for changed normals and malformed
+  attribute fingerprints, and documented that ignored OBJ material-library
+  edits are still outside the import fingerprint. This protects the preview
+  workflow; it does not verify terrain rendering or collision in Cemu.
+
 ## 2026-10-22 — Add a focused 3D viewport layout
 
 - Added a persistent **Hide 2D graph / Show 2D graph** control beside Undo/Redo.

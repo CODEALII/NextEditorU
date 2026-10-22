@@ -34,6 +34,14 @@ class PreviewSafetyTests(unittest.TestCase):
 
         self.assertIn("Invalid terrain geometry fingerprint", issues)
 
+    def test_preview_project_rejects_malformed_terrain_attribute_fingerprint(self):
+        project = {"format": "worldstudio-preview-v1", "nodes": [], "routes": [],
+                   "terrain": "terrain.obj", "terrain_attributes_sha256": "bad"}
+
+        issues = validate_preview(project)
+
+        self.assertIn("Invalid terrain attribute fingerprint", issues)
+
     def test_embedded_preview_hides_inspector_by_default_and_exposes_toggle(self):
         scene = {"shapes": [], "nodes": [], "routes": []}
         embedded_page = build_document(scene, embedded=True)
