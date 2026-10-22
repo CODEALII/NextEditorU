@@ -15,7 +15,7 @@ UI does not expose the selected island's internal point ID.
 The direct Clean comparison from that same junction is still required to
 attribute the visible transition to the edited W102→W103 link. Existing paired
 Chain and Clean movement runs used controller-profile hash
-`7f27b62eb731fdd4c4eae10b2f8a77f19a0f233c0a469067db2034900f4d9b` (Wii U
+`7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b` (Wii U
 GamePad). A later Clean retry used hash
 `d4f9fcf8da2748ac094f479d53c96661fb60c559fc564e41805bfc4ecae3879c` (Wii U
 Pro Controller); it held A for two seconds but showed no node change and was

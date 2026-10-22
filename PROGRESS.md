@@ -1,5 +1,17 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Revalidate matched Clean/Chain Cemu test profiles
+
+- Read-only preflight returned `ready:true` for the isolated Clean GamePad
+  profile and the Chain GamePad profile. Both use matching controller files
+  (the `controller0.txt` hash is `7f27b62e…f4d9b`) and byte-identical personal
+  and common saves; Clean has CrashFix only and Chain has WorldStudioChain active.
+- Corrected a stale controller-hash transcription in the integration notes and
+  roadmap. The exact profile paths, hashes and runner comparison flag are in
+  `docs/INTEGRATION.md`.
+- Cemu was not launched and no movement was tested in this preflight. The
+  matched Clean/Chain route traversal remains the next gameplay verification.
+
 ## 2026-10-22 — Make the 3D world the primary graph editor and stabilize route surfaces
 
 - Native world route meshes identified by their BFRES route names/materials now

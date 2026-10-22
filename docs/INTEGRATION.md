@@ -1,5 +1,28 @@
 # Runtime evidence and test protocol
 
+## Matched Clean/GamePad and Chain profiles preflight-ready — 2026-10-22
+
+- Read-only preflight passed for `build/cemu-clean-gamepad-input-v3-20261021`
+  (CrashFix only; WorldStudioChain forbidden) and
+  `build/cemu-chain-gamepad-input-v3-20261021` (WorldStudioChain active). Both
+  reports returned `ready:true`, found NSMBU v64 in their boot logs, and
+  confirmed the WASD left-stick and `Z`→GamePad A mappings.
+- Their `controller0.txt` SHA-256 values match exactly:
+  `7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b`.
+  Their `controller0.xml` hashes also match:
+  `6cda8003e6398301876ec717adfb0743e7275595afbda2c7b4b2f3d1815b4511`.
+  Both isolated MLC saves are byte-identical: personal save
+  `5de5ecae3f91c13841ac5a16f0511b7af765ff63628cb95ce65bde721689c9df` and
+  common save
+  `23ed86557c2b223fde2742a548f3e6acbab78f2b1cdaed2db110b0dc5e47a178`.
+- The Chain profile's installed `CS_W1.szs` hashes to
+  `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`.
+  The matched movement comparison has not been run: preflight reads profile
+  files and boot logs only and does not launch Cemu or send input. When resumed,
+  use `--compare-controller-to build/cemu-chain-gamepad-input-v3-20261021`
+  with the Clean run so the runner enforces the same controller bytes before
+  testing.
+
 ## Clean Pro movement retry stopped at the first visual gate — 2026-10-22
 
 - The isolated clean profile `build/cemu-clean-pro-fixed-input-20261021` ran
@@ -14,7 +37,7 @@
   entry were sent. This run does not verify movement or attribute a route-data
   failure. It also differs from the earlier Clean movement evidence, which used
   controller profile SHA-256
-  `7f27b62eb731fdd4c4eae10b2f8a77f19f0a233c0a469067db2034900f4d9b`. An
+  `7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b`. An
   offline byte comparison shows the key mappings are identical; the only
   controller-file difference is `emulate = Wii U GamePad` versus
   `emulate = Wii U Pro Controller`. Repeat the Clean comparison with the same
@@ -673,7 +696,7 @@ save/reload behavior establish the game rule.
 ## Matched Clean/Chain movement run — 2026-10-22
 
 - Both isolated profiles were booted with the same controller profile
-  SHA-256 `7f27b62eb731fdd4c4eae10b2f8a77f19f0a233c0a469067db2034900f4d9b`,
+  SHA-256 `7f27b62eb731fdd4c4eae10b2f8a77f19a0fba233c0a469067db2034900f4d9b`,
   start label `Crushing-Cogs Tower`, and two-second held sequence `A`, then
   `D`. The Chain profile loaded the exact `WorldStudioChain` archive at SHA-256
   `19dfe2d9d6f5427236e5336c2418d486962daa62982ed74d76533527c3a9995e`; its
