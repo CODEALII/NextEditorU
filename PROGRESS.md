@@ -5,13 +5,17 @@
 - Native world route meshes identified by their BFRES route names/materials now
   use a small WebGL polygon depth offset in the preview and mesh-picking pass.
   The adjustment is scoped to route surfaces; grass and ordinary geometry keep
-  the existing depth behavior. This addresses the coplanar grass/road flicker
-  visible while orbiting, but still needs a live visual check in the desktop app.
+  the existing depth behavior. A same-camera headless Chrome/SwiftShader orbit
+  comparison shows route gaps without the bias and continuous roads with it;
+  both pages render without JavaScript errors. This verifies the local preview,
+  not the live desktop window or the game's own renderer.
 - The 3D viewport now opens as the main graph editing surface, with the old
   synchronized 2D graph available through **Show 2D graph** and hidden by
   default. The choice persists in local editor settings.
 - Added regression checks for route-only depth bias, scene metadata propagation,
-  and the default/optional graph-pane behavior. No Cemu gameplay claim is made.
+  and the default/optional graph-pane behavior. Captures are in ignored local
+  evidence at `local/evidence/route-depth-bias-preview/` (`without-bias-orbit.png`
+  and `with-bias-orbit.png`). No Cemu gameplay claim is made.
 
 ## 2026-10-22 — Detect stale terrain UV and normal attributes
 
