@@ -18,6 +18,21 @@
   mipmap selection coverage. The embedded WebView2 and Cemu renderer have not
   been visually verified in this run.
 
+## 2026-10-22 — Make the in-viewport graph easier to use
+
+- Added an Expand/Shrink control to the persistent graph inset. Expanded mode
+  grows from 264 px to 520 px on a desktop viewport and scales down on narrower
+  windows. SVG node labels now use collision-aware placement; if no clear label
+  position is available, the point retains its full name as a hover title.
+- A headless Chrome check at 856×768 confirmed the expanded state opens and
+  closes, the 12-node scene's labels have no overlapping boxes and remain
+  inside the viewport, and clicking a point then a route updates the selected
+  editor IDs (`point:1`, `segment:0`) without JavaScript errors. The local
+  screenshot is ignored at
+  `local/evidence/graph-sync-check.png`.
+- Verification: the focused preview suite passes (**41 tests**). This checks
+  the embedded browser view, not live interaction with the native Tk tree.
+
 ## 2026-10-22 — Matched Cemu run verifies the changed route destination
 
 - With one isolated Cemu instance at a time, started both Clean and Chain at
