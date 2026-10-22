@@ -648,8 +648,9 @@ class EditorSmokeTests(unittest.TestCase):
         self.assertEqual(self.app.canvas.itemcget(route_items[0], "fill"), "#38edb6")
         self.assertEqual(float(self.app.canvas.itemcget(route_items[0], "width")), 5.0)
 
-    def test_loaded_scene_keeps_3d_as_primary_with_optional_2d_graph(self):
+    def test_loaded_scene_opens_integrated_graph_overlay_in_3d_view(self):
         calls = []
+        self.app.graph_visible = True
         self.app._ensure_embedded_view = lambda: None
         self.app._embedded_preview_dir = self.recent_tmp
         self.app.preview_widget = SimpleNamespace(
@@ -659,7 +660,7 @@ class EditorSmokeTests(unittest.TestCase):
         with patch("worldstudio.preview3d.build_document", return_value="<!doctype html>") as build_document:
             self.app._show_embedded_scene({"shapes": [], "nodes": [], "routes": []})
         build_document.assert_called_once_with(
-            {"shapes": [], "nodes": [], "routes": []}, embedded=True)
+            {"shapes": [], "nodes": [], "routes": [], "graphVisible": True}, embedded=True)
 
         panes = self.app.view_split.panes()
         self.assertIn(str(self.app.viewport_pane), panes)
@@ -668,22 +669,30 @@ class EditorSmokeTests(unittest.TestCase):
         ready_callback = calls[-1][1]
         ready_callback()
 
-    def test_optional_2d_graph_can_be_shown_and_hidden(self):
+    def test_3d_graph_overlay_toggle_does_not_open_a_separate_graph_pane(self):
         self.root.update()
+        self.app.graph_visible = True
+        self.assertNotIn(str(self.app.graph_frame), self.app.view_split.panes())
+        scripts = []
+        self.app.preview_widget = SimpleNamespace(ready=True, eval_js=scripts.append)
+
+        self.app.toggle_graph_view()
         self.assertFalse(self.app.graph_visible)
         self.assertNotIn(str(self.app.graph_frame), self.app.view_split.panes())
+        self.assertEqual(self.app.graph_view_button.cget("text"), "Show graph inset")
+        self.assertIn("setGraphVisible(false)", scripts[-1])
+        self.assertFalse(EditorLayoutPreferences(self.app.layout_preferences.path).graph_visible())
 
         self.app.toggle_graph_view()
         self.assertTrue(self.app.graph_visible)
-        self.assertIn(str(self.app.graph_frame), self.app.view_split.panes())
-        self.assertEqual(self.app.graph_view_button.cget("text"), "Close 2D graph panel")
+        self.assertNotIn(str(self.app.graph_frame), self.app.view_split.panes())
+        self.assertEqual(self.app.graph_view_button.cget("text"), "Hide graph inset")
+        self.assertIn("setGraphVisible(true)", scripts[-1])
         self.assertTrue(EditorLayoutPreferences(self.app.layout_preferences.path).graph_visible())
 
-        self.app.toggle_graph_view()
+        self.assertTrue(self.app._on_viewport_graph_visibility({"visible": False}))
         self.assertFalse(self.app.graph_visible)
-        self.assertNotIn(str(self.app.graph_frame), self.app.view_split.panes())
-        self.assertEqual(self.app.graph_view_button.cget("text"), "Open 2D graph panel")
-        self.assertFalse(EditorLayoutPreferences(self.app.layout_preferences.path).graph_visible())
+        self.assertEqual(self.app.graph_view_button.cget("text"), "Show graph inset")
 
     def test_legacy_layout_preference_defaults_to_integrated_3d_graph(self):
         preferences = self.app.layout_preferences
@@ -692,6 +701,11 @@ class EditorSmokeTests(unittest.TestCase):
         }), encoding="utf-8")
 
         self.assertFalse(preferences.graph_visible(default=False))
+
+        preferences.path.write_text(json.dumps({
+            "format": "nsmbu-world-studio-layout", "version": 3, "graph_visible": False
+        }), encoding="utf-8")
+        self.assertTrue(preferences.graph_visible(default=True))
 
         preferences.set_graph_visible(True)
         self.assertTrue(preferences.graph_visible(default=False))

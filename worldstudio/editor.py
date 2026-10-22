@@ -485,10 +485,8 @@ class WorldStudio(ttk.Frame):
         self._embedded_preview_revision = 0
         self._webview_host = None
         self._runtime_cleanup_done = False
-        # The embedded 3D scene is the primary graph editing surface. Keep the
-        # legacy 2D graph available on demand without taking viewport space by default.
-        self.graph_visible = self.layout_preferences.graph_visible(default=False)
-        self._view_split_after_id = None
+        # The route graph now lives as an editable overlay in the WebGL viewport.
+        self.graph_visible = self.layout_preferences.graph_visible(default=True)
         self._build()
         self._load_mesh()
         self.refresh()
@@ -552,34 +550,26 @@ class WorldStudio(ttk.Frame):
         self.redo_button.pack(side="left", padx=2)
         self.graph_view_button = ttk.Button(
             history_bar,
-            text="Close 2D graph panel" if self.graph_visible else "Open 2D graph panel",
+            text="Hide graph inset" if self.graph_visible else "Show graph inset",
             command=self.toggle_graph_view)
         self.graph_view_button.pack(side="left", padx=(12, 2))
-        self.viewport_hint = ttk.Label(self, text="3D graph editor · select nodes/routes in the inset, world, or list · drag a point in 3D to move it · right-drag to pan · wheel to zoom.", padding=(10, 5), foreground="#9fb4c7")
+        self.viewport_hint = ttk.Label(self, text="3D world editor · select nodes/routes in the graph inset, world, or list · drag points in the world or inset · right-drag to pan · wheel to zoom.", padding=(10, 5), foreground="#9fb4c7")
         self.viewport_hint.pack(fill="x")
         body = ttk.Panedwindow(self, orient="horizontal")
         body.pack(fill="both", expand=True, padx=8)
-        # Keep WebGL and the editable graph visible together. A Notebook made
-        # the primary viewport easy to leave behind and hid graph context;
-        # this nested splitter makes the 3D world a persistent editor pane.
+        # Keep one WebGL editing surface. The editable graph is rendered as an
+        # overlay by preview3d.py, so a second Tk graph canvas would duplicate it.
         self.view_split = ttk.Panedwindow(body, orient="horizontal")
         self.viewport_pane = ttk.Frame(self.view_split)
         self.graph_frame = ttk.Frame(self.view_split)
-        ttk.Label(self.viewport_pane, text="3D WORLD · GRAPH EDITOR", padding=(8, 5),
-                  foreground="#9fb4c7").pack(fill="x")
-        ttk.Label(self.graph_frame, text="2D GRAPH · OPTIONAL SIDE PANEL", padding=(8, 5),
+        ttk.Label(self.viewport_pane, text="3D WORLD · INTEGRATED GRAPH EDITOR", padding=(8, 5),
                   foreground="#9fb4c7").pack(fill="x")
         self.viewport_frame = ttk.Frame(self.viewport_pane)
         self.viewport_frame.pack(fill="both", expand=True)
         self.canvas = tk.Canvas(self.graph_frame, background="#101d29", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
         self._build_embedded_viewport()
-        self.view_split.add(self.viewport_pane, weight=3)
-        self.view_split.add(self.graph_frame, weight=2)
-        if not self.graph_visible:
-            self.view_split.forget(self.graph_frame)
-        self._view_split_positioned = False
-        self.view_split.bind("<Map>", self._position_initial_view_split, add="+")
+        self.view_split.add(self.viewport_pane, weight=1)
         body.add(self.view_split, weight=4)
         sidebar = ttk.Frame(body, width=370)
         body.add(sidebar, weight=1)
@@ -635,44 +625,19 @@ class WorldStudio(ttk.Frame):
         self.canvas.bind("<ButtonRelease-1>", self.release)
         self.canvas.bind("<MouseWheel>", self.zoom)
 
-    def _position_initial_view_split(self, _event=None):
-        if self._view_split_positioned:
-            return
-        self._view_split_positioned = True
-        self.after_idle(self._set_initial_view_split)
-
-    def _set_initial_view_split(self):
-        width = self.view_split.winfo_width()
-        if width > 1:
-            try:
-                self.view_split.sashpos(0, int(width * 0.64))
-            except tk.TclError:
-                pass
-
     def toggle_graph_view(self):
-        """Temporarily maximize the embedded 3D viewport or restore the graph."""
-        if self.graph_visible:
-            self.view_split.forget(self.graph_frame)
-            self.graph_visible = False
-            self.graph_view_button.configure(text="Open 2D graph panel")
-        else:
-            self.view_split.add(self.graph_frame, weight=2)
-            self.graph_visible = True
-            self.graph_view_button.configure(text="Close 2D graph panel")
-            if self._view_split_after_id is not None:
-                try:
-                    self.after_cancel(self._view_split_after_id)
-                except tk.TclError:
-                    pass
-            self._view_split_after_id = self.after_idle(self._restore_view_split_position)
+        """Show or hide the editable graph overlay inside the 3D viewport."""
+        self.graph_visible = not self.graph_visible
+        self.graph_view_button.configure(
+            text="Hide graph inset" if self.graph_visible else "Show graph inset")
+        if self.preview_widget and self.preview_widget.ready:
+            self.preview_widget.eval_js(
+                "window.worldStudioView && window.worldStudioView.setGraphVisible(" +
+                ("true" if self.graph_visible else "false") + ");")
         try:
             self.layout_preferences.set_graph_visible(self.graph_visible)
         except (OSError, ValueError) as error:
             self.status.set(f"Layout changed, but the preference could not be saved: {error}")
-
-    def _restore_view_split_position(self):
-        self._view_split_after_id = None
-        self._set_initial_view_split()
 
     def clear_tree_filter(self):
         self.tree_filter_var.set("")
@@ -718,6 +683,8 @@ class WorldStudio(ttk.Frame):
         self.preview_widget.when_failed(self._embedded_view_failed)
         self.preview_widget.rpc("select_item", run_in="main")(self._on_viewport_select)
         self.preview_widget.rpc("move_item", run_in="main")(self._on_viewport_move)
+        self.preview_widget.rpc("graph_visibility", run_in="main")(
+            self._on_viewport_graph_visibility)
 
     def _on_viewport_mapped(self, _event=None):
         self._ensure_embedded_view()
@@ -770,6 +737,7 @@ class WorldStudio(ttk.Frame):
         """Commit one 3D point drag through the native world/local edit model."""
         if getattr(self, "exporting", False) or not isinstance(payload, dict):
             return False
+
         editor_id = payload.get("editorId")
         position = payload.get("position")
         if (not isinstance(editor_id, str) or not editor_id.startswith("point:") or
@@ -824,6 +792,19 @@ class WorldStudio(ttk.Frame):
             self._schedule_viewport_overlay_update()
             self.status.set(f"Cannot move 3D point: {error}")
             return False
+
+    def _on_viewport_graph_visibility(self, payload):
+        """Keep the desktop toolbar in sync with the graph inset's own toggle."""
+        if not isinstance(payload, dict) or type(payload.get("visible")) is not bool:
+            return False
+        self.graph_visible = payload["visible"]
+        self.graph_view_button.configure(
+            text="Hide graph inset" if self.graph_visible else "Show graph inset")
+        try:
+            self.layout_preferences.set_graph_visible(self.graph_visible)
+        except (OSError, ValueError) as error:
+            self.status.set(f"Graph view changed, but the preference could not be saved: {error}")
+        return True
 
     def _sync_viewport_selection(self):
         if not self.preview_widget or not self.preview_widget.ready:
@@ -1288,6 +1269,8 @@ class WorldStudio(ttk.Frame):
         from .preview3d import build_document
         self._embedded_preview_revision += 1
         page = Path(self._embedded_preview_dir.name) / "index.html"
+        scene = dict(scene)
+        scene["graphVisible"] = self.graph_visible
         page.write_text(build_document(scene, embedded=True), encoding="utf-8")
         self.preview_widget.load_url(
             f"https://tkwry.localhost/index.html?revision={self._embedded_preview_revision}")
@@ -1979,7 +1962,7 @@ class WorldStudio(ttk.Frame):
             return
         self._runtime_cleanup_done = True
         for callback_name in ("_preview_poll_after", "_preview_update_after", "_preview_open_after",
-                              "_fit_after_id", "_recovery_after_id", "_view_split_after_id"):
+            "_fit_after_id", "_recovery_after_id"):
             callback_id = getattr(self, callback_name, None)
             if callback_id is not None:
                 try:

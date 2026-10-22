@@ -1,5 +1,22 @@
 # NSMBU World Studio progress
 
+## 2026-10-22 — Overlay the graph in the 3D viewport and stabilize road depth
+
+- The graph no longer occupies a separate Tk canvas beside the world. It now
+  floats over the full embedded 3D viewport, where nodes and routes can be
+  selected and points dragged; those edits still use the desktop selection and
+  move callbacks. The desktop toolbar and the viewport graph toggle stay in sync,
+  and the graph opens by default after migrating older layout preferences.
+- Native textured road surfaces now use an alpha cutout and write depth after
+  terrain. The previous blended rendering left overlapping route pieces out of
+  the depth buffer, which could make their visibility depend on camera angle.
+  Polygon offset stays scoped to identified road shapes. This is a targeted
+  renderer fix; the complete route shader/mask remains unsupported.
+- Verification: preview safety tests pass (**46**), embedded-editor graph tests
+  pass, Python compilation and `git diff --check` pass. No fresh in-app screenshot
+  was taken in this change, so the visual improvement still needs confirmation
+  against the user's W1 view; the older orbit screenshot predates these changes.
+
 ## 2026-10-22 — Make the graph editor accessible from every 3D world view
 
 - The actual desktop editor keeps the graph docked beside the WebGL world, and

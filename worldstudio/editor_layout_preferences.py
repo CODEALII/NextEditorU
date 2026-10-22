@@ -11,9 +11,8 @@ from .recent_projects import default_recent_projects_path
 
 PREFERENCES_FORMAT = "nsmbu-world-studio-layout"
 MAX_PREFERENCES_BYTES = 4096
-# Version 3 defaults older sessions to the integrated 3D graph surface. The
-# optional legacy 2D pane remains user-toggleable and its new choice persists.
-PREFERENCES_VERSION = 3
+# Version 4 moves graph visibility from a separate Tk pane into the 3D overlay.
+PREFERENCES_VERSION = 4
 
 
 def default_editor_layout_preferences_path():
